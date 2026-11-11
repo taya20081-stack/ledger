@@ -399,7 +399,7 @@ h1{font-weight:700}
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v1.8.6';
+window.APP_VER='v1.9.0';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -597,7 +597,7 @@ function buildRecords0(fs){
   const R=o=>({...base,id:uid(),...o});
   switch(fs.kind){
     case'exp':
-      if(fs.splits&&fs.splits.length){const g=uid();return fs.splits.filter(x=>evalAmt(x.amt)>0).map((x,i)=>R({a:fs.a,t:'支出',c:x.c,s:x.s,m:-evalAmt(x.amt),n:(x.n||base.n),sh:fs.sh||'',g,f:i===0?-fee:0,d:i===0?disc:0}))}
+      if(fs.splits&&fs.splits.length){const g=uid();return fs.splits.filter(x=>evalAmt(x.amt)>0).map((x,i)=>R({a:fs.a,t:'支出',c:x.c,s:x.s,m:-evalAmt(x.amt),n:(x.n||'').trim(),gn:base.n||'',sh:fs.sh||'',g,f:i===0?-fee:0,d:i===0?disc:0}))}
       return[R({a:fs.a,t:'支出',c:fs.c,s:fs.s,m:-amt,f:-fee,d:disc,sh:(fs.sh||'').trim()})];
     case'inc':return[R({a:fs.a,t:'收入',c:fs.c,s:fs.s,m:amt,f:-fee})];
     case'tr':{const k=uid();const to=D.acct.get(fs.a2);const sub=to&&to.grp==='信用卡'?'信用卡繳款':'轉帳';
@@ -613,7 +613,7 @@ function recordToForm(r){
   const f=blankForm();let grp=[r];
   if(r.k&&D.pairs.get(r.k))grp=D.pairs.get(r.k);else if(r.g&&D.groups.get(r.g))grp=D.groups.get(r.g);
   Object.assign(f,{a:r.a,dt:r.dt,tm:r.tm,n:r.n||'',p:r.p||'',ds:r.ds||'',w:r.w||'',sh:r.sh||'',fee:r.f?String(Math.abs(r.f)):'',disc:r.d?String(Math.abs(r.d)):'',cu:r.cu||'',xr:r.xr?String(r.xr):'',ids:grp.map(x=>x.id)});
-  if(r.t==='支出'){f.kind='exp';if(grp.length>1&&r.g){f.splits=grp.map(x=>({c:x.c,s:x.s,amt:String(-x.m),n:x.n||''}));f.fee=grp[0].f?String(-grp[0].f):'';f.disc=grp[0].d?String(grp[0].d):''}else{f.c=r.c;f.s=r.s;f.amt=String(-r.m)}
+  if(r.t==='支出'){f.kind='exp';if(grp.length>1&&r.g){const gname=grpName(grp);f.splits=grp.map(x=>({c:x.c,s:x.s,amt:String(-x.m),n:x.n&&x.n!==gname?x.n:''}));f._gn=gname;f.n=gname;f.fee=grp[0].f?String(-grp[0].f):'';f.disc=grp[0].d?String(grp[0].d):''}else{f.c=r.c;f.s=r.s;f.amt=String(-r.m)}
     if(r.m>0){f.amt=String(-r.m)}}
   else if(r.t==='收入'){f.kind='inc';f.c=r.c;f.s=r.s;f.amt=String(r.m)}
   else if(r.t==='轉出'||r.t==='轉入'){f.kind='tr';const o=grp.find(x=>x.t==='轉出')||r;const i=grp.find(x=>x.t==='轉入');
@@ -692,7 +692,7 @@ function toMozeCSV(list){
   const recs=(list||S.recs.filter(r=>!r.x)).slice().sort((a,b)=>a.dt<b.dt?-1:a.dt>b.dt?1:a.tm<b.tm?-1:a.tm>b.tm?1:(a.o||0)-(b.o||0));
   for(const r of recs){const a=D.acct.get(r.a);if(!a)continue;
     const debt=r.t==='應收款項'||r.t==='應付款項';
-    lines.push([a.name,r.cu||a.cur,r.t,r.c,r.s,numStr(r.m),numStr(r.f),numStr(r.d),r.t==='餘額調整'&&!r.n?'CATEGORY_ADJUSTMENT':r.n,r.sh,r.dt.replace(/-/g,'/'),r.tm,r.p,r.ds,r.tg,r.w].map(csvCell).join(','));}
+    lines.push([a.name,r.cu||a.cur,r.t,r.c,r.s,numStr(r.m),numStr(r.f),numStr(r.d),r.t==='餘額調整'&&!r.n?'CATEGORY_ADJUSTMENT':(r.n||r.gn||''),r.sh,r.dt.replace(/-/g,'/'),r.tm,r.p,r.ds,r.tg,r.w].map(csvCell).join(','));}
   return'﻿'+lines.join('\r\n')+'\r\n';
 }
 
@@ -815,11 +815,13 @@ function badge(r){
   if(r.t==='應收款項'||r.t==='應付款項')return`<span class="badge debt">${r.t==='應收款項'?'收':'付'}</span>`;
   return`<span class="badge sys">${esc((r.t||'?').slice(0,1))}</span>`;
 }
+// 多類別記錄的「大項名稱」：新版存在 gn；舊版是每個分項都被填成同一個名稱
+function grpName(ch){const g=ch.find(x=>x.gn);if(g)return g.gn;if(ch.length>1&&ch[0].n&&ch.every(x=>x.n===ch[0].n))return ch[0].n;return''}
 function titleOf(r){
   if(r.t==='轉出'||r.t==='轉入')return r.n||(r.s==='信用卡繳款'?'信用卡繳款':'轉帳');
   if(r.t==='應收款項'||r.t==='應付款項')return r.n||(r.w?r.w+' · ':'')+r.s;
   if(r.t==='餘額調整')return r.n||'餘額調整';
-  if(r.t==='支出'||r.t==='收入')return r.n||r.s||r.c;
+  if(r.t==='支出'||r.t==='收入')return r.n||r.gn||r.s||r.c;
   return r.n||r.t;
 }
 function subOf(r,ctx){
@@ -1096,7 +1098,7 @@ function renderEditor(){
   const acctRow=f.kind==='tr'?`<div class="grid2"><label class="field"><span>從</span><select class="in" id="f-a" data-f="a" data-rr="1">${acctOptions(f.a,1)}</select></label><label class="field"><span>到</span><select class="in" id="f-a2" data-f="a2" data-rr="1">${acctOptions(f.a2,1)}</select></label></div>${diffCur?`<label class="field"><span>轉入金額（${acB.cur}）${f._sugg&&!f.amt2?' · 依匯率約 '+fmt(f._sugg,acB.cur):''}</span><input class="in num" id="f-amt2" data-f="amt2" inputmode="decimal" value="${esc(f.amt2||'')}" placeholder="${f._sugg||''}"></label>`:''}`
     :`<label class="field"><span>帳戶</span><select class="in" id="f-a" data-f="a" data-rr="1">${acctOptions(f.a)}</select></label>`;
   const feeRow=['exp','inc','tr'].includes(f.kind)?`<label class="field"><span>手續費${ei&&f.cu&&f.cu!==cur?'（'+f.cu+'）':''}</span><input class="in num" id="f-fee" data-f="fee" inputmode="decimal" value="${esc(f.fee)}" placeholder="0"></label>`:'';
-  const projRow=`<label class="field"><span>專案</span><input class="in" id="f-p" data-f="p" value="${esc(f.p)}" list="dl-proj" placeholder="選填，例如：202610 日本沖繩"></label>`;
+  const projRow=`<label class="field"><span>專案</span><input class="in" id="f-p" data-f="p" value="${esc(f.p)}" placeholder="選填，點一下會列出進行中的專案" autocomplete="off"><div id="f-p-sugg" class="nsug" hidden></div></label>`;
   const shopRow=ei?`<div class="field"><span>商家</span><input class="in" id="f-sh" data-f="sh" value="${esc(f.sh)}" placeholder="選填，輸入幾個字會帶出以前的商家" autocomplete="off"><div id="f-sh-sugg" class="nsug" hidden></div></div>`:'';
   const nameRow=`<div class="field nsug-wrap"><span>名稱</span><input class="in" id="f-n" data-f="n" value="${esc(f.n)}" placeholder="${f.kind==='exp'?'輸入幾個字，會帶出以前記過的名稱':'選填'}" autocomplete="off"><div id="f-n-sugg" class="nsug" hidden></div></div>`;
   sb.innerHTML=`<div class="toolbar"><div class="seg" role="tablist">${kinds.map(([k,l])=>`<button class="${f.kind===k?'on':''}" data-act="ef-kind" data-k="${k}">${l}</button>`).join('')}</div>${f._edit?'':`<div class="btns"><button class="btn sm" data-act="inv-scan">${IC.qr}掃發票</button><button class="btn sm" data-act="rc-open">掃明細</button></div>`}</div>
@@ -1654,13 +1656,13 @@ function showInvoiceReview(inv){
   const shop=(S.sellers||{})[inv.seller]||inv.shopGuess||'';
   const items=inv.items.length?inv.items:[{n:'',q:1,p:inv.total,amt:inv.total}];
   const kind=inv.kind||'exp';
-  INV={...inv,kind,shop,a:(kind==='inc'?acctForIncome():acctForShop(shop))||S.settings.lastA||S.accts.find(a=>!a.arch)?.id,p:'',tm:inv.dt===TODAY()?NOWTM():'12:00',
+  INV={...inv,kind,shop,a:(kind==='inc'?acctForIncome():acctForShop(shop))||S.settings.lastA||S.accts.find(a=>!a.arch)?.id,p:'',tm:inv.tm||(inv.dt===TODAY()?NOWTM():'12:00'),
     lines:items.map(it=>({...it,on:it.amt!==0})),mode:'',dup:!!dup};
   invSuggest();
   openSheet(inv.no?'發票 '+inv.no.slice(0,2)+'-'+inv.no.slice(2):'明細表','',{});renderInvoiceReview();
 }
 function invSuggest(){const shop=INV.shop;INV.lines.forEach(l=>{const g=suggestCat(l.n,INV.kind==='inc'?'':shop,INV.kind);Object.assign(l,{c:g.c,s:g.s,conf:g.conf,exact:g.exact})});
-  const cats=new Set(INV.lines.filter(l=>l.on).map(l=>l.c+'/'+l.s));INV.mode=cats.size>1?'split':'merge';
+  const cats=new Set(INV.lines.filter(l=>l.on).map(l=>l.c+'/'+l.s));INV.mode=cats.size>1||INV.ocr&&INV.lines.filter(l=>l.on).length>1?'split':'merge';
   const w=new Map();INV.lines.forEach(l=>{if(l.on)w.set(l.c+'\u0001'+l.s,(w.get(l.c+'\u0001'+l.s)||0)+Math.abs(l.amt))});
   const top=[...w.entries()].sort((a,b)=>b[1]-a[1])[0];[INV.mc,INV.ms]=top?top[0].split('\u0001'):[INV.lines[0]?.c,INV.lines[0]?.s];
   INV.mn=INV.lines.filter(l=>l.on&&l.n).map(l=>l.n).join('、').slice(0,40);
@@ -1670,7 +1672,7 @@ function renderInvoiceReview(){
   const v=INV;const sb=$('#sb');if(!sb||!v)return;const on=v.lines.filter(l=>l.on);const sum=r2(on.reduce((s,l)=>s+l.amt,0));
   const diff=r2(v.total-sum);const cur=D.acct.get(v.a)?.cur||'TWD';
   const K=v.kind||'exp';
-  sb.innerHTML=`${v.no?'':`<div class="seg"><button class="${K==='exp'?'on':''}" data-act="inv-kind" data-k="exp">支出</button><button class="${K==='inc'?'on':''}" data-act="inv-kind" data-k="inc">收入</button></div>`}${v.dup?'<div class="note alert"><div class="grow">這張發票<b>已經記錄過</b>，再存一次會重複。</div></div>':''}
+  sb.innerHTML=`${v.ocr?`<div class="note" style="flex-wrap:wrap"><div class="grow">已從照片辨識出 <b>${v.lines.length}</b> 項，請逐項確認品名、金額與分類；不對的可以直接改，不要的取消勾選。</div><div class="btns" style="width:100%;margin-top:6px"><button class="btn sm" data-act="rc-cam">重拍</button><button class="btn sm" data-act="rc-lib">改選相簿照片</button><button class="btn sm" data-act="rc-text-open">看辨識文字</button></div></div>`:''}${v.no?'':`<div class="seg"><button class="${K==='exp'?'on':''}" data-act="inv-kind" data-k="exp">支出</button><button class="${K==='inc'?'on':''}" data-act="inv-kind" data-k="inc">收入</button></div>`}${v.dup?'<div class="note alert"><div class="grow">這張發票<b>已經記錄過</b>，再存一次會重複。</div></div>':''}
   <div class="kv">${v.no?`<div><div class="lbl">發票日期</div><div class="v num">${v.dt.replace(/-/g,'/')}</div></div>`:''}<div><div class="lbl">總計</div><div class="v num">${money(v.total)}</div></div>${v.seller?`<div><div class="lbl">賣方統編</div><div class="v num">${esc(v.seller)}</div></div>`:''}<div><div class="lbl">品項</div><div class="v num">${v.lines.length}${v.cnt>v.lines.length?' / '+v.cnt:''}</div></div></div>
   ${v.cnt>v.lines.length?`<div class="hint">QR 只記載 ${v.lines.length} 項（共 ${v.cnt} 項），未讀到的品項以差額處理。</div>`:''}
   <div class="grid2"><label class="field"><span>日期</span><input class="in" type="date" id="iv-dt" data-iv="dt" value="${v.dt}"></label><label class="field"><span>時間</span><input class="in" type="time" id="iv-tm" data-iv="tm" value="${v.tm}"></label></div>
@@ -1729,16 +1731,17 @@ function parseReceiptText(txt){
   const incHits=items.filter(x=>/薪|津貼|獎金|補助|加班|股利|利息|年終|分紅|補發|退款/.test(x.n)).length;
   return{kind:items.length&&incHits>=Math.max(2,items.length/2)?'inc':'exp',shopGuess,no:'',dt:TODAY(),total:total||sum,pre:0,buyer:'',seller:'',enc:'',inQR:items.length,cnt:items.length,items,needRight:false};
 }
-function openReceiptText(){
+function openReceiptText(txt,msg){
   stopScan();
-  openSheet('掃描明細表',`<div class="hint">在下方輸入框<b>點一下</b>，鍵盤上方或長按選單會出現「<b>掃描文字</b>」（相機圖示）→ 對準明細表的品名與金額 → 按「插入」。也可以在照片 App 用「原況文字」複製後貼上。</div>
-  <textarea class="in" id="rc-text" style="min-height:180px;font-family:var(--mono);font-size:14px" placeholder="鮮乳 1 65&#10;茶葉蛋 2 20&#10;御飯糰 32&#10;總計 117"></textarea>
+  openSheet('明細文字',`${msg?`<div class="note alert"><div class="grow">${esc(msg)}</div></div>`:''}<div class="btns fill"><button class="btn" data-act="rc-cam">拍照辨識</button><button class="btn" data-act="rc-lib">從相簿選照片</button></div>
+  <div class="hint">也可以直接打字或貼上：每行「品名 金額」，例如「鮮乳 65」。</div>
+  <textarea class="in" id="rc-text" style="min-height:180px;font-size:15px" placeholder="鮮乳 1 65&#10;茶葉蛋 2 20&#10;御飯糰 32&#10;總計 117">${esc(txt||'')}</textarea>
   <div class="hint" id="rc-prev">解析後會列出品名與金額，可以逐項修改。</div>
-  <div class="btns fill"><button class="btn pri" data-act="rc-parse">解析</button></div>`,{focus:'#rc-text'});
+  <div class="btns fill"><button class="btn pri" data-act="rc-parse">解析並逐項確認</button></div>`);
+  if(txt){const e=$('#rc-text');e&&e.dispatchEvent(new Event('input',{bubbles:true}))}
 }
 document.addEventListener('input',e=>{if(e.target.id!=='rc-text')return;const v=parseReceiptText(e.target.value);const p=$('#rc-prev');if(p)p.textContent=v.items.length?'找到 '+v.items.length+' 項，合計 '+fmt(r2(v.items.reduce((s,x)=>s+x.amt,0)))+(v.total?'；總計 '+fmt(v.total):''):'還沒找到品名與金額'});
 Object.assign(ACT,{
-  'rc-open':()=>openReceiptText(),
   'rc-parse':()=>{const t=$('#rc-text')?.value||'';const v=parseReceiptText(t);if(!v.items.length)return toast('找不到品名與金額，請確認每行有品名和數字');showInvoiceReview(v)}
 });
 
@@ -1900,7 +1903,7 @@ function searchRecs(){
   return D.live.filter(r=>{if(q.type&&r.t!==q.type)return false;if(q.a&&r.a!==q.a)return false;if(q.from&&r.dt<q.from)return false;if(q.to&&r.dt>q.to)return false;
     if(q.c&&r.c!==q.c)return false;if(q.p&&r.p!==q.p)return false;const am=Math.abs(raw(r));if(isFinite(mn)&&am<mn)return false;if(isFinite(mx)&&am>mx)return false;
     if(!terms.length)return true;
-    const hay=((r.n||'')+' '+(r.sh||'')+' '+(r.c||'')+' '+(r.s||'')+' '+(r.p||'')+' '+(r.w||'')+' '+(D.acct.get(r.a)?.name||'')+' '+Math.abs(r.m)).toLowerCase();return terms.every(t=>hay.includes(t))});
+    const hay=((r.n||'')+' '+(r.gn||'')+' '+(r.sh||'')+' '+(r.c||'')+' '+(r.s||'')+' '+(r.p||'')+' '+(r.w||'')+' '+(D.acct.get(r.a)?.name||'')+' '+Math.abs(r.m)).toLowerCase();return terms.every(t=>hay.includes(t))});
 }
 function searchResHTML(res){
   res=res||searchRecs();const q=S.search;const lim=q.limit;let exp=0,inc=0;
@@ -2054,6 +2057,25 @@ ACT['ss-pick']=el=>{const o=SS[+el.dataset.i];if(!o||!EF)return;EF.sh=o.n;
   renderEditor();const n=$('#f-sh');n&&n.blur()};
 document.addEventListener('change',e=>{if(e.target.id==='f-a'&&EF)EF._acctT=1});
 
+/* ---------- 專案自動完成：點一下列出進行中的專案，打字即篩選 ---------- */
+let PS=[];
+function projSuggest(){
+  const box=$('#f-p-sugg'),inp=$('#f-p');if(!box||!inp||!EF)return;if(document.activeElement!==inp){box.hidden=true;return}
+  const q=inp.value.trim().toLowerCase();const last=projLast();const cnt=new Map();for(const r of D.live)if(r.p)cnt.set(r.p,(cnt.get(r.p)||0)+1);
+  const cand=[];for(const[p,l]of last){const pl=p.toLowerCase();const i=pl.indexOf(q);if(q&&i<0)continue;const done=!!projDoneAt(p);if(!q&&done)continue;if(q&&pl===q&&cand.length===0&&last.size===1)continue;
+    cand.push({p,l,done,c:cnt.get(p)||0,sc:(q&&i===0?1e6:0)+(done?0:5e5)+(+l.replace(/-/g,''))/100})}
+  cand.sort((a,b)=>b.sc-a.sc);PS=cand.slice(0,7).filter(o=>o.p.toLowerCase()!==q||cand.length>1);
+  if(!PS.length){box.hidden=true;return}
+  box.innerHTML=PS.map((o,i)=>{const hl=q?esc(o.p).replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'),m=>`<b>${m}</b>`):esc(o.p);
+    return`<button class="nsi" data-act="ps-pick" data-i="${i}"><span class="nn">${hl}</span><span class="nm">${o.done?'已完成 · ':''}最後一筆 ${o.l.slice(5).replace('-','/')}</span><span class="na num">${o.c} 筆</span></button>`}).join('');
+  box.hidden=false;
+}
+document.addEventListener('input',e=>{if(e.target.id==='f-p')projSuggest()});
+document.addEventListener('focusin',e=>{if(e.target.id==='f-p')projSuggest()});
+document.addEventListener('focusout',e=>{if(e.target.id==='f-p')setTimeout(()=>{const b=$('#f-p-sugg');if(b&&document.activeElement?.id!=='f-p')b.hidden=true},180)});
+document.addEventListener('mousedown',e=>{if(e.target.closest('#f-p-sugg'))e.preventDefault()});
+ACT['ps-pick']=el=>{const o=PS[+el.dataset.i];if(!o||!EF)return;EF.p=o.p;const i=$('#f-p');if(i){i.value=o.p;i.blur()}const b=$('#f-p-sugg');if(b)b.hidden=true};
+
 /* ================= 首頁：月曆 + 當日明細（MOZE 風格） ================= */
 const CAT_EMOJI=[['早餐','🍳'],['午餐','🍱'],['晚餐','🍲'],['宵夜','🍜'],['飲料','🧋'],['咖啡','☕'],['點心','🍰'],['零食','🍪'],['水果','🍎'],['聚餐','🍻'],['飲食','🍽️'],['餐','🍽️'],
   ['加油','⛽'],['停車','🅿️'],['捷運','🚇'],['公車','🚌'],['計程車','🚕'],['高鐵','🚄'],['火車','🚆'],['機票','✈️'],['過路','🛣️'],['保養','🔧'],['交通','🚗'],
@@ -2111,7 +2133,7 @@ function homeRow(r,noShop){
   if(r.sh&&!noShop&&!isTr)sub.push(r.sh);const shop='';
   const conv=cur!=='TWD'&&!isTr?`<small class="num">≈ ${money(Math.round(Math.abs(val(r))*rateOf(curOf(r))),'TWD')}</small>`:'';
   const fut=r.dt>td;const sel=S.search.selMode&&S.search.sel.has(r.id);
-  return`<button class="row hrow${fut?' future':''}${sel?' sel':''}" data-act="${S.search.selMode?'sel-toggle':'edit-rec'}" data-id="${r.id}">${hbadge(r)}<div style="min-width:0"><div class="t">${esc(titleOf(r))}${fut?'<span class="pill warn">未入帳</span>':''}</div>${sub.length?`<div class="s">${esc(sub.join('・'))}</div>`:''}${shop?`<div class="s shp">🏪 ${esc(shop)}</div>`:''}</div><div class="amt">${amt}${conv}${acct?`<span class="apill">${esc(acct)}</span>`:''}</div></button>`;
+  return`<button class="row hrow${fut?' future':''}${sel?' sel':''}" data-act="${S.search.selMode?'sel-toggle':'edit-rec'}" data-id="${r.id}">${hbadge(r)}<div style="min-width:0"><div class="t">${esc(noShop?((r.n&&r.n!==noShop?r.n:'')||r.s||r.c||titleOf(r)):titleOf(r))}${fut?'<span class="pill warn">未入帳</span>':''}</div>${sub.length?`<div class="s">${esc(sub.join('・'))}</div>`:''}${shop?`<div class="s shp">🏪 ${esc(shop)}</div>`:''}</div><div class="amt">${amt}${conv}${acct?`<span class="apill">${esc(acct)}</span>`:''}</div></button>`;
 }
 const homeProjOk=r=>!S.settings.homeProj||r.p===S.settings.homeProj;
 function calCells(){
@@ -2170,7 +2192,7 @@ function homeItems(list){
   }
   return h;
 }
-function grpTitle(ch){const r=ch[0];if(r.sh)return r.sh;const ss=new Set(ch.map(x=>x.c+'・'+(x.s||'')));if(ss.size===1)return r.s||r.c;const cs=new Set(ch.map(x=>x.c));return cs.size===1?r.c:'多類別'}
+function grpTitle(ch){const gn=grpName(ch);if(gn)return gn;const r=ch[0];if(r.sh)return r.sh;const ss=new Set(ch.map(x=>x.c+'・'+(x.s||'')));if(ss.size===1)return r.s||r.c;const cs=new Set(ch.map(x=>x.c));return cs.size===1?r.c:'多類別'}
 function grpSheet(g){
   const ch=grpMembers(g).slice().sort((a,b)=>(a.o||0)-(b.o||0));if(!ch.length)return;const r=ch[0];
   let net=0;for(const x of ch)net+=raw(x);const cur=r.cu||curOf(r);const a=D.acct.get(r.a);const rt=ruleTag(r);
@@ -2178,7 +2200,7 @@ function grpSheet(g){
   const info=[['帳戶',a?a.name:'—'],['商家',r.sh||'—'],['日期',r.dt.replace(/-/g,'/')],['時間',r.tm||'—'],['專案',r.p||'—'],['項目',ch.length+' 項']];
   openSheet('多類別',`<div class="gdet"><div class="gdh" style="--bc:${col}"><span class="hb">${catEmoji(big)||'🧾'}</span><div class="grow"><div class="gdt">${esc(grpTitle(ch))}</div>${rt?`<div class="hint">${esc(rt)}</div>`:''}</div><div class="num gda ${net<0?'neg':'pos'}">${net<0?'-':'+'}${money(Math.abs(net),cur)}</div></div>
     <div class="gdi">${info.map(([k,v])=>`<div><span>${k}</span><b>${esc(v)}</b></div>`).join('')}</div></div>
-    <div class="hlist gl">${ch.map(x=>homeRow(x,true).replace('data-act="edit-rec"','data-act="grp-edit"')).join('')}</div>
+    <div class="hlist gl">${ch.map(x=>homeRow(x,grpName(ch)||true).replace('data-act="edit-rec"','data-act="grp-edit"')).join('')}</div>
     <button class="btn danger mt" data-act="grp-del" data-g="${esc(g)}" style="width:100%">刪除整筆（${ch.length} 項）</button>`);
 }
 function setDay(d){S.day=d;S.month=d.slice(0,7);S.search.selMode=false;S.search.sel.clear();render(true)}
@@ -2341,6 +2363,61 @@ function pageRules(){
   <div class="hint mt">這裡只會列出在這個 App 建立的週期與分期；從 MOZE 匯入的舊記錄沒有帶排程資訊，需要的話請在記帳時重新建立一次。</div>`};
 }
 Object.assign(ACT,{'sched-days':el=>{S.schedDays=+el.dataset.d;render(true)},'sched-fin':()=>{S.schedFin=!S.schedFin;render(true)}});
+
+/* ================= 掃明細：拍照或選照片 → 在手機上自動辨識文字（Tesseract.js，離線運算，不上傳照片）→ 逐項確認 =================
+   兩階段辨識：① 中文＋英數整頁（抓品名與同一行內的數字）② 只認數字的稀疏模式（抓右側獨立的金額欄），再依位置合併。 */
+const TESS_VER='5.1.1';let _tess=null,_wA=null,_wB=null,OCR_LAST=null;
+function loadTess(){if(window.Tesseract)return Promise.resolve();if(_tess)return _tess;
+  _tess=new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@'+TESS_VER+'/dist/tesseract.min.js';s.onload=()=>res();s.onerror=()=>{_tess=null;rej(new Error('無法載入文字辨識元件（需要連網一次）'))};document.head.appendChild(s)});return _tess}
+async function imgCanvas(file,max){let bmp;try{bmp=await createImageBitmap(file,{imageOrientation:'from-image'})}catch(e){bmp=await new Promise((res,rej)=>{const im=new Image();im.onload=()=>res(im);im.onerror=()=>rej(new Error('讀不到這張照片'));im.src=URL.createObjectURL(file)})}
+  const w=bmp.width,h=bmp.height;const k=Math.min(1,max/Math.max(w,h));const c=document.createElement('canvas');c.width=Math.round(w*k);c.height=Math.round(h*k);const g=c.getContext('2d');g.drawImage(bmp,0,0,c.width,c.height);
+  // 灰階＋拉開對比，讓感熱紙的淡字清楚一點
+  const d=g.getImageData(0,0,c.width,c.height);const p=d.data;let lo=255,hi=0;const hist=new Uint32Array(256);for(let i=0;i<p.length;i+=4){const v=(p[i]*299+p[i+1]*587+p[i+2]*114)/1000|0;p[i]=v;hist[v]++}
+  const n=p.length/4;let acc=0;for(let v=0;v<256;v++){acc+=hist[v];if(acc>n*0.02){lo=v;break}}acc=0;for(let v=255;v>=0;v--){acc+=hist[v];if(acc>n*0.05){hi=v;break}}const sc=255/Math.max(40,hi-lo);
+  for(let i=0;i<p.length;i+=4){const v=Math.max(0,Math.min(255,(p[i]-lo)*sc));p[i]=p[i+1]=p[i+2]=v}g.putImageData(d,0,0);return c}
+const CJK=/[㐀-鿿豈-﫿぀-ヿ]/;
+function ocrWords(data){const out=[];for(const b of data.blocks||[])for(const pg of b.paragraphs||[])for(const l of pg.lines||[])out.push(l);return out}
+function ocrMerge(A,B){
+  const nums=[];for(const l of ocrWords(B))for(const w of l.words||[]){const t=(w.text||'').replace(/[xX$]/g,'').replace(/[.,]$/,'');if(/^-?\d[\d,]*(\.\d+)?$/.test(t)&&w.confidence>=60)nums.push({t,x0:w.bbox.x0,x1:w.bbox.x1,yc:(w.bbox.y0+w.bbox.y1)/2,used:0})}
+  const lines=[];
+  for(const l of ocrWords(A)){const ws=(l.words||[]).filter(w=>(w.text||'').trim());if(!ws.length)continue;
+    const hs=ws.map(w=>w.bbox.y1-w.bbox.y0).sort((a,b)=>a-b);const lh=hs[hs.length>>1]||20;
+    const bl=l.baseline||{};const slope=bl.x1!==bl.x0&&isFinite((bl.y1-bl.y0)/(bl.x1-bl.x0))?(bl.y1-bl.y0)/(bl.x1-bl.x0):0;
+    const xm=(l.bbox.x0+l.bbox.x1)/2;const cys=ws.map(w=>(w.bbox.y0+w.bbox.y1)/2-slope*((w.bbox.x0+w.bbox.x1)/2-xm)).sort((a,b)=>a-b);const ym=cys[cys.length>>1];const yAt=x=>ym+slope*(x-xm);
+    // 品名區＝從行首到第一個大空隙為止；空隙右邊視為金額欄（中文模型常把那裡的數字認成怪字，改用數字階段的結果）
+    let last=ws.length-1;for(let i=0;i<ws.length-1;i++){if(ws[i+1].bbox.x0-ws[i].bbox.x1>lh*2.2){last=i;break}}
+    if(!ws.slice(0,last+1).some(w=>CJK.test(w.text)||/[A-Za-z]{2,}/.test(w.text)))last=-1;
+    let keep=ws,tail=[];
+    if(last>=0){const xc=ws[last].bbox.x1;const cand=nums.filter(n=>!n.used&&n.x0>xc+lh*0.3&&Math.abs(n.yc-yAt((n.x0+n.x1)/2))<lh*0.55).sort((a,b)=>a.x0-b.x0);
+      if(cand.length){cand.forEach(n=>n.used=1);keep=ws.slice(0,last+1);tail=cand.map(n=>n.t)}}
+    let s='';keep.forEach((w,i)=>{const t=w.text.trim();if(i){const pv=keep[i-1];const gap=w.bbox.x0-pv.bbox.x1;const glue=CJK.test(pv.text.slice(-1))&&CJK.test(t[0])&&gap<lh*0.7;s+=glue?'':' '}s+=t});
+    const txt=(s+' '+tail.join(' ')).trim();if(txt)lines.push({y:ym,t:txt})}
+  return lines.sort((a,b)=>a.y-b.y).map(x=>x.t).join('\n')}
+function ocrDate(txt){let m=/(20\d{2})[\/\-.年](\d{1,2})[\/\-.月](\d{1,2})/.exec(txt);if(m)return m[1]+'-'+p2(+m[2])+'-'+p2(+m[3]);m=/(1\d{2})[\/\-.年](\d{1,2})[\/\-.月](\d{1,2})/.exec(txt);if(m)return(+m[1]+1911)+'-'+p2(+m[2])+'-'+p2(+m[3]);return''}
+async function ocrReceipt(file,prog){
+  await loadTess();prog('準備照片…',0.02);const cv=await imgCanvas(file,1800);
+  const lg=(base,span,label)=>m=>{if(m.status==='recognizing text')prog(label,base+span*(m.progress||0));else if(/load|initial/.test(m.status||''))prog('載入辨識元件（第一次約 6 MB，之後不用再下載）…',Math.min(base,0.05+0.25*(m.progress||0)))};
+  if(!_wA){_wA=await Tesseract.createWorker(['chi_tra','eng'],1,{logger:m=>_wA_log&&_wA_log(m)});await _wA.setParameters({tessedit_pageseg_mode:'6',preserve_interword_spaces:'1'})}
+  _wA_log=lg(0.3,0.4,'辨識品名…');const A=await _wA.recognize(cv,{},{blocks:true,text:true});
+  if(!_wB){_wB=await Tesseract.createWorker('eng',1,{logger:m=>_wB_log&&_wB_log(m)});await _wB.setParameters({tessedit_pageseg_mode:'11',tessedit_char_whitelist:'0123456789,.-$xX'})}
+  _wB_log=lg(0.7,0.28,'辨識金額…');const B=await _wB.recognize(cv,{},{blocks:true,text:true});
+  prog('整理結果…',0.99);const text=ocrMerge(A.data,B.data);return{text,conf:Math.round(A.data.confidence||0),thumb:cv.toDataURL('image/jpeg',0.5)}}
+let _wA_log=null,_wB_log=null;
+function pickReceiptPhoto(camera){const inp=document.createElement('input');inp.type='file';inp.accept='image/*';if(camera)inp.setAttribute('capture','environment');inp.style.display='none';document.body.appendChild(inp);
+  inp.addEventListener('change',()=>{const f=inp.files&&inp.files[0];inp.remove();if(f)runReceiptOCR(f)});inp.click();setTimeout(()=>{if(!inp.files||!inp.files.length)inp.isConnected&&0},0)}
+async function runReceiptOCR(file){
+  try{stopScan()}catch(e){}
+  openSheet('辨識明細中',`<div class="prog" id="ocr-msg">準備中…</div><div class="pbar" style="margin:14px 0"><i id="ocr-bar" style="width:2%"></i></div><div class="hint">辨識在你的手機上進行，照片不會上傳。一般約 5～20 秒。</div>`,{noClose:1});
+  const prog=(m,p)=>{const a=$('#ocr-msg'),b=$('#ocr-bar');if(a)a.textContent=m;if(b)b.style.width=Math.round(Math.max(2,Math.min(100,p*100)))+'%'};
+  try{const r=await ocrReceipt(file,prog);OCR_LAST=r;const v=parseReceiptText(r.text);const d=ocrDate(r.text);if(d&&d<=TODAY()&&d>=addDays(TODAY(),-400))v.dt=d;const tmm=/(?:^|[^\d:])([01]?\d|2[0-3])[:：]([0-5]\d)(?![\d])/.exec(r.text);if(v.dt===d&&d&&tmm)v.tm=p2(+tmm[1])+':'+tmm[2];v.ocr=1;v.ocrText=r.text;v.ocrConf=r.conf;
+    closeSheet();setTimeout(()=>{if(v.items.length)showInvoiceReview(v);else openReceiptText(r.text,'照片裡沒有找到「品名＋金額」的行，可以直接在下面修改辨識結果，或重拍一張。')},260)}
+  catch(e){closeSheet();setTimeout(()=>openReceiptText('',(e&&e.message)||'辨識失敗，請再試一次'),260)}}
+Object.assign(ACT,{
+  'rc-open':()=>pickReceiptPhoto(true),
+  'rc-cam':()=>{closeSheet();pickReceiptPhoto(true)},
+  'rc-lib':()=>{closeSheet();pickReceiptPhoto(false)},
+  'rc-text-open':()=>{const t=(INV&&INV.ocrText)||(OCR_LAST&&OCR_LAST.text)||'';closeSheet();setTimeout(()=>openReceiptText(t),260)}
+});
 
 /* ================= 多筆選取（首頁長按、搜尋頁） ================= */
 let lpT=null,lpX=0,lpY=0,lpFired=false;
