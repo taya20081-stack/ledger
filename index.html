@@ -399,7 +399,7 @@ h1{font-weight:700}
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v1.8.4';
+window.APP_VER='v1.8.6';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -977,21 +977,25 @@ function pageBudget(){
   return{back:1,head:`<h1>預算</h1>`,body:`<div class="sum">${budgetBlock(ym)||'<div class="hint">設定每月總預算或分類預算後，首頁會顯示使用進度與每日可用金額。</div>'}</div>
   <div class="card stack"><label class="field"><span>每月總預算（TWD）· 近 6 個月平均支出 ${money(tAvg)}</span><input class="in num" inputmode="decimal" id="bg-total" value="${B.total||''}" placeholder="例如 ${Math.round(tAvg/1000)*1000||30000}"></label><div class="lbl">分類預算</div>${rows}<button class="btn pri" data-act="save-budget">儲存預算</button></div>`};
 }
+/* 專案狀態：手動標記完成（projDone），或最後一筆記錄超過 PROJ_IDLE 天自動視為已完成；手動「重新開啟」（projOpen）可取消自動判定 */
+const PROJ_IDLE=90,PROJ_TRIP=14;let _pl=null;   // 名稱以年月開頭的（旅遊類，例如 202610 日本沖繩）14 天沒新記錄就算結束
+function projLast(){const key=D.live.length+'|'+S.recs.length;if(_pl&&_pl.key===key)return _pl.m;const m=new Map();for(const r of D.live){if(!r.p)continue;const l=m.get(r.p);if(!l||r.dt>l)m.set(r.p,r.dt)}_pl={key,m};return m}
+function projDoneAt(name){const d=(S.settings.projDone||{})[name];if(d)return d;if((S.settings.projOpen||{})[name])return'';const l=projLast().get(name);return l&&l<addDays(TODAY(),-(/^(出國\s*)?\d{6}/.test(name)?PROJ_TRIP:PROJ_IDLE))?l:''}
 function pageProjects(){
   const stat=new Map();for(const r of D.live){if(!r.p)continue;const o=stat.get(r.p)||{n:r.p,c:0,sp:0,first:r.dt,last:r.dt};o.c++;o.sp+=spendOf(r)*rateOf(curOf(r));if(r.dt<o.first)o.first=r.dt;if(r.dt>o.last)o.last=r.dt;stat.set(r.p,o)}
-  const arr=[...stat.values()].sort((a,b)=>a.last<b.last?1:-1);const done=S.settings.projDone||{};
+  const arr=[...stat.values()].sort((a,b)=>a.last<b.last?1:-1);const done={};arr.forEach(o=>{const d=projDoneAt(o.n);if(d)done[o.n]=d});
   const li=o=>`<button class="li" data-act="push" data-p="project" data-id="${esc(o.n)}"><div class="grow"><div>${esc(o.n)}${done[o.n]?'<span class="pill">已完成</span>':''}</div><small class="num">${o.first.replace(/-/g,'/')} – ${o.last.replace(/-/g,'/')} · ${o.c} 筆</small></div><div class="r num neg">${money(o.sp)}</div><span class="chev">${IC.chev}</span></button>`;
   const act=arr.filter(o=>!done[o.n]),fin=arr.filter(o=>done[o.n]).sort((a,b)=>(done[a.n]<done[b.n]?1:-1));const op=S.projDoneOpen;
   const sum=xs=>money(Math.round(xs.reduce((t,o)=>t+o.sp,0)));
   return{back:1,head:`<h1>專案</h1>`,body:arr.length?`<div class="grp" style="margin-top:0"><div class="grph"><span>進行中（${act.length}）</span><span class="num">${sum(act)}</span></div>${act.length?`<div class="list">${act.map(li).join('')}</div>`:'<div class="empty" style="padding:16px 0">沒有進行中的專案</div>'}</div>
   ${fin.length?`<div class="grp"><button class="grph" data-act="proj-done-list" style="width:100%;border:0;background:none;cursor:pointer"><span>已完成（${fin.length}）</span><span>${op?'收合':'展開'}</span></button>${op?`<div class="list">${fin.map(li).join('')}</div>`:''}</div>`:''}
-  <div class="hint mt">點進專案，按「標記為已完成」就會移到已完成；已完成的專案不會出現在記帳時的專案建議清單。</div>`:'<div class="empty">還沒有專案。記帳時在「專案」欄填入名稱即可建立。</div>'};
+  <div class="hint mt">超過 ${PROJ_IDLE} 天沒有新記錄的專案會自動移到已完成（名稱以年月開頭的旅遊專案是 ${PROJ_TRIP} 天），再記一筆就會回到進行中；也可以點進專案手動「標記為已完成」或「重新開啟」。已完成的專案不會出現在記帳時的專案建議清單。</div>`:'<div class="empty">還沒有專案。記帳時在「專案」欄填入名稱即可建立。</div>'};
 }
 function pageProject(name){
   const rs=D.live.filter(r=>r.p===name);const by=new Map();let sp=0,inc=0;
   for(const r of rs){const k=rateOf(curOf(r));const v=spendOf(r)*k;sp+=v;inc+=incomeOf(r)*k;if(v)by.set(r.c,(by.get(r.c)||0)+v)}
   const arr=[...by.entries()].sort((a,b)=>b[1]-a[1]);const segs=arr.map(([n,v])=>({n,v,col:`var(--c${D.ci.get('exp:'+n)??11})`}));
-  return{back:1,head:`<h1>${esc(name)}</h1><button class="ibtn" data-act="proj-rename" data-id="${esc(name)}" aria-label="重新命名">${IC.edit}</button>`,body:`<div class="card" style="margin-top:0"><div class="kv"><div><div class="lbl">支出</div><div class="v num neg">${money(sp)}</div></div><div><div class="lbl">收入</div><div class="v num pos">${money(inc)}</div></div><div><div class="lbl">筆數</div><div class="v num">${rs.length}</div></div></div><div class="row-btns mt" style="display:flex;gap:8px;align-items:center">${(S.settings.projDone||{})[name]?`<span class="pill">已於 ${String(S.settings.projDone[name]).replace(/-/g,'/')} 完成</span><button class="btn sm" data-act="proj-done" data-id="${esc(name)}" data-on="">重新開啟</button>`:`<button class="btn sm" data-act="proj-done" data-id="${esc(name)}" data-on="1">標記為已完成</button>`}</div>${arr.length?`<div class="donutwrap mt">${donut(segs,sp,'支出')}<div class="legend">${arr.map(([n,v])=>`<div class="lg"><i style="background:var(--c${D.ci.get('exp:'+n)??11})"></i><span>${esc(n)}</span><span class="p num">${(v/sp*100).toFixed(1)}%</span><span class="num">${fmt(v)}</span></div>`).join('')}</div></div>`:''}</div>${dayGroups(rs,'proj',500)}`};
+  return{back:1,head:`<h1>${esc(name)}</h1><button class="ibtn" data-act="proj-rename" data-id="${esc(name)}" aria-label="重新命名">${IC.edit}</button>`,body:`<div class="card" style="margin-top:0"><div class="kv"><div><div class="lbl">支出</div><div class="v num neg">${money(sp)}</div></div><div><div class="lbl">收入</div><div class="v num pos">${money(inc)}</div></div><div><div class="lbl">筆數</div><div class="v num">${rs.length}</div></div></div><div class="row-btns mt" style="display:flex;gap:8px;align-items:center">${projDoneAt(name)?`<span class="pill">${(S.settings.projDone||{})[name]?'已於 '+String(S.settings.projDone[name]).replace(/-/g,'/')+' 完成':'已完成（最後一筆 '+projDoneAt(name).replace(/-/g,'/')+'）'}</span><button class="btn sm" data-act="proj-done" data-id="${esc(name)}" data-on="">重新開啟</button>`:`<button class="btn sm" data-act="proj-done" data-id="${esc(name)}" data-on="1">標記為已完成</button>`}</div>${arr.length?`<div class="donutwrap mt">${donut(segs,sp,'支出')}<div class="legend">${arr.map(([n,v])=>`<div class="lg"><i style="background:var(--c${D.ci.get('exp:'+n)??11})"></i><span>${esc(n)}</span><span class="p num">${(v/sp*100).toFixed(1)}%</span><span class="num">${fmt(v)}</span></div>`).join('')}</div></div>`:''}</div>${dayGroups(rs,'proj',500)}`};
 }
 function debtSuspect(o){if(debtStopped(o)||Math.abs(o.v)<=0.004)return false;const kp=(S.settings.debtKeep||{})[o.t+'|'+o.w];if(kp!=null&&Math.abs(kp-o.v)<0.01)return false;
   return o.v<0||(o.lp&&Math.abs(o.v)<=Math.max(50,o.g*0.03))}
@@ -1113,7 +1117,7 @@ function renderEditor(){
 function datalists(){
   const names=new Map(),shops=new Map();let n=0;for(const r of D.live){if(n++>4000)break;if(r.n)names.set(r.n,(names.get(r.n)||0)+1);if(r.sh)shops.set(r.sh,(shops.get(r.sh)||0)+1)}
   const top=(m,k)=>[...m.entries()].sort((a,b)=>b[1]-a[1]).slice(0,k).map(x=>`<option value="${esc(x[0])}">`).join('');
-  return`<datalist id="dl-names">${top(names,80)}</datalist><datalist id="dl-shops">${top(shops,50)}</datalist><datalist id="dl-proj">${D.projs.filter(p=>!(S.settings.projDone||{})[p]).slice(0,60).map(p=>`<option value="${esc(p)}">`).join('')}</datalist><datalist id="dl-who">${D.whos.slice(0,60).map(p=>`<option value="${esc(p)}">`).join('')}</datalist>`;
+  return`<datalist id="dl-names">${top(names,80)}</datalist><datalist id="dl-shops">${top(shops,50)}</datalist><datalist id="dl-proj">${D.projs.filter(p=>!projDoneAt(p)).slice(0,60).map(p=>`<option value="${esc(p)}">`).join('')}</datalist><datalist id="dl-who">${D.whos.slice(0,60).map(p=>`<option value="${esc(p)}">`).join('')}</datalist>`;
 }
 async function saveEditor(again){
   const f=EF;const err=validate(f);if(err)return toast(err);
@@ -1244,7 +1248,7 @@ const ACT={
   'stat-nav':el=>{const d=+el.dataset.d;if(S.stat.mode==='M')S.stat.ym=shiftYM(S.stat.ym,d);else S.stat.y=String(+S.stat.y+d);render(true)},
   'stat-cat':el=>{S.stat.cat=el.dataset.c;render();window.scrollTo(0,0)},
   'save-budget':async()=>{const B={total:evalAmt($('#bg-total').value)||0,cats:{},u:Date.now()};document.querySelectorAll('[data-bc]').forEach(i=>{const v=evalAmt(i.value);if(v>0)B.cats[i.dataset.bc]=v});S.budgets=B;await saveKV('budgets');render(true);toast('已儲存預算')},
-  'proj-done':async el=>{const k=el.dataset.id;const m={...(S.settings.projDone||{})};if(el.dataset.on)m[k]=TODAY();else delete m[k];S.settings.projDone=m;await saveKV('settings');render(true);toast(el.dataset.on?'已標記為完成':'已重新開啟')},
+  'proj-done':async el=>{const k=el.dataset.id;const m={...(S.settings.projDone||{})};const o={...(S.settings.projOpen||{})};if(el.dataset.on){m[k]=TODAY();delete o[k]}else{delete m[k];o[k]=1}S.settings.projDone=m;S.settings.projOpen=o;await saveKV('settings');render(true);toast(el.dataset.on?'已標記為完成':'已重新開啟')},
   'proj-done-list':()=>{S.projDoneOpen=!S.projDoneOpen;render(true)},
   'proj-rename':async el=>{const old=el.dataset.id;const v=await askText('重新命名專案',old,'新名稱');if(!v||!v.trim()||v.trim()===old)return;const rs=D.live.filter(r=>r.p===old).map(r=>({...r,p:v.trim()}));await mutate(rs);if((S.settings.projDone||{})[old]){const m={...S.settings.projDone};m[v.trim()]=m[old];delete m[old];S.settings.projDone=m;await saveKV('settings')}S.stack[S.stack.length-1].id=v.trim();render();toast('已更新 '+rs.length+' 筆')},
   'rule-new':()=>{const f=blankForm('exp');f.rep='M';f.mode='rep';openEditor(f)},
@@ -1365,7 +1369,8 @@ window.__ledger={S,D,mozeToData,toMozeCSV,evalAmt,amortize,val,cardCycle};
 const FB_VER='10.12.2';
 const SYNC_KV=['accts','cats','budgets','rules','tpls','rates','settings','sellers'];
 const LOCAL_SETTINGS=['theme','lastA','lastBackup','sample'];
-const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],firstM:false,firstK:false,cloudU:new Map(),remoteKV:{},lastSync:0,writing:0,wTot:0,wDone:0,online:navigator.onLine,decided:false,
+const MCOL='mon';   // 每月一份文件，每筆記錄存成一個 JSON 字串欄位
+const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],firstM:false,firstK:false,cloudU:new Map(),srv:new Set(),q:new Map(),qBusy:false,remoteKV:{},lastSync:0,writing:0,wTot:0,wDone:0,online:navigator.onLine,decided:false,
   available(){return!window.__ARTIFACT__},
   async init(){
     if(!this.available()){this.state='na';return}
@@ -1378,7 +1383,8 @@ const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],fi
       const app=firebase.apps.length?firebase.app():firebase.initializeApp(this.cfg);
       this.auth=firebase.auth(app);this.db=firebase.firestore(app);
       try{this.db.settings({experimentalAutoDetectLongPolling:true,merge:true})}catch(e){}
-      try{await this.db.enablePersistence({synchronizeTabs:true})}catch(e){}
+      // 不再使用 Firestore 的離線佇列（本機資料已存在 App 自己的資料庫）；清掉舊版卡住的上傳佇列
+      try{if(localStorage.getItem('fsCleared')!=='2'){await this.db.clearPersistence();localStorage.setItem('fsCleared','2')}}catch(e){}
       this.auth.onAuthStateChanged(u=>{this.user=u;if(u)this.start();else{this.stop();this.state='signedout';refreshCloudUI()}});
     }catch(e){this.state='error';this.err=String(e.message||e);refreshCloudUI()}
     addEventListener('online',()=>{this.online=true;refreshCloudUI()});addEventListener('offline',()=>{this.online=false;refreshCloudUI()});
@@ -1386,7 +1392,7 @@ const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],fi
   base(){return this.db.collection('users').doc(this.user.uid)},
   async pollInbox(){if(!this.user||!this.db)return;try{const snap=await this.base().collection('inbox').get({source:'server'});this.inboxErr='';this.inboxOk=Date.now();if(!snap.empty)processInbox(snap.docs)}catch(e){this.inboxErr=(e&&(e.code||e.message))||'unknown'}},
   start(){
-    this.stop();this.state='syncing';this.firstM=this.firstK=false;this.decided=false;this.cloudU=new Map();refreshCloudUI();
+    this.stop();this.state='syncing';this.firstM=this.firstK=false;this.decided=false;this.cloudU=new Map();this.srv=new Set();this.q=new Map();this.wTot=this.wDone=0;refreshCloudUI();
     const onErr=e=>{this.state='error';this.err=e.code==='permission-denied'?'沒有權限：請確認 Firestore 規則已發布':String(e.message||e);refreshCloudUI()};
     this.unsub.push(this.base().collection('kv').onSnapshot(snap=>{
       const changed=[];
@@ -1399,11 +1405,14 @@ const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],fi
     },onErr));
     this.unsub.push(this.base().collection('inbox').onSnapshot(snap=>{this.inboxErr='';this.inboxOk=Date.now();const docs=[];snap.docChanges().forEach(ch=>{if(ch.type==='added'&&!ch.doc.metadata.hasPendingWrites)docs.push(ch.doc)});if(docs.length)processInbox(docs)},e=>{this.inboxErr=(e&&(e.code||e.message))||'unknown';refreshCloudUI()}));
     this.pollInbox();
-    this.unsub.push(this.base().collection('months').onSnapshot(snap=>{
+    this.unsub.push(this.base().collection(MCOL).onSnapshot(async snap=>{
       const incoming=[];
       snap.docChanges().forEach(ch=>{if(ch.type==='removed'||ch.doc.metadata.hasPendingWrites)return;const r=(ch.doc.data()||{}).r||{};
-        for(const id in r){const x=r[id];if(!x||!x.id)continue;const cu=this.cloudU.get(id)||0;if((x.u||0)>=cu)this.cloudU.set(id,x.u||0);incoming.push(x)}});
-      if(!this.firstM){this.firstM=true;this.firstIncoming=incoming;this.maybeReconcile()}
+        for(const id in r){let x=r[id];if(typeof x==='string'){try{x=JSON.parse(x)}catch(e){continue}}if(!x||!x.id)continue;this.srv.add(id);const cu=this.cloudU.get(id)||0;if((x.u||0)>=cu)this.cloudU.set(id,x.u||0);incoming.push(x)}});
+      if(!this.firstM){
+        // 舊格式（months，每筆展開成欄位，大月份會超過 Firestore 索引上限）只讀一次，搬到新格式
+        try{const old=await this.base().collection('months').get();old.forEach(d=>{const r=(d.data()||{}).r||{};for(const id in r){const x=r[id];if(!x||!x.id||this.cloudU.has(id))continue;this.cloudU.set(id,-1);incoming.push(x)}})}catch(e){}
+        this.firstM=true;this.firstIncoming=incoming;this.maybeReconcile()}
       else if(incoming.length&&applyRemoteRecs(incoming))scheduleRender();
       this.touch(snap);
     },onErr));
@@ -1432,14 +1441,25 @@ const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],fi
   stop(){this.unsub.forEach(f=>{try{f()}catch(e){}});this.unsub=[]},
   pushRecs(list){
     if(!this.user||!this.decided||!list.length)return;
-    const byM=new Map();
-    for(const r of list){const ym=(r.dt||'').slice(0,7);if(!/^\d{4}-\d{2}$/.test(ym))continue;let m=byM.get(ym);if(!m)byM.set(ym,m={});m[r.id]=JSON.parse(JSON.stringify(r))}
-    const col=this.base().collection('months');let batch=this.db.batch(),n=0,cnt=0;const commits=[],sizes=[];
-    for(const[ym,m]of byM){const ids=Object.keys(m);for(let i=0;i<ids.length;i+=500){const part={},fields=[];ids.slice(i,i+500).forEach(id=>{part[id]=m[id];fields.push(new firebase.firestore.FieldPath('r',id))});
-      batch.set(col.doc(ym),{r:part},{mergeFields:fields});cnt+=fields.length;if(++n>=15||cnt>=1000){commits.push(batch.commit());sizes.push(cnt);batch=this.db.batch();n=0;cnt=0}}}
-    if(n){commits.push(batch.commit());sizes.push(cnt)}
-    for(const r of list)this.cloudU.set(r.id,r.u||0);
-    this.track(commits,sizes);
+    for(const r of list){if(!/^\d{4}-\d{2}/.test(r.dt||''))continue;if(!this.q.has(r.id))this.wTot++;this.q.set(r.id,JSON.stringify(r));this.cloudU.set(r.id,r.u||0)}
+    refreshCloudUI();this.drain();
+  },
+  // 依序上傳：每次最多 400 筆，一筆一個欄位（JSON 字串），確認成功才算完成，失敗自動重試
+  async drain(){
+    if(this.qBusy)return;this.qBusy=true;this.writing++;let fail=0;
+    try{
+      while(this.q.size&&this.user){
+        const take=[...this.q.entries()].slice(0,400);const byM=new Map();
+        for(const[id,js]of take){const ym=JSON.parse(js).dt.slice(0,7);let m=byM.get(ym);if(!m)byM.set(ym,m={});m[id]=js}
+        const batch=this.db.batch();const col=this.base().collection(MCOL);
+        for(const[ym,m]of byM)batch.set(col.doc(ym),{r:m},{mergeFields:Object.keys(m).map(id=>new firebase.firestore.FieldPath('r',id))});
+        try{await Promise.race([batch.commit(),new Promise((_,rj)=>setTimeout(()=>rj(new Error('逾時')),90000))]);
+          for(const[id,js]of take){if(this.q.get(id)===js)this.q.delete(id);this.srv.add(id)}this.wDone+=take.length;this.lastSync=Date.now();fail=0;if(this.state==='error'&&/上傳/.test(this.err)){this.state='ok';this.err=''}refreshCloudUI()}
+        catch(e){fail++;const c=e&&(e.code||e.message)||'';
+          if(c==='permission-denied'){this.err='上傳失敗：沒有權限（請確認 Firestore 規則）';this.state='error';refreshCloudUI();break}
+          this.err='上傳暫停，'+Math.min(60,5*fail)+' 秒後重試（'+c+'）';refreshCloudUI();await new Promise(r=>setTimeout(r,Math.min(60,5*fail)*1000))}
+      }
+    }finally{this.qBusy=false;this.writing--;if(!this.q.size){this.wTot=this.wDone=0;if(/上傳暫停/.test(this.err))this.err=''}refreshCloudUI()}
   },
   pushKV(k){if(!this.user||!this.decided)return;let v=S[k];if(k==='settings'){v={...v};LOCAL_SETTINGS.forEach(x=>delete v[x])}
     const u=S.kvu[k]||Date.now();this.remoteKV[k]=u;const w=[this.base().collection('kv').doc(k).set({j:JSON.stringify(v),u})];
@@ -1450,7 +1470,7 @@ const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],fi
     switch(this.state){
       case'na':return'雲端同步只在安裝版提供';case'off':return'尚未設定';case'loading':return'連線中…';case'signedout':return'尚未登入';case'error':return this.err||'同步錯誤';
       case'syncing':return'同步中…';
-      case'ok':{if(!this.online)return'離線中，恢復連線後自動上傳';if(this.writing)return this.wTot?'待上傳 '+(this.wTot-this.wDone).toLocaleString()+' / 共 '+this.wTot.toLocaleString()+' 筆':'上傳中…';return'已同步'+(this.lastSync?' · '+new Date(this.lastSync).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',hour12:false}):'')}
+      case'ok':{if(!this.online)return'離線中，恢復連線後自動上傳';if(this.q&&this.q.size)return'待上傳 '+this.q.size.toLocaleString()+' / 共 '+Math.max(this.wTot,this.q.size).toLocaleString()+' 筆'+(this.err&&/上傳暫停/.test(this.err)?'・'+this.err:'');if(this.writing)return'上傳中…';return'已同步'+(this.lastSync?' · '+new Date(this.lastSync).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',hour12:false}):'')}
     }return''}
 };
 window.Cloud=Cloud;
@@ -1483,7 +1503,7 @@ function pageCloud(){
     <div class="btns fill"><button class="btn pri" data-act="cloud-in">登入</button><button class="btn" data-act="cloud-up">建立帳號</button></div><button class="btn sm" data-act="cloud-reset" style="justify-self:start">忘記密碼</button>${Cloud.err&&st==='error'?`<div class="hint neg">${esc(Cloud.err)}</div>`:''}</div>`;
   else if(st==='loading')body=`<div class="empty">連線中…</div>`;
   else body=`<div class="sum"><div class="lbl">帳號</div><div style="font-size:17px;font-weight:600;word-break:break-all">${esc(Cloud.user?.email||'')}</div><div class="toolbar"><span class="hint" id="cloud-label">${esc(Cloud.label())}</span></div>
-    <div class="kv"><div><div class="lbl">本機記錄</div><div class="v num">${D.live.length.toLocaleString()}</div></div><div><div class="lbl">雲端記錄</div><div class="v num">${[...Cloud.cloudU.keys()].filter(id=>!S.byId.get(id)?.x).length.toLocaleString()}</div></div></div>
+    <div class="kv"><div><div class="lbl">本機記錄</div><div class="v num">${D.live.length.toLocaleString()}</div></div><div><div class="lbl">雲端記錄</div><div class="v num">${[...Cloud.srv].filter(id=>S.byId.get(id)&&!S.byId.get(id).x).length.toLocaleString()}</div></div></div>
     <div class="btns"><button class="btn sm" data-act="cloud-resync">重新同步</button><button class="btn sm danger" data-act="cloud-out">登出</button></div></div>
     <div class="hint mt">記帳後會在背景上傳；離線時先存在這台裝置，恢復連線後自動補傳。其他裝置開啟 App 時即時更新。</div>`;
   return{back:1,head:`<h1>雲端同步</h1>`,body:body+(st!=='na'&&st!=='off'?`${Cloud.user?`<div class="hint mt">帳號 UID（設定 Claude 對話記帳時需要）：<code class="num" style="user-select:all;word-break:break-all">${esc(Cloud.user.uid)}</code> <button class="btn sm" data-act="copy-uid">複製</button></div>`:''}<div class="hint mt">Firebase 專案：${esc(Cloud.cfg?.projectId||'')}${window.FIREBASE_CONFIG?'':' · <button class="btn sm" data-act="cloud-cfg-clear">更換設定</button>'}</div>`:'')};
@@ -2170,7 +2190,7 @@ Object.assign(ACT,{
   'cal-today':()=>{if(S.day!==TODAY())setDay(TODAY())},
   'cal-col':()=>{S.calCol=!S.calCol;if(!S.calCol)S.month=S.day.slice(0,7);render(true)},
   'cal-nav':el=>calMove(+el.dataset.d),
-  'home-proj':()=>{const cur=S.settings.homeProj||'';const projs=D.projs.filter(Boolean);
+  'home-proj':()=>{const cur=S.settings.homeProj||'';const projs=D.projs.filter(p=>p&&(p===cur||!projDoneAt(p)));
     openSheet('首頁顯示',`<div class="list">${['',...projs].map(p=>`<button class="li" data-act="home-proj-set" data-p="${esc(p)}" style="width:100%;text-align:left;border:0;background:none"><div class="grow">${p?esc(p):'全部記錄'}</div>${p===cur?IC.check.replace('<svg','<svg width="18" height="18" style="stroke:var(--accent);fill:none;stroke-width:2"'):''}</button>`).join('')}</div>${cur?`<button class="btn mt" data-act="home-proj-stat" data-p="${esc(cur)}">查看「${esc(cur)}」統計</button>`:''}`)},
   'home-proj-set':async el=>{S.settings.homeProj=el.dataset.p;await saveKV('settings');closeSheet();render(true)},
   'home-proj-stat':el=>{closeSheet();push('project',el.dataset.p)},
