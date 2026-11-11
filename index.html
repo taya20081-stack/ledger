@@ -393,13 +393,15 @@ h1{font-weight:700}
 .pbar{height:6px;border-radius:99px;background:var(--paper2);margin:6px 0 4px;overflow:hidden}
 .pbar i{display:block;height:100%;background:var(--accent);border-radius:99px}
 
+.trl{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin-top:-4px;grid-column:2/-1;min-width:0}.row.hrow:has(>.trl)>:first-child{grid-row:1/3;align-self:center}.trl .apill{max-width:none;overflow:visible}.trl .arr{color:var(--muted);font-size:13px}
+
 </style>
 </head>
 <body>
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v1.9.0';
+window.APP_VER='v1.9.7';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -444,6 +446,7 @@ const GROUPS=['現金','銀行','電子支付','信用卡','外幣','投資','�
 const EXP_T=new Set(['支出','手續費','利息','折扣']);
 const INC_T=new Set(['收入','紅利回饋']);
 const SYS_T=['紅利回饋','折扣','手續費','利息','餘額調整'];
+const SYS_HIDE=new Set(['手續費','利息','餘額調整']);   // 新增時不顯示（收支細項／帳戶頁已有），舊記錄仍可編輯
 const DEBT_ACT={lend:['應收款項','借出',-1,'借出'],adv:['應收款項','代墊',-1,'代墊'],collect:['應收款項','收款',1,'收回'],borrow:['應付款項','借入',1,'借入'],repay:['應付款項','還款',-1,'還款']};
 const DEFAULT_CATS={
   exp:[['飲食',['早餐','午餐','晚餐','飲料','點心','宵夜','食材','酒']],['日常',['日用品','家用','美容美髮','洗衣']],['交通',['捷運','公車','火車','高鐵','計程車','加油','停車','過路費']],['居家',['房租','水費','電費','瓦斯','網路','電信','管理費','修繕']],['娛樂',['電影','遊戲','訂閱服務','運動','展覽']],['購物',['服飾','3C','家電','書籍','禮物']],['醫療保健',['掛號','藥品','保健食品','保險']],['學習',['課程','書籍','文具']],['旅遊',['住宿','交通','餐飲','門票','伴手禮']],['人情',['紅包','禮金','請客']],['投資',['股票','基金','手續費']],['其他',['其他']]],
@@ -1055,7 +1058,7 @@ function pageSettings(){
   return{back:1,head:`<h1>設定</h1>`,body:`<div class="card stack" style="margin-top:0"><div class="lbl">主題</div><div class="seg"><button class="${S.settings.theme!=='dark'?'on':''}" data-act="theme" data-k="light">淺色</button><button class="${S.settings.theme==='dark'?'on':''}" data-act="theme" data-k="dark">深色</button></div><div class="lbl">收支顏色</div><div class="seg"><button class="${S.settings.swapCol===false?'on':''}" data-act="swapcol" data-k="">支出紅・收入綠</button><button class="${S.settings.swapCol!==false?'on':''}" data-act="swapcol" data-k="1">支出綠・收入紅</button></div></div>
   <div class="card stack"><div class="lbl">統計排除分類</div><div class="hint">被排除的主類別不計入首頁收支、預算與統計（例如把「投資」視為資產移轉而非消費）。</div><div class="chips">${S.cats.exp.map(c=>`<button class="chip${ex.includes(c.n)?' on':''}" data-act="excl" data-c="${esc(c.n)}"><i style="background:var(--c${c.ci})"></i>${esc(c.n)}</button>`).join('')}</div></div>
   <div class="card stack"><div class="lbl">儲存狀態</div><div class="hint">${DB.mem?'<b class="neg">此瀏覽器不允許 IndexedDB，資料不會保存。</b>':'資料存於本機 IndexedDB。'}${persisted===true?' 已取得永久儲存權限。':persisted===false?' 瀏覽器未授予永久儲存；iPhone 請「加入主畫面」後使用，並定期備份。':''}</div></div>
-  <div class="card stack"><div class="lbl">危險操作</div><button class="btn danger" data-act="wipe">清除此裝置上的所有資料</button></div><div class="hint mt">存摺記帳 v1.0 · 2026-11</div>`};
+  <div class="card stack"><div class="lbl">危險操作</div><button class="btn danger" data-act="wipe">清除此裝置上的所有資料</button>${window.Cloud&&Cloud.user?`<button class="btn danger" data-act="acct-delete">刪除帳號（含雲端資料）</button>`:''}</div><div class="hint mt">存摺記帳 ${esc(window.APP_VER||'')}</div>`};
 }
 /* ================= render ================= */
 const PAGES={home:pageHome,accts:pageAccts,stats:pageStats,more:pageMore,acct:pageAcct,budget:pageBudget,projects:pageProjects,project:pageProject,debts:pageDebts,debt:pageDebt,rules:pageRules,tpls:pageTpls,cats:pageCats,rates:pageRates,backup:pageBackup,settings:pageSettings,search:pageSearch};
@@ -1102,7 +1105,7 @@ function renderEditor(){
   const shopRow=ei?`<div class="field"><span>商家</span><input class="in" id="f-sh" data-f="sh" value="${esc(f.sh)}" placeholder="選填，輸入幾個字會帶出以前的商家" autocomplete="off"><div id="f-sh-sugg" class="nsug" hidden></div></div>`:'';
   const nameRow=`<div class="field nsug-wrap"><span>名稱</span><input class="in" id="f-n" data-f="n" value="${esc(f.n)}" placeholder="${f.kind==='exp'?'輸入幾個字，會帶出以前記過的名稱':'選填'}" autocomplete="off"><div id="f-n-sugg" class="nsug" hidden></div></div>`;
   sb.innerHTML=`<div class="toolbar"><div class="seg" role="tablist">${kinds.map(([k,l])=>`<button class="${f.kind===k?'on':''}" data-act="ef-kind" data-k="${k}">${l}</button>`).join('')}</div>${f._edit?'':`<div class="btns"><button class="btn sm" data-act="inv-scan">${IC.qr}掃發票</button><button class="btn sm" data-act="rc-open">掃明細</button></div>`}</div>
-  ${f.kind==='sys'?`<label class="field"><span>類型</span><select class="in" id="f-st" data-f="st" data-rr="1">${SYS_T.map(t=>`<option ${t===f.st?'selected':''}>${t}</option>`).join('')}</select></label>`:''}
+  ${f.kind==='sys'?`<label class="field"><span>類型</span><select class="in" id="f-st" data-f="st" data-rr="1">${SYS_T.filter(t=>!SYS_HIDE.has(t)||f.st===t).map(t=>`<option ${t===f.st?'selected':''}>${t}</option>`).join('')}</select></label>`:''}
   ${f.kind==='debt'?`<div class="field"><span>動作</span><div class="chips">${Object.entries(DEBT_ACT).map(([k,v])=>`<button class="chip${f.act===k?' on':''}" data-act="ef-debt" data-k="${k}">${v[3]}<small style="opacity:.7">${v[0]==='應收款項'?'應收':'應付'}</small></button>`).join('')}</div></div><label class="field"><span>對象</span><input class="in" id="f-w" data-f="w" list="dl-who" value="${esc(f.w)}" placeholder="例如：家人、同事姓名"></label>`:''}
   ${dateRow}${catPicker}${splits}${amtBox}${feeRow}${acctRow}${projRow}${shopRow}${nameRow}
   ${!f._edit&&['exp','inc','tr'].includes(f.kind)?(()=>{const md=f.mode||(f.rep?'rep':'');const canI=f.kind==='exp'&&!f.splits;
@@ -1447,7 +1450,7 @@ const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],fi
     refreshCloudUI();this.drain();
   },
   // 依序上傳：每次最多 400 筆，一筆一個欄位（JSON 字串），確認成功才算完成，失敗自動重試
-  async drain(){
+  async drain(){if(this.deleting)return;
     if(this.qBusy)return;this.qBusy=true;this.writing++;let fail=0;
     try{
       while(this.q.size&&this.user){
@@ -1506,7 +1509,7 @@ function pageCloud(){
   else if(st==='loading')body=`<div class="empty">連線中…</div>`;
   else body=`<div class="sum"><div class="lbl">帳號</div><div style="font-size:17px;font-weight:600;word-break:break-all">${esc(Cloud.user?.email||'')}</div><div class="toolbar"><span class="hint" id="cloud-label">${esc(Cloud.label())}</span></div>
     <div class="kv"><div><div class="lbl">本機記錄</div><div class="v num">${D.live.length.toLocaleString()}</div></div><div><div class="lbl">雲端記錄</div><div class="v num">${[...Cloud.srv].filter(id=>S.byId.get(id)&&!S.byId.get(id).x).length.toLocaleString()}</div></div></div>
-    <div class="btns"><button class="btn sm" data-act="cloud-resync">重新同步</button><button class="btn sm danger" data-act="cloud-out">登出</button></div></div>
+    <div class="btns"><button class="btn sm" data-act="cloud-resync">重新同步</button><button class="btn sm danger" data-act="cloud-out">登出</button><button class="btn sm danger" data-act="acct-delete">刪除帳號</button></div></div>
     <div class="hint mt">記帳後會在背景上傳；離線時先存在這台裝置，恢復連線後自動補傳。其他裝置開啟 App 時即時更新。</div>`;
   return{back:1,head:`<h1>雲端同步</h1>`,body:body+(st!=='na'&&st!=='off'?`${Cloud.user?`<div class="hint mt">帳號 UID（設定 Claude 對話記帳時需要）：<code class="num" style="user-select:all;word-break:break-all">${esc(Cloud.user.uid)}</code> <button class="btn sm" data-act="copy-uid">複製</button></div>`:''}<div class="hint mt">Firebase 專案：${esc(Cloud.cfg?.projectId||'')}${window.FIREBASE_CONFIG?'':' · <button class="btn sm" data-act="cloud-cfg-clear">更換設定</button>'}</div>`:'')};
 }
@@ -1517,6 +1520,23 @@ Object.assign(ACT,{
   'cloud-in':async()=>{const em=$('#cl-em').value.trim(),pw=$('#cl-pw').value;try{await Cloud.auth.signInWithEmailAndPassword(em,pw);toast('已登入，開始同步')}catch(e){toast(AUTH_ERR[e.code]||e.message)}},
   'cloud-up':async()=>{const em=$('#cl-em').value.trim(),pw=$('#cl-pw').value;try{await Cloud.auth.createUserWithEmailAndPassword(em,pw);toast('帳號已建立，開始上傳')}catch(e){toast(AUTH_ERR[e.code]||e.message)}},
   'cloud-reset':async()=>{const em=$('#cl-em').value.trim();if(!em)return toast('請先輸入 Email');try{await Cloud.auth.sendPasswordResetEmail(em);toast('已寄出重設密碼信')}catch(e){toast(AUTH_ERR[e.code]||e.message)}},
+  'acct-delete':()=>{if(!Cloud.user)return toast('尚未登入雲端帳號');const em=Cloud.user.email||'';
+    openSheet('刪除帳號',`<div class="note alert"><div class="grow"><b>此動作無法復原。</b>將永久刪除：<br>・雲端上的所有記錄、帳戶、分類與設定<br>・聊天記帳的收件匣<br>・登入帳號 ${esc(em)}<br>・這台裝置上的資料<br>其他已登入的裝置也會無法再同步。</div></div>
+    <button class="btn" data-act="export-json">先匯出備份檔</button>
+    <label class="field"><span>輸入登入密碼確認</span><input class="in" id="ad-pw" type="password" autocomplete="current-password"></label>
+    <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="ad-ok"> 我了解資料刪除後無法找回</label>
+    <div class="btns fill"><button class="btn" data-act="close-sheet">取消</button><button class="btn danger" data-act="acct-delete-go">永久刪除</button></div><div class="hint" id="ad-msg"></div>`)},
+  'acct-delete-go':async()=>{const pw=$('#ad-pw').value;if(!$('#ad-ok').checked)return toast('請勾選確認');if(!pw)return toast('請輸入密碼');
+    const msg=t=>{const m=$('#ad-msg');if(m)m.textContent=t};const btn=$('[data-act=acct-delete-go]');if(btn)btn.disabled=true;
+    const u=Cloud.user;try{msg('驗證密碼…');await u.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(u.email,pw))}
+    catch(e){if(btn)btn.disabled=false;return msg(AUTH_ERR[e.code]||e.message)}
+    Cloud.deleting=true;Cloud.stop();Cloud.q.clear&&Cloud.q.clear();
+    try{let n=0;for(const c of[MCOL,'months','kv','inbox']){const snap=await Cloud.base().collection(c).get({source:'server'});const ds=snap.docs;
+        for(let i=0;i<ds.length;i+=400){const b=Cloud.db.batch();ds.slice(i,i+400).forEach(d=>b.delete(d.ref));await b.commit();n+=Math.min(400,ds.length-i);msg('刪除雲端資料… '+n)}}
+      try{await Cloud.base().delete()}catch(e){}
+      msg('刪除登入帳號…');await u.delete()}
+    catch(e){Cloud.deleting=false;if(btn)btn.disabled=false;return msg('刪除失敗：'+(AUTH_ERR[e.code]||e.message)+'。可重新整理後再試一次。')}
+    const cfg=S.cloudCfg;await DB.clear();if(cfg)await DB.putKV('cloudCfg',cfg);toast('帳號與資料已刪除');setTimeout(()=>location.reload(),1200)},
   'cloud-out':async()=>{if(!await askConfirm('登出後這台裝置不再同步，本機資料保留。','登出',false))return;await Cloud.auth.signOut();render()},
   'cloud-resync':()=>{Cloud.err='';Cloud.start()}
 });
@@ -1803,12 +1823,13 @@ function pageEntity(dr){
   for(const r of D.live){if(r.dt>td||!pred(r))continue;if(!allTime&&(r.dt<R.from||r.dt>R.to))continue;
     const k=rateOf(curOf(r));const e=spendOf(r)*k,i=incomeOf(r)*k;if(!e&&!i)continue;if(excluded(r)&&e)continue;
     recs.push(r);exp+=e;inc+=i;if(!f||r.dt<f)f=r.dt;if(!l||r.dt>l)l=r.dt;
-    if(e){const g=ce.get(r.c)||{v:0,n:0};g.v+=e;g.n++;ce.set(r.c,g)}if(i){const g=ci.get(r.s||r.c)||{v:0,n:0};g.v+=i;g.n++;ci.set(r.s||r.c,g)}}
+    if(e){const g=ce.get(r.c)||{v:0,n:0,l:[]};g.v+=e;g.n++;g.l.push(r);ce.set(r.c,g)}if(i){const g=ci.get(r.s||r.c)||{v:0,n:0,l:[]};g.v+=i;g.n++;g.l.push(r);ci.set(r.s||r.c,g)}}
+  STAT_SUB={};const lblE=allTime?'全部期間':R.label;for(const[k,g]of ce)STAT_SUB['exp:'+k]={l:g.l,v:g.v,t:dr.v+' · '+k,kind:'exp',lbl:lblE};for(const[k,g]of ci)STAT_SUB['inc:'+k]={l:g.l,v:g.v,t:dr.v+' · '+k,kind:'inc',lbl:lblE};
   exp=Math.round(exp);inc=Math.round(inc);
   const pie=(m,kind,title)=>{const arr=[...m.entries()].sort((a,b)=>b[1].v-a[1].v);const tot=arr.reduce((x,[,g])=>x+g.v,0);if(!arr.length)return'';
     const col=(n,i)=>kind==='exp'?`var(--c${D.ci.get('exp:'+n)??10})`:`var(--c${(i+2)%11})`;
     const segs=arr.slice(0,9).map(([n,g],i)=>({n,v:g.v,col:col(n,i)}));if(arr.length>9)segs.push({n:'其他',v:arr.slice(9).reduce((s,x)=>s+x[1].v,0),col:'var(--c11)'});
-    return`<h3 style="margin:16px 0 0;font:600 14px var(--serif)">${title}</h3><div class="donutwrap mt">${donut(segs,Math.round(tot),kind==='exp'?'支出':'收入')}<div class="legend">${arr.map(([n,g],i)=>`<div class="lg lg2"><i style="background:${i<9?col(n,i):'var(--c11)'}"></i><span>${esc(n)}<small>${g.n} 筆</small></span><span class="p num">${tot?(g.v/tot*100).toFixed(1):0}%</span><span class="num">${fmt(Math.round(g.v))}</span></div>`).join('')}</div></div>`};
+    return`<h3 style="margin:16px 0 0;font:600 14px var(--serif)">${title}</h3><div class="donutwrap mt">${donut(segs,Math.round(tot),kind==='exp'?'支出':'收入')}<div class="legend">${arr.map(([n,g],i)=>`<button class="lg lg2" data-act="stat-sub" data-v="${esc(kind+':'+n)}"><i style="background:${i<9?col(n,i):'var(--c11)'}"></i><span>${esc(n)}<small>${g.n} 筆</small></span><span class="p num">${tot?(g.v/tot*100).toFixed(1):0}%</span><span class="num">${fmt(Math.round(g.v))}</span></button>`).join('')}</div></div>`};
   const SP=allTime&&f?{from:f,to:l}:null;const tb=SP?bucketsIn(SP,autoGran(SP)):trendBuckets(mode,st.anchor);const ts=sumBuckets(tb,pred);
   const tTitle=SP?'期間走勢（每'+{D:'日',W:'週',M:'月',Y:'年'}[tb[0]?.g||'M']+'）':{D:'近 14 天',W:'近 12 週',M:'近 12 個月',Q:'近 8 季',Y:'近 6 年',C:'期間走勢'}[mode];
   const nav=allTime?'':(mode==='C'?`<div class="grid2" style="flex:1;min-width:0"><input class="in" type="date" id="st-from" data-stset="from" value="${R.from}" aria-label="起日"><input class="in" type="date" id="st-to" data-stset="to" value="${R.to}" aria-label="迄日"></div>`
@@ -1838,7 +1859,8 @@ function pageStats(){
     const v=kindFn(r)*rateOf(curOf(r));if(!v)continue;if(drillPred&&!drillPred(r))continue;
     if(!dr&&dim!=='cat'&&dimKey(r,dim)===NONE[dim]){if(!none)none={v:0,n:0};none.v+=v;none.n++;continue}
     if(!spanF||r.dt<spanF)spanF=r.dt;if(!spanT||r.dt>spanT)spanT=r.dt;
-    total+=v;recs.push(r);const k=gkey(r);let g=groups.get(k);if(!g)groups.set(k,g={v:0,n:0});g.v+=v;g.n++}
+    total+=v;recs.push(r);const k=gkey(r);let g=groups.get(k);if(!g)groups.set(k,g={v:0,n:0,l:[]});g.v+=v;g.n++;g.l.push(r)}
+  if(dr){STAT_SUB={};for(const[k,g]of groups)STAT_SUB[k]={l:g.l,v:g.v,t:dr.v+' · '+k,kind:st.kind,lbl:R.label}}
   total=Math.round(total);
   const arr=[...groups.entries()].sort((a,b)=>b[1].v-a[1].v);const ck=st.kind;const gtotal=arr.reduce((x,[,g])=>x+g.v,0);
   const catCol=n=>`var(--c${D.ci.get(ck+':'+n)??(n==='折扣'?11:10)})`;
@@ -1852,7 +1874,7 @@ function pageStats(){
     :`<div style="display:flex;align-items:center;gap:2px;min-width:0"><button class="ibtn" data-act="stat-nav" data-d="-1" aria-label="上一期">${IC.l}</button><span class="num" style="font-weight:600;white-space:nowrap">${esc(R.label)}</span><button class="ibtn" data-act="stat-nav" data-d="1" aria-label="下一期">${IC.r}</button></div><input class="in" type="date" id="st-anchor" data-stset="anchor" value="${st.anchor}" aria-label="跳到日期" style="width:auto;max-width:170px">`;
   const quick=mode==='C'?`<div class="chips">${[['近 7 天',-6],['近 30 天',-29],['近 90 天',-89],['近一年',-364]].map(([l,n])=>`<button class="chip" data-act="stat-quick" data-n="${n}">${l}</button>`).join('')}</div>`:'';
   const LIM=st.showAll?400:15;const canDrill=!dr;
-  const legend=arr.slice(0,LIM).map(([n,g],i)=>`<button class="lg lg2" ${canDrill?`data-act="stat-drill" data-dim="${dim}" data-v="${esc(n)}"`:''}><i style="background:${i<9?colOf(n,i):'var(--c11)'}"></i><span>${esc(n)}<small>${g.n} 筆${dim!=='cat'||dr?' · 平均 '+fmt(Math.round(g.v/g.n)):''}</small></span><span class="p num">${gtotal?(g.v/gtotal*100).toFixed(1):0}%</span><span class="num ${g.v<0?'pos':''}">${fmt(Math.round(g.v))}</span></button>`).join('')
+  const legend=arr.slice(0,LIM).map(([n,g],i)=>`<button class="lg lg2" ${canDrill?`data-act="stat-drill" data-dim="${dim}" data-v="${esc(n)}"`:`data-act="stat-sub" data-v="${esc(n)}"`}><i style="background:${i<9?colOf(n,i):'var(--c11)'}"></i><span>${esc(n)}<small>${g.n} 筆${dim!=='cat'||dr?' · 平均 '+fmt(Math.round(g.v/g.n)):''}</small></span><span class="p num">${gtotal?(g.v/gtotal*100).toFixed(1):0}%</span><span class="num ${g.v<0?'pos':''}">${fmt(Math.round(g.v))}</span></button>`).join('')
     +(arr.length>LIM?`<button class="more-btn" data-act="stat-all">顯示全部 ${arr.length} 個</button>`:'');
   const SP=allTime&&spanF?{from:spanF,to:spanT}:null;
   const tb=SP?(dr?bucketsIn(SP,autoGran(SP)):[]):trendBuckets(mode,st.anchor);const ts=sumBuckets(tb,pred);
@@ -1883,7 +1905,12 @@ function pageStats(){
     ${ptable}${tb.length?`<div class="card"><h3>${trendTitle}${dr?' · '+esc(dr.v):''}<small>${dr?'':'<span class="lgd se"></span>支出 <span class="lgd si"></span>收入'}</small></h3>${multiLine(tb.map(b=>b.short),series)}</div>`:''}
     ${table}${showList?dayGroups(recs,'home',300):''}${dr?'':nw}`};
 }
+let STAT_SUB={};
+function statSubSheet(key){const o=STAT_SUB[key];if(!o||!o.l.length)return toast('沒有明細');
+  const n=o.l.length,v=Math.round(o.v);
+  openSheet(o.t,`<div class="card" style="margin-top:0"><div class="kv"><div><div class="lbl">${o.kind==='exp'?'支出':'收入'}合計</div><div class="v num" style="font-size:20px">${money(v)}</div></div><div><div class="lbl">筆數</div><div class="v num">${n}</div></div><div><div class="lbl">平均</div><div class="v num">${money(Math.round(v/n))}</div></div></div><div class="hint">${esc(o.lbl||'')}・點任一筆可修改</div></div>${dayGroups(o.l,'home',1000)}`)}
 Object.assign(ACT,{
+  'stat-sub':el=>statSubSheet(el.dataset.v),
   'stat-kind':el=>{S.stat.kind=el.dataset.k;S.stat.drill=null;render(true)},
   'stat-dim':el=>{S.stat.dim=el.dataset.k;S.stat.showAll=0;render(true)},
   'stat-all':()=>{S.stat.showAll=1;render(true)},
@@ -2127,13 +2154,14 @@ function homeRow(r,noShop){
   const td=TODAY();const cur=r.cu||curOf(r);const v=raw(r);const isTr=r.t==='轉出'||r.t==='轉入';const a=D.acct.get(r.a);
   let amt,acct=a?a.name:'';
   if(isTr){const o=r.t==='轉出'?r:partner(r)||r;const p=partner(o);amt=`<span class="num">${money(Math.abs(o.m),curOf(o))}</span>`;acct=D.acct.get(o.a)?.name||acct;
-    var sub=[(D.acct.get(o.a)?.name||'—')+' → '+(p&&D.acct.get(p.a)?.name||'—')]}
-  else{amt=`<span class="num ${v<0?'neg':v>0?'pos':''}">${money(Math.abs(v),cur)}</span>`;
+    var sub=[];const rt0=ruleTag(r);if(rt0)sub.push(rt0);
+    var trl=`<div class="trl"><span class="apill">${esc(D.acct.get(o.a)?.name||'—')}</span><span class="arr">→</span><span class="apill">${esc(p&&D.acct.get(p.a)?.name||'—')}</span></div>`;acct=''}
+  else{var trl='';amt=`<span class="num ${v<0?'neg':v>0?'pos':''}">${money(Math.abs(v),cur)}</span>`;
     var sub=[];const rt=ruleTag(r);if(rt)sub.push(rt);if(r.t!=='支出'&&r.t!=='收入')sub.push(r.t+(r.w?' @'+r.w:''))}
   if(r.sh&&!noShop&&!isTr)sub.push(r.sh);const shop='';
   const conv=cur!=='TWD'&&!isTr?`<small class="num">≈ ${money(Math.round(Math.abs(val(r))*rateOf(curOf(r))),'TWD')}</small>`:'';
   const fut=r.dt>td;const sel=S.search.selMode&&S.search.sel.has(r.id);
-  return`<button class="row hrow${fut?' future':''}${sel?' sel':''}" data-act="${S.search.selMode?'sel-toggle':'edit-rec'}" data-id="${r.id}">${hbadge(r)}<div style="min-width:0"><div class="t">${esc(noShop?((r.n&&r.n!==noShop?r.n:'')||r.s||r.c||titleOf(r)):titleOf(r))}${fut?'<span class="pill warn">未入帳</span>':''}</div>${sub.length?`<div class="s">${esc(sub.join('・'))}</div>`:''}${shop?`<div class="s shp">🏪 ${esc(shop)}</div>`:''}</div><div class="amt">${amt}${conv}${acct?`<span class="apill">${esc(acct)}</span>`:''}</div></button>`;
+  return`<button class="row hrow${fut?' future':''}${sel?' sel':''}" data-act="${S.search.selMode?'sel-toggle':'edit-rec'}" data-id="${r.id}">${hbadge(r)}<div style="min-width:0"><div class="t">${esc(noShop?((r.n&&r.n!==noShop?r.n:'')||r.s||r.c||titleOf(r)):titleOf(r))}</div>${sub.length||fut?`<div class="s">${fut?'<span class="pill warn" style="margin:0 6px 0 0">未入帳</span>':''}${esc(sub.join('・'))}</div>`:''}${shop?`<div class="s shp">🏪 ${esc(shop)}</div>`:''}</div><div class="amt">${amt}${conv}${acct?`<span class="apill">${esc(acct)}</span>`:''}</div>${trl}</button>`;
 }
 const homeProjOk=r=>!S.settings.homeProj||r.p===S.settings.homeProj;
 function calCells(){
