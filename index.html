@@ -1259,7 +1259,7 @@ window.__ledger={S,D,mozeToData,toMozeCSV,evalAmt,amortize,val,cardCycle};
 const FB_VER='10.12.2';
 const SYNC_KV=['accts','cats','budgets','rules','tpls','rates','settings','sellers'];
 const LOCAL_SETTINGS=['theme','lastA','lastBackup','sample'];
-const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],firstM:false,firstK:false,cloudU:new Map(),remoteKV:{},lastSync:0,writing:0,online:navigator.onLine,decided:false,
+const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],firstM:false,firstK:false,cloudU:new Map(),remoteKV:{},lastSync:0,writing:0,wTot:0,wDone:0,online:navigator.onLine,decided:false,
   available(){return!window.__ARTIFACT__},
   async init(){
     if(!this.available()){this.state='na';return}
@@ -1271,6 +1271,7 @@ const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],fi
     try{
       const app=firebase.apps.length?firebase.app():firebase.initializeApp(this.cfg);
       this.auth=firebase.auth(app);this.db=firebase.firestore(app);
+      try{this.db.settings({experimentalAutoDetectLongPolling:true,merge:true})}catch(e){}
       try{await this.db.enablePersistence({synchronizeTabs:true})}catch(e){}
       this.auth.onAuthStateChanged(u=>{this.user=u;if(u)this.start();else{this.stop();this.state='signedout';refreshCloudUI()}});
     }catch(e){this.state='error';this.err=String(e.message||e);refreshCloudUI()}
@@ -1327,23 +1328,23 @@ const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],fi
     if(!this.user||!this.decided||!list.length)return;
     const byM=new Map();
     for(const r of list){const ym=(r.dt||'').slice(0,7);if(!/^\d{4}-\d{2}$/.test(ym))continue;let m=byM.get(ym);if(!m)byM.set(ym,m={});m[r.id]=JSON.parse(JSON.stringify(r))}
-    const col=this.base().collection('months');let batch=this.db.batch(),n=0;const commits=[];
+    const col=this.base().collection('months');let batch=this.db.batch(),n=0,cnt=0;const commits=[],sizes=[];
     for(const[ym,m]of byM){const ids=Object.keys(m);for(let i=0;i<ids.length;i+=500){const part={},fields=[];ids.slice(i,i+500).forEach(id=>{part[id]=m[id];fields.push(new firebase.firestore.FieldPath('r',id))});
-      batch.set(col.doc(ym),{r:part},{mergeFields:fields});if(++n>=15){commits.push(batch.commit());batch=this.db.batch();n=0}}}
-    if(n)commits.push(batch.commit());
+      batch.set(col.doc(ym),{r:part},{mergeFields:fields});cnt+=fields.length;if(++n>=15){commits.push(batch.commit());sizes.push(cnt);batch=this.db.batch();n=0;cnt=0}}}
+    if(n){commits.push(batch.commit());sizes.push(cnt)}
     for(const r of list)this.cloudU.set(r.id,r.u||0);
-    this.track(commits);
+    this.track(commits,sizes);
   },
   pushKV(k){if(!this.user||!this.decided)return;let v=S[k];if(k==='settings'){v={...v};LOCAL_SETTINGS.forEach(x=>delete v[x])}
     const u=S.kvu[k]||Date.now();this.remoteKV[k]=u;const w=[this.base().collection('kv').doc(k).set({j:JSON.stringify(v),u})];
     if(k==='cats'||k==='accts')w.push(this.base().collection('kv').doc('botinfo').set(botInfo()));this.track(w)},
-  track(commits){if(!commits.length)return;this.writing+=commits.length;refreshCloudUI();
-    Promise.all(commits).then(()=>{this.lastSync=Date.now()}).catch(e=>{this.err='寫入失敗：'+(e.code||e.message);this.state='error'}).finally(()=>{this.writing-=commits.length;refreshCloudUI()})},
+  track(commits,sizes){if(!commits.length)return;this.writing+=commits.length;commits.forEach((c,i)=>{const k=sizes?sizes[i]||0:0;this.wTot+=k;c.then(()=>{this.wDone+=k;refreshCloudUI()},()=>{})});refreshCloudUI();
+    Promise.all(commits).then(()=>{this.lastSync=Date.now()}).catch(e=>{this.err='寫入失敗：'+(e.code||e.message);this.state='error'}).finally(()=>{this.writing-=commits.length;if(!this.writing){this.wTot=this.wDone=0}refreshCloudUI()})},
   label(){
     switch(this.state){
       case'na':return'雲端同步只在安裝版提供';case'off':return'尚未設定';case'loading':return'連線中…';case'signedout':return'尚未登入';case'error':return this.err||'同步錯誤';
       case'syncing':return'同步中…';
-      case'ok':{if(!this.online)return'離線中，恢復連線後自動上傳';if(this.writing)return'上傳中…';return'已同步'+(this.lastSync?' · '+new Date(this.lastSync).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',hour12:false}):'')}
+      case'ok':{if(!this.online)return'離線中，恢復連線後自動上傳';if(this.writing)return this.wTot?'上傳中 '+this.wDone.toLocaleString()+'/'+this.wTot.toLocaleString()+' 筆':'上傳中…';return'已同步'+(this.lastSync?' · '+new Date(this.lastSync).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',hour12:false}):'')}
     }return''}
 };
 window.Cloud=Cloud;
@@ -1398,7 +1399,7 @@ let inboxBusy=Promise.resolve();
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&typeof Cloud!=='undefined'&&Cloud.user)Cloud.pollInbox()});
 function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
   if(!Cloud.decided){await new Promise(r=>{const t=setInterval(()=>{if(Cloud.decided){clearInterval(t);r()}},300)})}
-  const add=[];
+  const add=[],dels=[];
   for(const d of docs){const x=d.data()||{};const id='ib_'+d.id;
     if(!S.byId.has(id)){const amt=Math.abs(+x.amt);if(isFinite(amt)&&amt>0){
       const kind=x.kind==='inc'?'inc':'exp';const acct=S.accts.find(a=>a.id===x.a||a.name===x.a)||D.acct.get(S.settings.lastA)||S.accts.find(a=>!a.arch);
@@ -1408,8 +1409,9 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
         const r={id,a:acct.id,t:kind==='inc'?'收入':'支出',c,s:s||'',m:kind==='inc'?amt:-amt,f:-(Math.abs(+x.fee)||0),d:0,n:String(x.n||'').slice(0,80),sh:String(x.sh||'').slice(0,60),dt,tm,p:String(x.p||'').slice(0,60),ds:'',tg:'claude',w:'',k:'',g:'',o:Date.now()};
         if(x.cu&&x.cu!==acct.cur){r.cu=x.cu;r.xr=+(fxOn(x.cu,dt)/fxOn(acct.cur,dt)).toPrecision(6)}
         add.push(r)}}}
-    try{await d.ref.delete()}catch(e){}}
+    dels.push(d.ref)}
   if(add.length){Cloud.inboxN=(Cloud.inboxN||0)+add.length;await mutate(add);scheduleRender();toast('Claude 幫你記了 '+add.length+' 筆：'+add.slice(0,3).map(r=>(r.n||r.s)+' '+fmt(Math.abs(r.m))).join('、'))}
+  dels.forEach(ref=>ref.delete().catch(()=>{}));
 }).catch(e=>{Cloud.inboxErr='處理失敗：'+(e&&e.message||e)})}
 ACT['copy-uid']=el=>{const v=Cloud.user?.uid||'';(navigator.clipboard?.writeText(v)||Promise.reject()).then(()=>toast('已複製 UID'),()=>toast('請長按 UID 文字手動複製'))};
 
