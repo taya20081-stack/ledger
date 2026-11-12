@@ -2,7 +2,7 @@
   "name": "存摺記帳",
   "short_name": "存摺記帳",
   "lang": "zh-Hant-TW",
-  "description": "個人記帳：MOZE CSV 匯入、多帳戶、預算、分期與統計",
+  "description": "個人記帳：多帳戶、預算、分期與統計",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

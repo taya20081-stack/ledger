@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>存摺記帳</title>
-<meta name="description" content="個人記帳 PWA，支援 MOZE CSV 匯入、多帳戶、多幣別、預算、分期與統計。">
+<meta name="description" content="個人記帳 PWA，支援多帳戶、多幣別、預算、分期與統計。">
 <meta name="theme-color" content="#F8F8F8">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -413,7 +413,7 @@ body.calc-on #sb{padding-bottom:330px}
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v1.9.17';
+window.APP_VER='v1.9.18';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -678,7 +678,7 @@ function guessGroup(name,cur){
 function mozeToData(text,existingAccts=[]){
   const rows=parseCSV(text);const H=rows.shift();if(!H)throw new Error('檔案是空的');
   const ix=n=>H.indexOf(n);const need=['帳戶','幣種','記錄類型','金額','日期'];
-  for(const n of need)if(ix(n)<0)throw new Error('找不到欄位「'+n+'」，請確認是 MOZE 匯出的 CSV');
+  for(const n of need)if(ix(n)<0)throw new Error('找不到欄位「'+n+'」，請確認是正確格式的 CSV');
   const I={a:ix('帳戶'),cur:ix('幣種'),t:ix('記錄類型'),c:ix('主類別'),s:ix('子類別'),m:ix('金額'),f:ix('手續費'),d:ix('折扣'),n:ix('名稱'),sh:ix('商家'),dt:ix('日期'),tm:ix('時間'),p:ix('專案'),ds:ix('描述'),tg:ix('標籤'),w:ix('對象')};
   const g=(r,k)=>I[k]>=0?(r[I[k]]??'').trim():'';
   const accts=existingAccts.map(a=>({...a}));const byName=new Map(accts.map(a=>[a.name,a]));
@@ -948,8 +948,8 @@ function pageHomeMonth(){
   return{head,body};
 }
 function pageWelcome(){
-  return{head:`<span class="seal">帳</span><h1>存摺記帳</h1>`,body:`<div class="hero"><h2>每一筆錢，都記在自己的存摺上。</h2><p>手機與電腦共用的個人記帳本，資料只存在你的裝置。可直接匯入 MOZE 3.0 匯出的 CSV，帳戶、分類、專案、轉帳、應收應付與分期利息都會保留。</p>
-  <div class="btns"><button class="btn pri" data-act="import-moze" data-m="replace">匯入 MOZE CSV</button><button class="btn" data-act="import-json" data-m="replace">還原備份檔</button><button class="btn" data-act="start-blank">從零開始</button><button class="btn" data-act="load-sample">先看範例</button>${!window.__ARTIFACT__?'<button class="btn" data-act="push" data-p="cloud">登入雲端同步</button>':''}</div>
+  return{head:`<span class="seal">帳</span><h1>存摺記帳</h1>`,body:`<div class="hero"><h2>每一筆錢，都記在自己的存摺上。</h2><p>手機與電腦共用的個人記帳本，資料只存在你的裝置。可匯入 CSV 或備份檔，帳戶、分類、專案、轉帳、應收應付與分期利息都會保留。</p>
+  <div class="btns"><button class="btn pri" data-act="import-moze" data-m="replace">匯入 CSV</button><button class="btn" data-act="import-json" data-m="replace">還原備份檔</button><button class="btn" data-act="start-blank">從零開始</button><button class="btn" data-act="load-sample">先看範例</button>${!window.__ARTIFACT__?'<button class="btn" data-act="push" data-p="cloud">登入雲端同步</button>':''}</div>
   <div class="feat"><div><b>多帳戶 · 多幣別</b>現金、銀行、信用卡、電子票證與外幣帳戶，依匯率換算淨資產。</div><div><b>信用卡帳單</b>結帳日、繳款日、本期消費與待繳金額，到期前提醒。</div><div><b>預算與專案</b>月預算、分類預算、每日可用額度；專案追蹤旅遊或車輛支出。</div><div><b>週期 · 分期 · 範本</b>固定扣款自動入帳，分期本息均攤，常用記錄一鍵帶入。</div><div><b>應收應付</b>借出、代墊、借入、還款，依對象結算。</div><div><b>統計圖表</b>分類占比、月趨勢、淨資產走勢，支援排除特定分類。</div></div></div>`};
 }
 function acctBal(a){return D.bal.get(a.id)||0}
@@ -1106,8 +1106,8 @@ function pageBackup(){
   return{back:1,head:`<h1>備份與同步</h1>`,body:`<div class="card stack" style="margin-top:0"><h3 style="margin:0">完整備份（JSON）<small>上次：${bk}</small></h3><div class="hint">包含所有記錄、帳戶、分類、預算、週期、範本與匯率。手機與公司電腦之間用這個檔案同步。</div>
   <div class="btns fill"><button class="btn pri" data-act="export-json">匯出備份</button><button class="btn" data-act="import-json" data-m="merge">合併匯入</button></div><button class="btn danger" data-act="import-json" data-m="replace">以備份檔取代全部資料</button>
   <div class="lbl">手機與電腦同步步驟</div><ol class="steps"><li>在記帳較多的那台按「匯出備份」，iPhone 會跳出分享選單，可存到「檔案」、OneDrive，或傳到 LINE Keep / Email。</li><li>在另一台開啟 App，按「合併匯入」並選擇該檔案。</li><li>合併以每筆記錄的最後修改時間為準，兩邊各自新增的記錄都會保留，刪除也會同步。</li></ol></div>
-  <div class="card stack"><h3 style="margin:0">MOZE CSV<small>16 欄格式</small></h3><div class="hint">匯入會保留帳戶、初始金額、主/子類別、手續費與折扣、專案、對象、描述；轉帳會依日期時間自動配對。</div>
-  <div class="btns fill"><button class="btn" data-act="import-moze" data-m="append">附加匯入（略過重複）</button><button class="btn danger" data-act="import-moze" data-m="replace">取代全部</button></div><button class="btn" data-act="export-csv">匯出 CSV（MOZE 格式，Excel 可開）</button></div>`};
+  <div class="card stack"><h3 style="margin:0">CSV<small>16 欄格式</small></h3><div class="hint">匯入會保留帳戶、初始金額、主/子類別、手續費與折扣、專案、對象、描述；轉帳會依日期時間自動配對。</div>
+  <div class="btns fill"><button class="btn" data-act="import-moze" data-m="append">附加匯入（略過重複）</button><button class="btn danger" data-act="import-moze" data-m="replace">取代全部</button></div><button class="btn" data-act="export-csv">匯出 CSV（Excel 可開）</button></div>`};
 }
 function pageSettings(){
   const ex=S.settings.excl;const persisted=S.persisted;
@@ -2499,7 +2499,7 @@ function pageRules(){
   ${fin.length?`<div class="grp"><button class="grph" data-act="sched-fin" style="width:100%;border:0;background:none;cursor:pointer"><span>分期付款 · 已繳清（${fin.length}）</span><span>${S.schedFin?'收合':'展開'}</span></button>${S.schedFin?`<div class="list">${fin.map(instLi).join('')}</div>`:''}</div>`:''}
   <div class="grp"><div class="grph"><span>週期記錄（${rs.length}）</span><span class="num">每月約 支 ${shortNum(mEq('支出'))}・收 ${shortNum(mEq('收入'))}・轉 ${shortNum(mEq('轉帳'))}</span></div><div class="list">${rs.length?rs.slice().sort((a,b)=>(ruleNext(a)||'9')<(ruleNext(b)||'9')?-1:1).map(ruleLi).join(''):'<div class="empty" style="padding:18px 0">沒有週期記錄。記帳時把「記帳方式」切到「週期」即可建立，例如房租、訂閱、薪資、固定轉帳。</div>'}</div></div>
   <div class="grp"><div class="grph"><span>未來 ${H} 天明細（${up.length}）</span><span></span></div><div class="list">${upRows||'<div class="empty" style="padding:18px 0">這段期間沒有預計的週期或分期。</div>'}</div></div>
-  <div class="hint mt">這裡只會列出在這個 App 建立的週期與分期；從 MOZE 匯入的舊記錄沒有帶排程資訊，需要的話請在記帳時重新建立一次。</div>`};
+  <div class="hint mt">這裡列出在這個 App 建立的週期與分期；匯入的舊記錄沒有排程資訊，需要的話請重新建立一次。</div>`};
 }
 Object.assign(ACT,{'sched-days':el=>{S.schedDays=+el.dataset.d;render(true)},'sched-fin':()=>{S.schedFin=!S.schedFin;render(true)}});
 
