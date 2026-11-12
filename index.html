@@ -201,6 +201,7 @@ details.adv[open] summary{margin-bottom:8px}
 .chart .be{fill:var(--seal)} .chart .bi{fill:var(--gain)} .chart .bh{opacity:1} .chart .bd{opacity:.72}
 .chart .ln{fill:none;stroke:var(--accent);stroke-width:2.2}
 .chart .ar{fill:var(--accent);opacity:.12}
+.chart .ln.nw{stroke:#2f6fdb}.chart .md.nw{fill:#2f6fdb}
 .chart .dt{fill:var(--accent);stroke:var(--paper);stroke-width:2}
 .chart .ct{fill:var(--ink);font:600 17px var(--mono)}
 .chart .cs{fill:var(--muted);font:11px var(--sans)}
@@ -413,7 +414,7 @@ body.calc-on #sb{padding-bottom:330px}
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v1.9.19';
+window.APP_VER='v1.9.20';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -965,7 +966,7 @@ function comboChart(labels,exp,inc,nw){
     g+=`<rect class="be" x="${cx-bw-.5}" y="${yb(exp[i])}" width="${bw}" height="${Math.max(0,yb(0)-yb(exp[i]))}" rx="2"><title>${esc(lb)} 支出 ${fmt(exp[i])}</title></rect><rect class="bi" x="${cx+.5}" y="${yb(inc[i])}" width="${bw}" height="${Math.max(0,yb(0)-yb(inc[i]))}" rx="2"><title>${esc(lb)} 收入 ${fmt(inc[i])}</title></rect>`;
     if(i%every===0||i===n-1)g+=`<text class="axc" x="${cx}" y="${H-8}" text-anchor="middle">${esc(lb)}</text>`});
   const pts=nw.map((v,i)=>(L+gw*i+gw/2).toFixed(1)+','+yn(v).toFixed(1));
-  g+=`<path class="ln" d="M${pts.join(' L')}"/>`;nw.forEach((v,i)=>{g+=`<circle class="md sa" cx="${L+gw*i+gw/2}" cy="${yn(v)}" r="${i===n-1?4.5:2.4}"><title>${esc(labels[i])} 淨資產 ${fmt(v)}</title></circle>`});
+  g+=`<path class="ln nw" d="M${pts.join(' L')}"/>`;nw.forEach((v,i)=>{g+=`<circle class="md nw" cx="${L+gw*i+gw/2}" cy="${yn(v)}" r="${i===n-1?4.5:2.4}"><title>${esc(labels[i])} 淨資產 ${fmt(v)}</title></circle>`});
   return`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="收支與淨資產走勢">${g}</svg>`;
 }
 function acctChartHTML(){
@@ -974,7 +975,7 @@ function acctChartHTML(){
   const asc=D.live.slice().reverse();let j=0;const nw=[];
   for(const b of bks){const lim=b.to<td?b.to:td;while(j<asc.length&&asc[j].dt<=lim){const r=asc[j];if(act.has(r.a)&&r.dt<=td)base+=val(r)*rateOf(curOf(r));j++}nw.push(Math.round(base))}
   const last=ts[ts.length-1]||{exp:0,inc:0};const lb=bks[bks.length-1];const names={D:'按日',W:'按週',M:'按月',Y:'按年'};
-  return`<div class="card" style="margin-top:12px"><div class="toolbar"><div class="seg">${['D','W','M','Y'].map(k=>`<button class="${mode===k?'on':''}" data-act="acct-chart" data-k="${k}">${names[k]}</button>`).join('')}</div><span class="hint" style="margin:0"><i class="lgd se"></i>支出<i class="lgd si"></i>收入<i class="lgd" style="background:var(--accent)"></i>淨資產</span></div>
+  return`<div class="card" style="margin-top:12px"><div class="toolbar"><div class="seg">${['D','W','M','Y'].map(k=>`<button class="${mode===k?'on':''}" data-act="acct-chart" data-k="${k}">${names[k]}</button>`).join('')}</div><span class="hint" style="margin:0"><i class="lgd se"></i>支出<i class="lgd si"></i>收入<i class="lgd" style="background:#2f6fdb"></i>淨資產</span></div>
   ${comboChart(bks.map(b=>b.short),ts.map(x=>x.exp),ts.map(x=>x.inc),nw)}
   <div class="toolbar" style="margin-top:6px"><span class="num" style="font-weight:600">${esc(periodRange(mode,lb.anchor).label)}</span><span class="num"><span class="neg">支 ${fmt(last.exp)}</span>　<span class="pos">收 ${fmt(last.inc)}</span></span></div></div>`;
 }
