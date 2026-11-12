@@ -414,7 +414,7 @@ body.calc-on #sb{padding-bottom:330px}
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v1.9.20';
+window.APP_VER='v1.9.21';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -956,7 +956,7 @@ function pageWelcome(){
 function acctBal(a){return D.bal.get(a.id)||0}
 
 function comboChart(labels,exp,inc,nw){
-  const W=640,H=230,L=50,R=54,T=10,B=26;const bmax=Math.max(1,...exp,...inc);const step=niceStep(bmax);const top=Math.max(step,Math.ceil(bmax/step)*step);
+  const W=640,H=230,L=50,R=68,T=14,B=26;const bmax=Math.max(1,...exp,...inc);const step=niceStep(bmax);const top=Math.max(step,Math.ceil(bmax/step)*step);
   let lo=Math.min(...nw),hi=Math.max(...nw);if(lo===hi){lo-=1;hi+=1}const pad=(hi-lo)*.08;lo-=pad;hi+=pad;
   const yb=v=>T+(H-T-B)*(1-v/top),yn=v=>T+(H-T-B)*(1-(v-lo)/(hi-lo));const n=labels.length,gw=(W-L-R)/n,bw=Math.max(3,Math.min(14,(gw-4)/2));
   let g='';for(let v=0;v<=top+1e-9;v+=step)g+=`<line class="${v===0?'gl0':'gl'}" x1="${L}" x2="${W-R}" y1="${yb(v)}" y2="${yb(v)}"/><text class="ax" x="${L-6}" y="${yb(v)+4}" text-anchor="end">${shortNum(v)}</text>`;
@@ -975,7 +975,7 @@ function acctChartHTML(){
   const asc=D.live.slice().reverse();let j=0;const nw=[];
   for(const b of bks){const lim=b.to<td?b.to:td;while(j<asc.length&&asc[j].dt<=lim){const r=asc[j];if(act.has(r.a)&&r.dt<=td)base+=val(r)*rateOf(curOf(r));j++}nw.push(Math.round(base))}
   const last=ts[ts.length-1]||{exp:0,inc:0};const lb=bks[bks.length-1];const names={D:'按日',W:'按週',M:'按月',Y:'按年'};
-  return`<div class="card" style="margin-top:12px"><div class="toolbar"><div class="seg">${['D','W','M','Y'].map(k=>`<button class="${mode===k?'on':''}" data-act="acct-chart" data-k="${k}">${names[k]}</button>`).join('')}</div><span class="hint" style="margin:0"><i class="lgd se"></i>支出<i class="lgd si"></i>收入<i class="lgd" style="background:#2f6fdb"></i>淨資產</span></div>
+  return`<div class="card" style="margin-top:12px"><div class="toolbar"><div class="seg">${['D','W','M','Y'].map(k=>`<button class="${mode===k?'on':''}" data-act="acct-chart" data-k="${k}">${names[k]}</button>`).join('')}</div></div><div class="hint" style="margin:10px 0 8px"><i class="lgd se" style="margin-left:0"></i>支出<i class="lgd si"></i>收入<i class="lgd" style="background:#2f6fdb"></i>淨資產</div>
   ${comboChart(bks.map(b=>b.short),ts.map(x=>x.exp),ts.map(x=>x.inc),nw)}
   <div class="toolbar" style="margin-top:6px"><span class="num" style="font-weight:600">${esc(periodRange(mode,lb.anchor).label)}</span><span class="num"><span class="neg">支 ${fmt(last.exp)}</span>　<span class="pos">收 ${fmt(last.inc)}</span></span></div></div>`;
 }
