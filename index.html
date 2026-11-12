@@ -407,6 +407,10 @@ h1{font-weight:700}
 body.calc-on #sb{padding-bottom:330px}
 
 .mdg{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}.mdg button{height:38px;border:1px solid var(--rule);border-radius:10px;background:var(--paper);color:var(--ink);font-size:15px;font-variant-numeric:tabular-nums}.mdg button.on{background:#7BBF7F;border-color:#7BBF7F;color:#fff;font-weight:600}.mdg .wide{grid-column:span 4}
+/* v2.0 */
+.cpy{display:flex;gap:8px;align-items:flex-start}.cpy code{flex:1;min-width:0;font-size:12px;line-height:1.45;word-break:break-all;background:var(--paper2);border:1px solid var(--rule);border-radius:8px;padding:8px}
+.steps{margin:0;padding-left:20px;display:grid;gap:8px;font-size:14px;line-height:1.55}.steps code{font-size:12px;background:var(--paper2);border-radius:4px;padding:1px 4px;word-break:break-all}
+details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-details-marker{display:none}
 
 </style>
 </head>
@@ -414,7 +418,7 @@ body.calc-on #sb{padding-bottom:330px}
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v1.9.21';
+window.APP_VER='v2.0.2';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -928,9 +932,10 @@ function budgetBlock(ym,compact){
   const cls=p=>p>1?'over':p>=.8?'warn':'';
   const[y,m]=ym.split('-').map(Number);const isCur=ym===td.slice(0,7);const left=isCur?daysIn(y,m)-Number(td.slice(8))+1:0;
   let h='';
-  if(B.total){const p=used/B.total;h+=`<div class="stack" style="gap:6px"><div class="toolbar"><span class="lbl">本月預算</span><span class="num" style="font-size:13px">${shortNum(used)} / ${shortNum(B.total)}</span></div><div class="bar"><i class="${cls(p)}" style="width:${Math.min(100,p*100).toFixed(1)}%"></i></div><div class="hint">${B.total-used>=0?'剩餘 <span class="num">'+money(B.total-used)+'</span>'+(isCur&&left?'，每日可用 <span class="num">'+money(Math.round((B.total-used)/left))+'</span>':''):'已超支 <span class="num neg">'+money(used-B.total)+'</span>'}</div></div>`}
-  if(!compact){for(const[c,lim]of Object.entries(B.cats||{})){if(!lim)continue;const u=by.get(c)||0;const p=u/lim;
-    h+=`<div class="stack" style="gap:4px"><div class="toolbar"><span>${esc(c)}</span><span class="num" style="font-size:13px">${shortNum(u)} / ${shortNum(lim)}</span></div><div class="bar"><i class="${cls(p)}" style="width:${Math.min(100,p*100).toFixed(1)}%"></i></div></div>`}}
+  const cT=budCarry(ym),TT=(B.total||0)+cT;
+  if(B.total){const p=used/TT;h+=`<div class="stack" style="gap:6px"><div class="toolbar"><span class="lbl">本月預算${cT?'（含結轉 '+(cT>0?'+':'')+shortNum(cT)+'）':''}</span><span class="num" style="font-size:13px">${shortNum(used)} / ${shortNum(TT)}</span></div><div class="bar"><i class="${cls(p)}" style="width:${Math.min(100,p*100).toFixed(1)}%"></i></div><div class="hint">${TT-used>=0?'剩餘 <span class="num">'+money(TT-used)+'</span>'+(isCur&&left?'，每日可用 <span class="num">'+money(Math.round((TT-used)/left))+'</span>':''):'已超支 <span class="num neg">'+money(used-TT)+'</span>'}</div></div>`}
+  if(!compact){for(const[c,lim0]of Object.entries(B.cats||{})){if(!lim0)continue;const cc=budCarry(ym,c),lim=lim0+cc;const u=by.get(c)||0;const p=u/lim;
+    h+=`<div class="stack" style="gap:4px"><div class="toolbar"><span>${esc(c)}${cc?'<small class="hint">（結轉 '+(cc>0?'+':'')+shortNum(cc)+'）</small>':''}</span><span class="num" style="font-size:13px">${shortNum(u)} / ${shortNum(lim)}</span></div><div class="bar"><i class="${cls(p)}" style="width:${Math.min(100,p*100).toFixed(1)}%"></i></div></div>`}}
   return h;
 }
 function pageHomeMonth(){
@@ -1175,6 +1180,7 @@ function renderEditor(){
     if(md==='inst'&&canI)return seg+`<div class="grid2"><label class="field"><span>分期期數</span><input class="in num" id="f-ik" data-f="ik" inputmode="numeric" value="${esc(f.ik||'3')}"></label><label class="field"><span>年利率 %（無利息填 0）</span><input class="in num" id="f-ir" data-f="ir" inputmode="decimal" value="${esc(f.ir||'0')}"></label></div><label class="field"><span>起始期數（已經繳過幾期就從下一期開始，例如填 5 代表這筆是第 5 期）</span><input class="in num" id="f-sno" data-f="sno" inputmode="numeric" value="${esc(f.sno||'')}" placeholder="首期"></label><div class="hint" id="f-iprev">${instPrev(f)}</div>`;
     return seg+`<div class="grid2">${postSel}<label class="field"><span>訂金尾款追蹤</span><select class="in" id="f-dep" data-act-change="ef-dep"><option value="">關閉</option><option value="1" ${f.dep?'selected':''}>開啟</option></select></label></div>${f.dep?`<div class="grid2"><label class="field"><span>總金額（上面金額＝訂金）</span><input class="in num" id="f-depT" data-f="depT" data-calc inputmode="${CALC_IM}" value="${esc(f.depT||'')}"></label><label class="field"><span>尾款預計日期</span><input class="in" type="date" id="f-depD" data-f="depD" value="${esc(f.depD||'')}"></label></div><div class="hint">存檔後先記訂金；尾款（總金額－訂金）會放進鈴鐺的待入帳清單，付款時點「入帳」即可。</div>`:''}`})():''}
   ${f.kind==='exp'&&!f.splits?`<button class="btn sm" data-act="sp-on" style="justify-self:start">拆成多個分類（分項）</button>`:''}
+  ${f._dupMsg?`<div class="note alert" id="ef-dup"><div class="grow"><b>可能重複</b>：同帳戶已有 ${f._dupMsg}。確定不是同一筆，再按一次「儲存」。</div></div>`:''}
   ${f._edit&&efRule(f)?`<div class="note" style="flex-wrap:wrap"><div class="grow">這是週期記錄「${esc(efRule(f).rule.name||'')}」的第 ${efRule(f).k+1+(efRule(f).rule.off||0)} 期，要改哪些？</div></div><div class="btns fill"><button class="btn pri" data-act="ef-save">只改這一期</button><button class="btn" data-act="ef-save" data-scope="all">這一期和之後都改</button></div>`:`<div class="btns fill"><button class="btn pri" data-act="ef-save">儲存</button>${f._edit?'':`<button class="btn" data-act="ef-save" data-again="1">儲存並再記一筆</button>`}</div>`}
   <div class="btns">${f._edit?`<button class="btn sm" data-act="ef-copy">複製</button>${f.kind==='exp'?`<button class="btn sm" data-act="ef-refund">退款</button>`:''}`:''}${f._edit?`<button class="btn sm danger" data-act="ef-del" id="ef-del">刪除</button>`:''}</div>
   ${datalists()}`;
@@ -1187,6 +1193,8 @@ function datalists(){
 async function saveEditor(again){
   const f=EF;const err=validate(f);if(err)return toast(err);
   const recs=buildRecords(f);if(!recs.length)return toast('沒有可儲存的內容');
+  if(!f._edit&&!(f.mode||f.rep)&&(f.kind==='exp'||f.kind==='inc')&&!f.splits&&recs.length===1){const dp=dupOf(recs[0]);const sig=recs[0].a+'|'+recs[0].m+'|'+recs[0].dt+'|'+recs[0].tm;
+    if(dp&&f._dupSig!==sig){f._dupSig=sig;f._dupMsg=dupText(dp);renderEditor();setTimeout(()=>{const e=$('#ef-dup');e&&e.scrollIntoView({block:'center'})},50);return toast('可能重複，再按一次儲存仍會記錄')}}
   const del=[];
   if(f._edit){const old=f.ids.map(id=>S.byId.get(id)).filter(Boolean);recs.forEach((r,i)=>{if(old[i]){r.id=old[i].id;r.o=old[i].o;if(old[i].k&&r.k){/*keep pair id*/r.k=old[0].k||r.k}if(old[i].g&&f.kind==='exp'&&!f.splits)r.g=old[i].g}});
     if(f.kind==='tr'){const k=old[0]?.k||recs[0].k;recs.forEach(r=>r.k=k)}
@@ -1315,7 +1323,7 @@ const ACT={
   'stat-mode':el=>{S.stat.mode=el.dataset.k;render()},
   'stat-nav':el=>{const d=+el.dataset.d;if(S.stat.mode==='M')S.stat.ym=shiftYM(S.stat.ym,d);else S.stat.y=String(+S.stat.y+d);render(true)},
   'stat-cat':el=>{S.stat.cat=el.dataset.c;render();window.scrollTo(0,0)},
-  'save-budget':async()=>{const B={total:evalAmt($('#bg-total').value)||0,cats:{},u:Date.now()};document.querySelectorAll('[data-bc]').forEach(i=>{const v=evalAmt(i.value);if(v>0)B.cats[i.dataset.bc]=v});S.budgets=B;await saveKV('budgets');render(true);toast('已儲存預算')},
+  'save-budget':async()=>{const roll=!!$('#bg-roll')?.checked;const B={total:evalAmt($('#bg-total').value)||0,cats:{},u:Date.now(),roll,since:roll?(S.budgets.roll&&S.budgets.since?S.budgets.since:TODAY().slice(0,7)):''};document.querySelectorAll('[data-bc]').forEach(i=>{const v=evalAmt(i.value);if(v>0)B.cats[i.dataset.bc]=v});S.budgets=B;await saveKV('budgets');render(true);toast('已儲存預算')},
   'proj-done':async el=>{const k=el.dataset.id;const m={...(S.settings.projDone||{})};const o={...(S.settings.projOpen||{})};if(el.dataset.on){m[k]=TODAY();delete o[k]}else{delete m[k];o[k]=1}S.settings.projDone=m;S.settings.projOpen=o;await saveKV('settings');render(true);toast(el.dataset.on?'已標記為完成':'已重新開啟')},
   'proj-done-list':()=>{S.projDoneOpen=!S.projDoneOpen;render(true)},
   'proj-rename':async el=>{const old=el.dataset.id;const v=await askText('重新命名專案',old,'新名稱');if(!v||!v.trim()||v.trim()===old)return;const rs=D.live.filter(r=>r.p===old).map(r=>({...r,p:v.trim()}));await mutate(rs);if((S.settings.projDone||{})[old]){const m={...S.settings.projDone};m[v.trim()]=m[old];delete m[old];S.settings.projDone=m;await saveKV('settings')}S.stack[S.stack.length-1].id=v.trim();render();toast('已更新 '+rs.length+' 筆')},
@@ -1531,7 +1539,7 @@ const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],fi
   },
   pushKV(k){if(!this.user||!this.decided)return;let v=S[k];if(k==='settings'){v={...v};LOCAL_SETTINGS.forEach(x=>delete v[x])}
     const u=S.kvu[k]||Date.now();this.remoteKV[k]=u;const w=[this.base().collection('kv').doc(k).set({j:JSON.stringify(v),u})];
-    if(k==='cats'||k==='accts')w.push(this.base().collection('kv').doc('botinfo').set(botInfo()));this.track(w)},
+    if(k==='cats'||k==='accts'||(k==='settings'&&usCodes()!==_usLast)){_usLast=usCodes();w.push(this.base().collection('kv').doc('botinfo').set(botInfo()))}this.track(w)},
   track(commits,sizes){if(!commits.length)return;this.writing+=commits.length;commits.forEach((c,i)=>{const k=sizes?sizes[i]||0:0;this.wTot+=k;c.then(()=>{this.wDone+=k;refreshCloudUI()},()=>{})});refreshCloudUI();
     Promise.all(commits).then(()=>{this.lastSync=Date.now()}).catch(e=>{this.err='寫入失敗：'+(e.code||e.message);this.state='error'}).finally(()=>{this.writing-=commits.length;if(!this.writing){this.wTot=this.wDone=0}refreshCloudUI()})},
   label(){
@@ -1613,7 +1621,10 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
   if(!Cloud.decided){await new Promise(r=>{const t=setInterval(()=>{if(Cloud.decided){clearInterval(t);r()}},300)})}
   const add=[],dels=[],newRules=[],delNames=[],upds=[],insts=[];
+  let apN=0,apDup=0,apUnk=0,pxN=0;
   for(const d of docs){const x=d.data()||{};const id='ib_'+d.id;
+    if(x.src==='ap'){if(!S.byId.has(id)){const o=apRecord(x,id);if(o.r){add.push(o.r);apN++;if(!o.sure)apUnk++}else if(o.skip==='dup')apDup++}dels.push(d.ref);continue}
+    if(x.kind==='px'){try{const q=JSON.parse(x.p||'{}');const cur=S.settings.pxx||{d:'',p:{}};if((x.d||'')>=(cur.d||'')){S.settings.pxx={d:x.d||'',p:{...cur.p,...q}};pxApply(S.settings.pxx.p);pxN++}}catch(e){}dels.push(d.ref);continue}
     if(x.kind==='inst'){const amt=Math.abs(+x.amt),k=parseInt(x.cnt)||0,acct=S.accts.find(a=>a.id===x.a||a.name===x.a);
       if(!S.rules.some(q=>q.id===id)&&amt>0&&k>1&&acct&&/^\d{4}-\d{2}-\d{2}$/.test(x.dt||'')){const sno=Math.max(1,Math.min(k,parseInt(x.sno)||1));const nm=String(x.n||'分期付款').slice(0,80);const tm=/^\d{2}:\d{2}$/.test(x.tm||'')?x.tm:'00:00';const day=+x.dt.slice(8),o=Date.now();
         const recs=[];for(let i=sno;i<=k;i++){recs.push({id:uid(),a:acct.id,t:'支出',c:x.c||'個人支出',s:x.s||'',m:-amt,f:0,d:0,n:nm,sh:String(x.sh||'').slice(0,60),dt:addMonths(x.dt,i-sno,day),tm,p:String(x.p||'').slice(0,60),ds:nm+'・第 '+i+'/'+k+' 期',tg:'claude',w:'',k:'',g:id,o:o+i})}
@@ -1641,7 +1652,10 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
   if(delNames.length){const td=TODAY();const gone=S.rules.filter(q=>q.fq!=='I'&&String(q.id).startsWith('ib_')&&delNames.includes(q.name));
     if(gone.length){const ids=S.recs.filter(r=>!r.x&&r.dt>td&&/_\d+_\d+$/.test(r.id)&&gone.some(q=>r.id.startsWith(q.id+'_'))).map(r=>r.id);
       S.rules=S.rules.filter(q=>!gone.includes(q));await saveKV('rules');if(ids.length)await mutate([],ids);scheduleRender();toast('Claude 幫你刪除了 '+gone.length+' 個週期')}}
-  if(add.length){Cloud.inboxN=(Cloud.inboxN||0)+add.length;await mutate(add);scheduleRender();toast('Claude 幫你記了 '+add.length+' 筆：'+add.slice(0,3).map(r=>(r.n||r.s)+' '+fmt(Math.abs(r.m))).join('、'))}
+  if(apN||apDup||pxN)saveKV('settings');if(pxN)scheduleRender();
+  if(add.length){Cloud.inboxN=(Cloud.inboxN||0)+add.length;await mutate(add);scheduleRender();const cl=add.filter(r=>r.tg!=='ap');
+    toast([cl.length?'Claude 幫你記了 '+cl.length+' 筆：'+cl.slice(0,3).map(r=>(r.n||r.s)+' '+fmt(Math.abs(r.m))).join('、'):'',apN?'Apple Pay 自動記了 '+apN+' 筆'+(apUnk?'（'+apUnk+' 筆卡片未設定對應帳戶）':''):''].filter(Boolean).join('；')+(apDup?'；略過重複 '+apDup+' 筆':''))}
+  else if(apDup)toast('Apple Pay：略過 '+apDup+' 筆已記過的交易')
   if(upds.length){const td=TODAY();let ch=false;const dd=[];
     for(const u of upds){for(const rule of S.rules.filter(q=>q.fq!=='I'&&String(q.id).startsWith('ib_')&&q.name===u.n)){
       if(u.wk!==undefined)rule.wk=(u.wk==='prev'||u.wk==='next')?u.wk:'';
@@ -1655,7 +1669,9 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
 ACT['copy-uid']=el=>{const v=Cloud.user?.uid||'';(navigator.clipboard?.writeText(v)||Promise.reject()).then(()=>toast('已複製 UID'),()=>toast('請長按 UID 文字手動複製'))};
 
 /* 給 Claude 專用帳號讀的精簡清單：只有分類與帳戶名稱，不含金額 */
-function botInfo(){return{cats:JSON.stringify({exp:S.cats.exp.map(c=>({n:c.n,subs:c.subs})),inc:S.cats.inc.map(c=>({n:c.n,subs:c.subs}))}),accts:JSON.stringify(S.accts.filter(a=>!a.arch).map(a=>({id:a.id,name:a.name,cur:a.cur,grp:a.grp}))),lastA:D.acct.get(S.settings.lastA)?.name||'',u:Date.now()}}
+function botInfo(){return{cats:JSON.stringify({exp:S.cats.exp.map(c=>({n:c.n,subs:c.subs})),inc:S.cats.inc.map(c=>({n:c.n,subs:c.subs}))}),accts:JSON.stringify(S.accts.filter(a=>!a.arch).map(a=>({id:a.id,name:a.name,cur:a.cur,grp:a.grp}))),lastA:D.acct.get(S.settings.lastA)?.name||'',us:usCodes(),u:Date.now()}}
+function usCodes(){return JSON.stringify([...new Set((S.settings.hold||[]).map(h=>String(h.code||'').toUpperCase()).filter(c=>/^[A-Z][A-Z.\-]{0,9}$/.test(c)))].sort())}
+let _usLast=null;
 
 /* ================= 電子發票 QR（紙本證明聯）＋依歷史自動分類 =================
    規格：財政部「電子發票證明聯一維及二維條碼規格」
@@ -2577,6 +2593,271 @@ Object.assign(ACT,{
   'sel-done':()=>{S.search.selMode=false;S.search.sel.clear();render(true)},
   'sel-toggle':el=>{const id=el.dataset.id;const s=S.search.sel;s.has(id)?s.delete(id):s.add(id);el.classList.toggle('sel');const b=document.querySelector('.sel-bar span');if(b)b.textContent='已選 '+s.size+' 筆'}
 });
+
+/* =====================================================================
+   v2.0 新功能：Apple Pay 自動記帳、重複偵測、信用卡對帳、訂閱偵測、
+   股票市值、存錢目標、預算結轉
+   ===================================================================== */
+
+/* ---------- 重複偵測：同帳戶、同類型、同金額，時間相近 ---------- */
+function _minOf(r){return r.tm&&r.tm!=='00:00'?+r.tm.slice(0,2)*60+ +r.tm.slice(3,5):null}
+function dupOf(r,skip){if(!r||!['支出','收入'].includes(r.t))return null;const v=Math.abs(r.m);const mr=_minOf(r);
+  for(const x of D.live){if(x.id===r.id||(skip&&skip.has(x.id))||x.a!==r.a||x.t!==r.t||Math.abs(Math.abs(x.m)-v)>0.005)continue;
+    const dd=dayDiff(r.dt,x.dt);if(Math.abs(dd)>1)continue;const mx=_minOf(x);
+    if(mr!=null&&mx!=null){if(Math.abs(dd*1440+mx-mr)<=120)return x}else if(dd===0)return x}
+  return null}
+function dupText(x){return`${x.dt.slice(5).replace('-','/')} ${x.tm&&x.tm!=='00:00'?x.tm+' ':''}${esc(titleOf(x))} ${money(Math.abs(x.m),curOf(x))}`}
+
+/* ---------- Apple Pay（iPhone 捷徑「交易」自動化）→ 收件匣 ----------
+   文件欄位：src='ap' shop amt(例如 "NT$1,234") card at(yyyy-MM-ddTHH:mm)            */
+function apAmt(s){s=String(s||'');let cu='TWD';
+  for(const[re,c]of[[/US\$|USD/i,'USD'],[/HK\$|HKD/i,'HKD'],[/[¥￥円]|JPY/i,'JPY'],[/€|EUR/i,'EUR'],[/£|GBP/i,'GBP'],[/₩|KRW/i,'KRW'],[/S\$|SGD/i,'SGD'],[/A\$|AUD/i,'AUD'],[/RMB|CNY|人民幣/i,'CNY'],[/฿|THB/i,'THB']])if(re.test(s)){cu=c;break}
+  const num=s.replace(/[^\d.,]/g,'');const v=/,\d{2}$/.test(num)&&!num.includes('.')?+num.replace(/\./g,'').replace(',','.'):+num.replace(/,/g,'');
+  return{v:isFinite(v)?v:NaN,cu,neg:/[-−]/.test(s)}}
+function _lcs(a,b){let best=0;for(let i=0;i<a.length;i++)for(let j=0;j<b.length;j++){let k=0;while(a[i+k]&&a[i+k]===b[j+k])k++;if(k>best)best=k}return best}
+function apAcct(card){const map=S.settings.apMap||{};const m=map[card];if(m&&D.acct.has(m)&&!D.acct.get(m).arch)return{a:m,sure:true};
+  const nz=s=>String(s||'').toLowerCase().replace(/\s|信用卡|簽帳金融卡|金融卡|簽帳卡|卡|銀行|商業|國際|card|bank|visa|master|jcb/g,'');const c=nz(card);let best=null,bs=0;
+  if(c)for(const a of S.accts){if(a.arch)continue;let s=_lcs(c,nz(a.name));if(s>=2&&a.grp==='信用卡')s+=.5;if(s>bs){bs=s;best=a}}
+  if(best&&bs>=2.5)return{a:best.id,sure:true,guess:true};const fb=D.acct.get(S.settings.lastA)||S.accts.find(a=>!a.arch);return{a:fb?.id,sure:false}}
+function apRecord(x,id){const{v,cu,neg}=apAmt(x.amt);if(!(v>0))return{skip:'amt'};
+  const card=String(x.card||'').trim().slice(0,40);const shop=String(x.shop||'').trim().slice(0,60);
+  const{a,sure}=apAcct(card);const acct=D.acct.get(a);if(!acct)return{skip:'acct'};
+  const cards=S.settings.apCards||(S.settings.apCards={});if(card){const o=cards[card]||{n:0};o.n++;o.last=TODAY();cards[card]=o}
+  const m=/^(\d{4}-\d{2}-\d{2})[T ](\d{1,2}):(\d{2})/.exec(String(x.at||''));const dt=m?m[1]:TODAY();const tm=m?p2(+m[2])+':'+m[3]:NOWTM();
+  const inc=neg;const g=inc?{c:S.cats.inc[0]?.n||'收入',s:S.cats.inc[0]?.subs[0]||''}:suggestCat('',shop);
+  const r={id,a:acct.id,t:inc?'收入':'支出',c:g.c,s:g.s||'',m:inc?v:-v,f:0,d:0,n:inc?'Apple Pay 退款':'',sh:shop,dt,tm,p:'',ds:sure||!card?'':'Apple Pay 卡片「'+card+'」尚未設定對應帳戶',tg:'ap',w:'',k:'',g:'',o:Date.now()};
+  if(cu!==acct.cur){r.cu=cu;r.xr=+(fxOn(cu,dt)/fxOn(acct.cur,dt)).toPrecision(6)}
+  const dp=dupOf(r);if(dp)return{skip:'dup',dup:dp};
+  return{r,sure}}
+function pageApplePay(){const uid=window.Cloud&&Cloud.user?Cloud.user.uid:'';const cfg=window.FIREBASE_CONFIG||{};
+  const signUrl='https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key='+(cfg.apiKey||'');
+  const fsUrl='https://firestore.googleapis.com/v1/projects/'+(cfg.projectId||'')+'/databases/(default)/documents/users/'+(uid||'〔登入後顯示〕')+'/inbox';
+  const body='{"fields":{"src":{"stringValue":"ap"},"shop":{"stringValue":"〔商家〕"},"amt":{"stringValue":"〔金額〕"},"card":{"stringValue":"〔卡片〕"},"at":{"stringValue":"〔格式化日期〕"}}}';
+  const recent=D.live.filter(r=>r.tg==='ap').slice(0,5);const cards=Object.entries(S.settings.apCards||{}).sort((a,b)=>(b[1].last||'')<(a[1].last||'')?-1:1);
+  const opts=sel=>`<option value="">自動判斷</option>`+S.accts.filter(a=>!a.arch).map(a=>`<option value="${a.id}" ${a.id===sel?'selected':''}>${esc(a.name)}</option>`).join('');
+  const cp=(lbl,v)=>`<div class="field"><span>${lbl}</span><div class="cpy"><code>${esc(v)}</code><button class="btn sm" data-act="ap-copy" data-v="${esc(v)}">複製</button></div></div>`;
+  return{back:1,head:`<h1>Apple Pay 自動記帳</h1>`,body:`
+  <div class="sum"><div class="lbl">運作方式</div><div class="hint" style="margin-top:4px">iPhone 用 Apple Pay 刷卡的當下，捷徑會把「商家、金額、卡片」送進雲端收件匣；打開 App 時自動記成一筆支出，分類依這個商家以前的記錄判斷。同帳戶、同金額、2 小時內已經有記錄的會自動略過，不會重複。</div>
+  ${recent.length?`<div class="lbl mt">最近自動記錄</div>${recent.map(r=>`<div class="hint num">${r.dt.slice(5).replace('-','/')} ${r.tm} · ${esc(r.sh||r.s)} · ${money(Math.abs(r.m),curOf(r))} · ${esc(D.acct.get(r.a)?.name||'')}</div>`).join('')}`:''}</div>
+  ${cards.length?`<div class="grp"><div class="grph"><span>卡片對應帳戶</span><span>${cards.length}</span></div><div class="card stack">${cards.map(([c,o])=>`<label class="field"><span>${esc(c)} · ${o.n} 次 · 最後 ${esc((o.last||'').slice(5).replace('-','/'))}</span><select class="in" data-apmap="${esc(c)}">${opts((S.settings.apMap||{})[c])}</select></label>`).join('')}</div></div>`:''}
+  <div class="grp"><div class="grph"><span>一次性設定（iPhone 捷徑）</span></div><div class="card stack">
+  ${!uid?'<div class="note alert"><div class="grow">請先到「雲端同步」登入，才會顯示你的寫入網址。</div></div>':''}
+  <ol class="steps">
+   <li>打開「捷徑」App →「自動化」→ 右上「＋」→ 選「<b>交易</b>」，勾選要自動記帳的卡片，選「<b>立即執行</b>」→「下一步」→「新增空白自動化」。</li>
+   <li>加入動作「<b>格式化日期</b>」：日期選「目前日期」，格式選「自訂」，填 <code>yyyy-MM-dd'T'HH:mm</code></li>
+   <li>加入動作「<b>取得 URL 內容</b>」：網址貼上下方〔登入網址〕，展開後方法選 <b>POST</b>，要求本文選 <b>JSON</b>，新增 3 個欄位：<br><code>email</code>（文字）＝記帳助理帳號的 Email<br><code>password</code>（文字）＝記帳助理的密碼<br><code>returnSecureToken</code>（布林值）＝是</li>
+   <li>加入動作「<b>取得辭典值</b>」：取得「值」，鍵填 <code>idToken</code>，辭典選上一步的「URL 的內容」。</li>
+   <li>加入動作「<b>文字</b>」：貼上下方〔本文範本〕，再把〔商家〕〔金額〕〔卡片〕換成「捷徑輸入」的對應變數，〔格式化日期〕換成第 2 步的結果。</li>
+   <li>再加入「<b>取得 URL 內容</b>」：網址貼上〔寫入網址〕，方法 <b>POST</b>；標頭新增 <code>Authorization</code>＝<code>Bearer </code>（後面空一格）＋「辭典值」，再新增 <code>Content-Type</code>＝<code>application/json</code>；要求本文選「<b>檔案</b>」，選第 5 步的「文字」。</li>
+   <li>完成。用 Apple Pay 刷一次，打開 App 就會看到這筆記錄。</li></ol>
+  ${cp('登入網址',signUrl)}${cp('寫入網址',fsUrl)}${cp('本文範本',body)}
+  <div class="hint">記帳助理帳號只能「新增收件匣」，讀不到你的帳本；密碼只存在你的 iPhone 捷徑裡。</div></div></div>`}}
+
+/* ---------- 信用卡／帳戶對帳：貼上或上傳帳單明細，和 App 的記錄比對 ---------- */
+let RC=null;
+function stmtParse(txt){const out=[];const td=TODAY();const ty=+td.slice(0,4);
+  const skipRe=/合計|總計|小計|本期應繳|最低應繳|前期|上期|應繳總額|繳款截止|信用額度|循環利息|帳單結帳/;
+  for(let raw of String(txt||'').split(/\r?\n/)){let line=raw.replace(/"([^"]*)"/g,(_,a)=>a).replace(/\t/g,' ').replace(/,(?!\d{3}(?!\d))/g,' ').trim();if(!line||skipRe.test(line))continue;
+    const dre=/(\d{2,4})[\/\-.年](\d{1,2})[\/\-.月](\d{1,2})日?|(?<![\d\/])(\d{1,2})\/(\d{1,2})(?![\d\/])/g;let m,dates=[];while((m=dre.exec(line)))dates.push(m);if(!dates.length)continue;
+    const d0=dates[0];let y,mo,da;if(d0[1]){y=+d0[1];if(y<1000)y+=y<200?1911:2000;mo=+d0[2];da=+d0[3]}else{mo=+d0[4];da=+d0[5];y=ty;if(`${y}-${p2(mo)}-${p2(da)}`>addDays(td,31))y--}
+    if(!(mo>=1&&mo<=12&&da>=1&&da<=31))continue;const dt=`${y}-${p2(mo)}-${p2(da)}`;
+    let rest=line;for(const d of dates)rest=rest.replace(d[0],' ');
+    const nre=/(?<![\w.])\(?-?\$?\d{1,3}(?:,\d{3})+(?:\.\d+)?\)?(?![\w])|(?<![\w.,])\(?-?\$?\d+(?:\.\d{1,2})?\)?(?![\w,])/g;const nums=[...rest.matchAll(nre)];if(!nums.length)continue;
+    const last=nums[nums.length-1];let s=last[0];const neg=/^\(|-/.test(s);const v=+s.replace(/[()$,\-]/g,'');if(!(v>0))continue;
+    const desc=rest.slice(0,last.index).replace(/\s+/g,' ').replace(/(?:^|\s)(?:TWD|NTD|NT\$?)(?=\s|$)/gi,' ').trim().slice(0,60);
+    out.push({dt,v:neg?-v:v,desc,raw:raw.trim().slice(0,120)})}
+  return out}
+function reconcile(acctId,items){const a=D.acct.get(acctId);if(!a||!items.length)return null;const lo=items.reduce((m,x)=>x.dt<m?x.dt:m,'9999'),hi=items.reduce((m,x)=>x.dt>m?x.dt:m,'0000');
+  // 同一張收據拆成多個分項（g 相同）合併成一筆再比對
+  const cm=new Map();for(const r of D.live){if(r.a!==acctId||r.dt<addDays(lo,-4)||r.dt>addDays(hi,6))continue;const key=r.g?'g:'+r.g:r.id;let c=cm.get(key);
+    if(!c)cm.set(key,c={id:r.id,ids:[],dt:r.dt,tm:r.tm,v:0,fx:false,t:r.t,tg:r.tg,rs:[]});c.ids.push(r.id);c.rs.push(r);c.v+=-val(r);if(r.cu&&r.cu!==a.cur)c.fx=true;if(r.dt<c.dt)c.dt=r.dt}
+  const pool=[...cm.values()];for(const c of pool)c.title=c.rs.length>1?(grpName(c.rs)||titleOf(c.rs[0]))+'（'+c.rs.length+' 項）':titleOf(c.rs[0]);
+  const used=new Set();const matched=[],missing=[];
+  for(const it of items.slice().sort((p,q)=>p.dt<q.dt?-1:1)){let best=null,bs=1e9;
+    for(const c of pool){if(used.has(c.id))continue;const dd=dayDiff(it.dt,c.dt);if(dd<-3||dd>5)continue;const tol=c.fx?Math.max(1,Math.abs(it.v)*.03):0.5;const diff=Math.abs(c.v-it.v);if(diff>tol)continue;const sc=diff*10+Math.abs(dd);if(sc<bs){bs=sc;best=c}}
+    if(best){used.add(best.id);matched.push({it,r:best})}else missing.push(it)}
+  const extra=pool.filter(c=>!used.has(c.id)&&c.dt>=lo&&c.dt<=hi&&c.t!=='轉入'&&c.tg!=='autoload');
+  return{acctId,lo,hi,items,matched,missing,extra,tot:items.reduce((s,x)=>s+x.v,0)}}
+function pageRecon(id){const a=D.acct.get(id);if(!a)return{back:1,head:'<h1>對帳</h1>',body:'<div class="empty">帳戶不存在</div>'};const R=RC&&RC.acctId===id?RC:null;
+  const it=x=>`<div class="li"><div class="grow"><div>${esc(x.desc||'（無說明）')}</div><small class="num">${x.dt.replace(/-/g,'/')}</small></div><div class="r num">${money(x.v,a.cur)}</div></div>`;
+  return{back:1,head:`<h1>對帳 · ${esc(a.name)}</h1>`,body:`
+  <div class="card stack" style="margin-top:0"><div class="hint">把信用卡帳單或網銀明細「複製貼上」到下面（每行一筆，要有日期和金額），或上傳 CSV／文字檔。會在 ±3～5 天內找金額相同的記錄配對。PDF 帳單請先用預覽程式全選複製文字再貼上。</div>
+  <textarea class="in" id="rc-in" rows="6" placeholder="例：11/02 11/04 全聯福利中心 1,234">${esc(R?.src||'')}</textarea>
+  <div class="btns"><button class="btn pri" data-act="rc-run" data-id="${id}">開始比對</button><label class="btn">上傳檔案<input type="file" id="rc-file" data-id="${id}" accept=".csv,.txt,text/csv,text/plain" hidden></label>${R?`<button class="btn" data-act="rc-clear" data-id="${id}">清除</button>`:''}</div></div>
+  ${R?`<div class="sum"><div class="lbl">${R.lo.replace(/-/g,'/')} ～ ${R.hi.replace(/-/g,'/')} · 帳單 ${R.items.length} 筆 · 合計 <span class="num">${money(R.tot,a.cur)}</span></div>
+    <div class="kv mt"><div><div class="lbl">已對上</div><div class="v num pos">${R.matched.length}</div></div><div><div class="lbl">帳單有、App 沒記</div><div class="v num ${R.missing.length?'neg':''}">${R.missing.length}</div></div><div><div class="lbl">App 有、帳單沒有</div><div class="v num">${R.extra.length}</div></div></div></div>
+  ${R.missing.length?`<div class="grp"><div class="grph"><span>帳單有、App 沒記</span><button class="btn sm pri" data-act="rc-pend" data-id="${id}">全部放進待入帳</button></div><div class="list">${R.missing.map(it).join('')}</div><div class="hint">放進待入帳後，到首頁鈴鐺逐筆確認分類再入帳。</div></div>`:''}
+  ${R.extra.length?`<div class="grp"><div class="grph"><span>App 有、帳單沒有</span><span>${R.extra.length}</span></div><div class="list">${R.extra.map(c=>`<button class="li" data-act="edit-rec" data-id="${c.id}"><div class="grow"><div>${esc(c.title)}</div><small class="num">${c.dt.replace(/-/g,'/')} ${c.tm||''}</small></div><div class="r num">${money(c.v,a.cur)}</div></button>`).join('')}</div><div class="hint">可能是還沒請款、記錯帳戶、記錯金額，或重複記錄。</div></div>`:''}
+  ${R.matched.length?`<details class="grp"><summary class="grph"><span>已對上 ${R.matched.length} 筆</span><span>展開</span></summary><div class="list">${R.matched.map(({it:x,r})=>`<div class="li"><div class="grow"><div>${esc(x.desc||'')} ↔ ${esc(r.title)}</div><small class="num">帳單 ${x.dt.slice(5).replace('-','/')} · 記錄 ${r.dt.slice(5).replace('-','/')}</small></div><div class="r num">${money(x.v,a.cur)}</div></div>`).join('')}</div></details>`:''}`:''}`}}
+async function rcRun(id,txt){const items=stmtParse(txt);if(!items.length)return toast('沒有讀到含日期與金額的明細');RC=reconcile(id,items);RC.src=txt;render(true);toast('讀到 '+items.length+' 筆，已對上 '+RC.matched.length+' 筆')}
+async function readTextFile(file){const buf=await file.arrayBuffer();let t=new TextDecoder('utf-8').decode(buf);if((t.match(/\uFFFD/g)||[]).length>3){try{t=new TextDecoder('big5').decode(buf)}catch(e){}}return t.replace(/^﻿/,'')}
+
+/* ---------- 訂閱／固定支出偵測 ---------- */
+function subCands(){const td=TODAY(),from=addMonths(td,-7,1);const grp=new Map();const ign=new Set(S.settings.subIgn||[]);
+  for(const r of D.live){if(r.t!=='支出'||r.dt<from||r.dt>td||ruleOf(r)||/^(al_|ib_)/.test(r.id)&&r.tg==='autoload')continue;const nm=(r.sh||r.n||'').trim();if(!nm)continue;
+    const key=nm+'|'+r.a+'|'+Math.round(Math.abs(r.m));let g=grp.get(key);if(!g)grp.set(key,g={key,nm,a:r.a,v:Math.round(Math.abs(r.m)),rs:[]});g.rs.push(r)}
+  const shopN=new Map();for(const r of D.live){if(r.t!=='支出'||r.dt<from||r.dt>td)continue;const nm=(r.sh||r.n||'').trim();if(nm)shopN.set(nm,(shopN.get(nm)||0)+1)}
+  const out=[];
+  for(const g of grp.values()){if(ign.has(g.key)||g.rs.length<3||(shopN.get(g.nm)||0)>new Set(g.rs.map(r=>r.dt.slice(0,7))).size*3)continue;const ds=g.rs.map(r=>r.dt).sort();const months=new Set(ds.map(d=>d.slice(0,7)));
+    if(months.size<3||g.rs.length>months.size*1.5)continue;let ok=0;for(let i=1;i<ds.length;i++){const d=dayDiff(ds[i-1],ds[i]);if(d>=25&&d<=35)ok++}
+    if(ok<2||ds[ds.length-1]<addDays(td,-40))continue;
+    if(S.rules.some(ru=>ru.fq!=='I'&&ru.on&&ru.fs&&ru.fs.a===g.a&&Math.abs(Math.abs(evalAmt(ru.fs.amt))-g.v)<1))continue;
+    const last=g.rs.reduce((m,r)=>r.dt>m.dt?r:m);const days=ds.map(d=>+d.slice(8));const day=days.sort((a,b)=>a-b)[Math.floor(days.length/2)];
+    out.push({...g,last,n:g.rs.length,months:months.size,day})}
+  return out.sort((a,b)=>b.v-a.v).slice(0,12)}
+function subHTML(){const cs=subCands();if(!cs.length)return'';window._subs=cs;
+  return`<div class="grp"><div class="grph"><span>可能的訂閱／固定支出</span><span>${cs.length}</span></div><div class="list">${cs.map((c,i)=>`<div class="li sch"><div class="grow"><div>${esc(c.nm)}<span class="pill">每月約 ${c.day} 日</span></div><small class="num">${money(c.v)} · ${esc(D.acct.get(c.a)?.name||'')} · 近 ${c.months} 個月出現 ${c.n} 次 · 上次 ${c.last.dt.slice(5).replace('-','/')}</small></div><button class="btn sm pri" data-act="sub-make" data-i="${i}">設為週期</button><button class="btn sm" data-act="sub-ign" data-i="${i}">忽略</button></div>`).join('')}</div><div class="hint">依近 7 個月的記錄找出「同商家、同金額、約每月一次」但還沒設成週期的支出。設為週期後會從下一期開始自動記帳。</div></div>`}
+
+/* ---------- 股票市值（價格來自 GitHub Action 每天抓的 prices.json） ----------
+   持股 S.settings.hold=[{id,pf(組合),code,name,sh,cu,cost(選填，原幣),px,pxd,pxManual}] */
+const PRICE_URL='https://raw.githubusercontent.com/taya20081-stack/ledger/main/prices.json';
+let PX=null;   // {d, p:{code:[name,close,cur?]}}，只在本機快取
+function pxApply(P){let n=0;for(const h of S.settings.hold||[]){if(h.pxManual)continue;const q=P&&P[h.code];if(q&&(!h.pxd||(q[3]||'')>=h.pxd||!q[3])){h.px=+q[1];if(q[3])h.pxd=q[3];if(!h.name)h.name=q[0];if(q[2])h.cu=q[2];n++}}return n}
+async function loadPrices(force){const H=S.settings.hold||[];if(!H.length&&!force)return false;const td=TODAY();if(!force&&S.settings.pxFor===td&&PX)return false;
+  try{const res=await fetch(PRICE_URL+'?t='+Date.now(),{cache:'no-store'});if(!res.ok)return false;PX=await res.json();let n=0;
+    for(const h of H){if(h.pxManual)continue;const q=PX.p&&PX.p[h.code];if(q){h.px=+q[1];h.pxd=q[3]||PX.d;if(!h.name)h.name=q[0];if(q[2])h.cu=q[2];n++}}n+=pxApply(S.settings.pxx&&S.settings.pxx.p);
+    S.settings.pxFor=td;await saveKV('settings');return n>0}catch(e){return false}}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.ready)loadPrices().then(ok=>{if(ok)render(true)})});
+function holdRecs(h){const code=String(h.code||'').trim(),nm=String(h.name||'').trim();const reC=code?new RegExp('(^|[^0-9A-Za-z])'+code.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?![0-9A-Za-z])','i'):null;
+  return D.live.filter(r=>(r.c==='投資'||/股票|基金|ETF|申購|股利|配息/.test(r.s||''))&&((reC&&reC.test(r.n||''))||(nm&&nm.length>=2&&(r.n||'').includes(nm))))}
+function holdCalc(h){const fx=rateOf(h.cu||'TWD');const mv=(+h.px||0)*(+h.sh||0)*fx;
+  if(+h.cost>0){const cost=+h.cost*fx;return{mv,cost,pl:mv-cost,manual:1}}
+  let buy=0,sell=0,div=0;for(const r of holdRecs(h)){const s=r.s||'';const v=Math.abs(r.m)*rateOf(curOf(r));const fee=Math.abs(r.f||0)*rateOf(curOf(r));
+    if(/股利|配息/.test(s)&&r.t==='收入')div+=v;else if(r.t==='收入'||/出售|贖回/.test(s))sell+=v-fee;else if(r.t==='支出')buy+=v+fee}
+  const cost=buy-sell;return{mv,cost,div,pl:mv-cost+div}}
+function holdTotal(){let mv=0;for(const h of S.settings.hold||[])mv+=(+h.px||0)*(+h.sh||0)*rateOf(h.cu||'TWD');return Math.round(mv)}
+function holdGuess(){const have=new Set((S.settings.hold||[]).map(h=>h.code));const m=new Map();const since=addMonths(TODAY(),-36,1);
+  for(const r of D.live){if(r.dt<since||r.t!=='支出'||!(r.c==='投資'||/股票|申購|基金/.test(r.s||'')))continue;const x=/^\s*(\d{4,6}[A-Z]?)\s*([^\d\s]{0,12})/.exec(r.n||'');if(!x||have.has(x[1]))continue;const o=m.get(x[1])||{code:x[1],name:x[2]||'',n:0,last:''};o.n++;if(r.dt>o.last)o.last=r.dt;if(!o.name&&x[2])o.name=x[2];m.set(x[1],o)}
+  return[...m.values()].sort((a,b)=>a.last<b.last?1:-1).slice(0,15)}
+function pfList(){const H=S.settings.hold||[];const o=[];for(const h of H){const p=h.pf||'我的';if(!o.includes(p))o.push(p)}return o}
+function pageInvest(){const H=S.settings.hold||[];const mvOf=h=>(+h.px||0)*(+h.sh||0)*rateOf(h.cu||'TWD');const tot=H.reduce((t,h)=>t+mvOf(h),0);
+  const pd=H.filter(h=>h.pxd&&!h.pxManual&&(h.cu||'TWD')==='TWD').map(h=>h.pxd).sort().pop();
+  const pfs=pfList().map(pf=>{const rs=H.map((h,i)=>({h,i})).filter(x=>(x.h.pf||'我的')===pf);const t=rs.reduce((s,x)=>s+mvOf(x.h),0);
+    return`<div class="grp"><div class="grph"><span>${esc(pf)}</span><span class="num">${money(Math.round(t))}</span></div><div class="list">${rs.map(({h,i})=>{const cu=h.cu||'TWD';return`<button class="li" data-act="hd-edit" data-i="${i}"><div class="grow"><div>${esc(h.name||h.code)} <small class="num">${esc(h.code)}</small></div>
+      <small class="num">${(+h.sh||0).toLocaleString('zh-TW',{maximumFractionDigits:5})} 股 × ${h.px?(cu!=='TWD'?cu+' ':'')+(+h.px).toLocaleString('zh-TW',{maximumFractionDigits:2}):'尚無價格'}${h.pxManual?'（手動）':h.pxd?' · '+h.pxd.slice(5).replace('-','/'):''}</small></div><div class="r num">${h.px?money(Math.round(mvOf(h))):'—'}</div></button>`}).join('')}</div></div>`}).join('');
+  return{back:1,head:`<h1>股票市值</h1><button class="ibtn" data-act="px-refresh" aria-label="更新股價">${IC.sync||'↻'}</button>`,body:`
+  <div class="sum"><div class="lbl">持股市值（TWD）${pd?' · 台股 '+pd.slice(5).replace('-','/')+' 收盤':''}</div><div class="huge num">${fmt(Math.round(tot))}</div>
+   ${pfList().length>1?`<div class="kv mt">${pfList().map(pf=>`<div><div class="lbl">${esc(pf)}</div><div class="v num">${fmt(Math.round(H.filter(h=>(h.pf||'我的')===pf).reduce((s,h)=>s+mvOf(h),0)))}</div></div>`).join('')}</div>`:''}
+   <div class="hint mt">市值＝股數 × 前一交易日收盤價，外幣以臺銀現金買入匯率換算，會計入「帳戶」頁的淨資產。點持股可改股數。</div></div>
+  ${pfs||'<div class="empty">尚未加入持股</div>'}
+  <div class="card stack"><div class="lbl">新增持股</div><div class="grid3"><label class="field"><span>組合</span><input class="in" id="hd-pf" list="hd-pfl" value="${esc(pfList()[0]||'我的')}"><datalist id="hd-pfl">${pfList().map(p=>`<option value="${esc(p)}">`).join('')}</datalist></label><label class="field"><span>代號</span><input class="in" id="hd-code" placeholder="2884、NVDA" autocomplete="off"></label><label class="field"><span>股數</span><input class="in num" id="hd-sh" inputmode="decimal" placeholder="1000"></label></div>
+   <button class="btn pri" data-act="hd-add">加入</button></div>
+  <details class="card"><summary class="lbl" style="cursor:pointer">批次貼上持股</summary><div class="stack" style="margin-top:8px"><div class="hint">每行一檔：<code>組合, 代號, 股數</code>。同組合同代號會覆蓋股數。美股代號（英文）自動當成美元計價。</div><textarea class="in" id="hd-bulk" rows="6" placeholder="我的, 0050, 1000&#10;我的, AAPL, 2.5"></textarea><button class="btn" data-act="hd-bulk">匯入</button></div></details>`}}
+function holdEditSheet(i){const h=(S.settings.hold||[])[i];if(!h)return;
+  openSheet((h.name||h.code)+' '+h.code,`<div class="grid2"><label class="field"><span>股數</span><input class="in num" id="he-sh" inputmode="decimal" value="${esc(h.sh)}"></label><label class="field"><span>組合</span><input class="in" id="he-pf" value="${esc(h.pf||'我的')}"></label></div>
+  <label class="field"><span>手動價格（留空＝自動帶收盤價）</span><input class="in num" id="he-px" inputmode="decimal" value="${h.pxManual?esc(h.px):''}" placeholder="${h.px&&!h.pxManual?'目前 '+h.px:''}"></label>
+  <div class="btns fill"><button class="btn danger" data-act="hd-del" data-i="${i}">刪除</button><button class="btn pri" data-act="hd-save" data-i="${i}">儲存</button></div>`)}
+function holdUpsert(pf,code,sh,cost,cu){const H=S.settings.hold||(S.settings.hold=[]);code=String(code).trim().toUpperCase();pf=String(pf||'我的').trim()||'我的';
+  let h=H.find(x=>(x.pf||'我的')===pf&&x.code===code);if(!h){h={id:uid(),pf,code,name:'',sh:0};H.push(h)}h.sh=sh;if(cost>0)h.cost=cost;if(cu)h.cu=cu;else if(!h.cu)h.cu=/^[A-Z]{1,5}$/.test(code)?'USD':'TWD';return h}
+
+/* ---------- 存錢目標 ---------- */
+function goalCalc(g){const a=g.a?D.acct.get(g.a):null;const saved=a?acctBal(a)*rateOf(a.cur):(+g.saved||0);const left=Math.max(0,(+g.target||0)-saved);
+  let months=0;if(g.due){const td=TODAY();months=Math.max(1,(+g.due.slice(0,4)-+td.slice(0,4))*12+(+g.due.slice(5,7)-+td.slice(5,7))+(+g.due.slice(8)>=+td.slice(8)?1:0))}
+  return{saved,left,pct:g.target>0?Math.min(1,saved/g.target):0,months,per:months?left/months:0}}
+function goalsHTML(compact){const G=S.settings.goals||[];if(!G.length)return'';
+  return G.map((g,i)=>{const c=goalCalc(g);return`<div class="stack" style="gap:4px"><div class="toolbar"><span>${esc(g.name)}${c.pct>=1?'<span class="pill">已達成</span>':''}</span><span class="num" style="font-size:13px">${shortNum(c.saved)} / ${shortNum(g.target)}</span></div><div class="bar"><i class="${c.pct>=1?'':''}" style="width:${(c.pct*100).toFixed(1)}%;background:#7BBF7F"></i></div>${compact?'':`<div class="hint">${c.pct>=1?'已達成目標':`還差 <span class="num">${money(Math.round(c.left))}</span>`}${g.due&&c.pct<1?` · ${g.due.replace(/-/g,'/')} 前每月需存 <span class="num">${money(Math.ceil(c.per))}</span>`:''}${g.a?' · 依帳戶「'+esc(D.acct.get(g.a)?.name||'')+'」餘額':' · 手動記錄已存金額'}</div>`}</div>`}).join('')}
+function pageGoals(){const G=S.settings.goals||[];const opts=`<option value="">手動填已存金額</option>`+S.accts.filter(a=>!a.arch).map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');
+  return{back:1,head:`<h1>存錢目標</h1>`,body:`
+  ${G.length?`<div class="list">${G.map((g,i)=>{const c=goalCalc(g);return`<div class="li sch"><div class="grow"><div>${esc(g.name)}${c.pct>=1?'<span class="pill">已達成</span>':''}</div><div class="bar" style="margin:6px 0"><i style="width:${(c.pct*100).toFixed(1)}%;background:#7BBF7F"></i></div><small class="num">${money(Math.round(c.saved))} / ${money(g.target)}（${Math.round(c.pct*100)}%）${g.due?' · 期限 '+g.due.replace(/-/g,'/'):''}</small><small class="num">${c.pct>=1?'已達成':`還差 ${money(Math.round(c.left))}`}${g.due&&c.pct<1?` · 每月需存 ${money(Math.ceil(c.per))}（剩 ${c.months} 個月）`:''}${g.a?' · 依「'+esc(D.acct.get(g.a)?.name||'')+'」餘額':''}</small></div>${g.a?'':`<button class="btn sm" data-act="gl-save" data-i="${i}">更新已存</button>`}<button class="btn sm danger" data-act="gl-del" data-i="${i}">刪除</button></div>`}).join('')}</div>`:'<div class="empty">還沒有存錢目標</div>'}
+  <div class="card stack"><div class="lbl">新增目標</div><label class="field"><span>名稱</span><input class="in" id="gl-name" placeholder="例如 2027 普吉島旅遊"></label>
+  <div class="grid2"><label class="field"><span>目標金額</span><input class="in num" id="gl-target" inputmode="decimal" placeholder="100000"></label><label class="field"><span>期限（選填）</span><input class="in" type="date" id="gl-due"></label></div>
+  <label class="field"><span>進度依據</span><select class="in" id="gl-a">${opts}</select></label><button class="btn pri" data-act="gl-add">新增目標</button>
+  <div class="hint">建議為目標開一個專用帳戶（例如「旅遊基金」），每次轉帳存入，進度就會自動依帳戶餘額更新。</div></div>`}}
+
+/* ---------- 預算結轉：沒花完的累積到下個月，超支則扣下個月 ---------- */
+const _monUse=new Map();
+function monUse(ym){const key=ym+'|'+D.live.length+'|'+S.recs.length;const c=_monUse.get(ym);if(c&&c.key===key)return c;const by=new Map();let tot=0;
+  for(const r of D.live){if(r.dt.slice(0,7)!==ym||excluded(r))continue;const v=spendOf(r)*rateOf(curOf(r));if(!v)continue;tot+=v;by.set(r.c,(by.get(r.c)||0)+v)}
+  const o={key,tot,by};_monUse.set(ym,o);return o}
+function budCarry(ym,cat){const B=S.budgets;if(!B.roll||!B.since||ym<=B.since)return 0;const base=cat?(B.cats||{})[cat]||0:B.total||0;if(!base)return 0;let carry=0;
+  for(let k=B.since;k<ym;k=shiftYM(k,1)){const u=monUse(k);carry+=base-(cat?(u.by.get(cat)||0):u.tot)}return Math.round(carry)}
+
+/* ---------- 掛到既有頁面 ---------- */
+PAGES.applepay=pageApplePay;PAGES.recon=pageRecon;PAGES.invest=pageInvest;PAGES.goals=pageGoals;
+{const _more=PAGES.more;PAGES.more=function(){const r=_more();const it=(p,t,s)=>`<button class="li" data-act="push" data-p="${p}"><div class="grow"><div>${t}</div><small>${s}</small></div><span class="chev">${IC.chev}</span></button>`;
+  const H=S.settings.hold||[],G=S.settings.goals||[];
+  r.body=r.body.replace(/(<div class="grp"><div class="list">)(<button class="li" data-act="push" data-p="cats")/,`$1${it('goals','存錢目標',G.length?G.length+' 個目標':'設定目標金額與期限')}${it('invest','股票市值',H.length?H.length+' 檔 · '+money(holdTotal()):'輸入持股，自動帶收盤價')}${it('applepay','Apple Pay 自動記帳','刷卡當下自動記一筆')}$2`);return r}}
+{const _accts=PAGES.accts;PAGES.accts=function(){const r=_accts();const mv=holdTotal();if(!mv)return r;
+  r.body=r.body.replace(/(<div class="lbl">淨資產（TWD）<\/div><div class="huge num">)([^<]*)(<\/div>)/,(m,a,b,c)=>a+fmt(Math.round(parseFloat(String(b).replace(/[^\d.\-]/g,''))+mv))+c)
+    .replace(/(<div class="lbl">資產<\/div><div class="num" style="font-size:17px">)([^<]*)(<\/div>)/,(m,a,b,c)=>a+fmt(Math.round(parseFloat(String(b).replace(/[^\d.\-]/g,''))+mv))+c)
+    .replace(/(<\/div><\/div><\/div>)(\s*<div class="toolbar mt">)/,`$1<button class="li" data-act="push" data-p="invest" style="margin-top:10px"><div class="grow"><div>股票市值</div><small>已計入上方淨資產</small></div><div class="r num">${money(mv)}</div><span class="chev">${IC.chev}</span></button>$2`);return r}}
+{const _acct=PAGES.acct;PAGES.acct=function(id){const r=_acct(id);r.body=r.body.replace(/(<button class="btn sm" data-act="adjust" data-id="[^"]*">調整餘額<\/button>)/,`$1<button class="btn sm" data-act="push" data-p="recon" data-id="${id}">對帳</button>`);return r}}
+{const _rules=PAGES.rules;PAGES.rules=function(){const r=_rules();const h=subHTML();if(h)r.body=r.body.replace(/(<div class="grp"><div class="grph"><span>週期)/,h+'$1');if(h&&!r.body.includes('可能的訂閱'))r.body+=h;return r}}
+{const _bud=PAGES.budget;PAGES.budget=function(){const r=_bud();const B=S.budgets;
+  r.body=r.body.replace(/(<button class="btn pri" data-act="save-budget">)/,`<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="bg-roll" ${B.roll?'checked':''}> <b>沒花完的結轉到下個月</b></label><div class="hint">開啟後，每月沒用完的預算會加到下個月；超支的部分會從下個月扣掉（總預算與分類預算都適用）。${B.roll&&B.since?'從 '+B.since.replace('-','/')+' 開始計算。':''}</div>$1`);
+  const gh=goalsHTML(true);if(gh)r.body+=`<div class="grp"><div class="grph"><span>存錢目標</span><button class="btn sm" data-act="push" data-p="goals">管理</button></div><div class="card stack">${gh}</div></div>`;return r}}
+
+/* ---------- 動作 ---------- */
+Object.assign(ACT,{
+  'ap-copy':el=>{const v=el.dataset.v;(navigator.clipboard?.writeText(v)||Promise.reject()).then(()=>toast('已複製'),()=>toast('請長按文字手動複製'))},
+  'rc-run':el=>rcRun(el.dataset.id,$('#rc-in').value),
+  'rc-clear':()=>{RC=null;render(true)},
+  'rc-pend':async el=>{if(!RC||!RC.missing.length)return;const a=D.acct.get(RC.acctId);const add=RC.missing.map(it=>{const exp=it.v>0;const kind=exp?'exp':'inc';const f=blankForm(kind);const g=exp?suggestCat(it.desc,it.desc):{c:f.c,s:f.s};
+      Object.assign(f,{a:a.id,amt:String(Math.abs(it.v)),n:it.desc,sh:'',c:g.c,s:g.s||'',dt:it.dt,tm:'12:00'});return{id:uid(),fs:f,due:it.dt,label:'對帳補記'}});
+    S.settings.pend=[...(S.settings.pend||[]),...add];await saveKV('settings');RC.missing=[];render(true);toast('已放進待入帳 '+add.length+' 筆，請到鈴鐺確認')},
+  'sub-make':el=>{const c=(window._subs||[])[+el.dataset.i];if(!c)return;const r=c.last;const f=blankForm('exp');let dt=addMonths(r.dt,1,c.day);while(dt<=TODAY())dt=addMonths(dt,1,c.day);
+    Object.assign(f,{a:r.a,c:r.c,s:r.s,n:r.n||'',sh:r.sh||'',p:r.p||'',amt:String(Math.abs(r.m)),tm:r.tm||'09:00',dt,mode:'rep',rep:'M',iv:1});openEditor(f)},
+  'sub-ign':async el=>{const c=(window._subs||[])[+el.dataset.i];if(!c)return;S.settings.subIgn=[...(S.settings.subIgn||[]),c.key];await saveKV('settings');render(true)},
+  'px-refresh':async()=>{toast('更新股價中…');const ok=await loadPrices(true);render(true);toast(ok?'已更新到 '+(PX?.d||'').slice(5).replace('-','/')+' 收盤價':'目前抓不到股價資料（prices.json 尚未建立或網路問題）')},
+  'hd-add':async()=>{const code=($('#hd-code').value||'').trim();const sh=evalAmt($('#hd-sh').value);if(!code)return toast('請輸入代號');if(!(sh>0))return toast('請輸入股數');
+    holdUpsert($('#hd-pf').value,code,sh,0);await saveKV('settings');await loadPrices(true);render(true);toast('已加入')},
+  'hd-bulk':async()=>{let n=0;for(const line of($('#hd-bulk').value||'').split(/\n/)){const c=line.split(/[,，\t]/).map(x=>x.trim());if(c.length<3)continue;const sh=evalAmt(c[2].replace(/,/g,''));if(!c[1]||!(sh>0))continue;holdUpsert(c[0],c[1],sh,0,'');n++}
+    if(!n)return toast('沒有讀到持股，格式：組合, 代號, 股數');await saveKV('settings');await loadPrices(true);render(true);toast('已匯入 '+n+' 檔')},
+  'hd-guess':el=>{$('#hd-code').value=el.dataset.code;$('#hd-sh').focus();toast('請填股數後按「加入」')},
+  'hd-edit':el=>holdEditSheet(+el.dataset.i),
+  'hd-save':async el=>{const h=(S.settings.hold||[])[+el.dataset.i];if(!h)return;const sh=evalAmt($('#he-sh').value);if(!(sh>=0))return toast('股數不正確');
+    h.pf=$('#he-pf').value.trim()||'我的';h.sh=sh;const px=$('#he-px').value.trim();
+    if(px){const v=evalAmt(px);if(!(v>0))return toast('價格不正確');h.px=v;h.pxManual=1;h.pxd=TODAY()}else if(h.pxManual){h.pxManual=0;h.px=0}
+    await saveKV('settings');closeSheet();await loadPrices(true);render(true);toast('已儲存')},
+  'hd-del':async el=>{const H=S.settings.hold||[];const h=H[+el.dataset.i];if(!h)return;closeSheet();if(!await askConfirm('刪除持股「'+esc(h.code+' '+(h.name||''))+'」？','刪除'))return;H.splice(H.indexOf(h),1);await saveKV('settings');render(true)},
+  'gl-add':async()=>{const name=$('#gl-name').value.trim(),target=evalAmt($('#gl-target').value),due=$('#gl-due').value,a=$('#gl-a').value;if(!name)return toast('請輸入名稱');if(!(target>0))return toast('請輸入目標金額');
+    S.settings.goals=[...(S.settings.goals||[]),{id:uid(),name,target,due,a,saved:0}];await saveKV('settings');render(true);toast('已新增目標')},
+  'gl-save':async el=>{const g=(S.settings.goals||[])[+el.dataset.i];if(!g)return;const v=await askText('目前已存金額',String(g.saved||''),g.name,'num');if(v==null)return;const n=evalAmt(v);if(!(n>=0))return toast('金額不正確');g.saved=n;await saveKV('settings');render(true)},
+  'gl-del':async el=>{const G=S.settings.goals||[];const g=G[+el.dataset.i];if(!g||!await askConfirm('刪除目標「'+esc(g.name)+'」？','刪除'))return;G.splice(+el.dataset.i,1);await saveKV('settings');render(true)},
+});
+document.addEventListener('change',async e=>{const t=e.target;
+  if(t.matches&&t.matches('[data-apmap]')){const m=S.settings.apMap||(S.settings.apMap={});if(t.value)m[t.dataset.apmap]=t.value;else delete m[t.dataset.apmap];await saveKV('settings');toast('已設定')}
+  if(t.id==='rc-file'&&t.files&&t.files[0]){const txt=await readTextFile(t.files[0]);t.value='';rcRun(t.dataset.id,txt)}});
+
+/* ---------- 推播提醒：App 把未來 30 天的提醒寫到 kv/notify，GitHub 排程每小時用記帳助理帳號讀取並發送 ---------- */
+const VAPID_PUB='BLZN1RRX7V0G8oU5kup6Ma0Vx2gb7Bw_psRL5q8baj6190NQxYuiFodV7_s0o36ityRvpj8e-1tWkgN0ojPeXSI';
+function ntfCfg(){return Object.assign({card:1,rule:1,pend:1,ruleMin:0},S.settings.ntf||{})}
+function notifyItems(){const c=ntfCfg();const td=TODAY(),to=addDays(td,30);const out=[];const add=(dt,tm,id,t,b)=>{if(dt>=td&&dt<=to)out.push({id,at:dt+'T'+tm,t,b})};
+  if(c.card)for(const a of S.accts){if(a.arch||a.grp!=='信用卡')continue;const cc=cardCycle(a);if(!cc||!cc.due||!(cc.remain>0))continue;const amt=money(Math.round(cc.remain));
+    add(addDays(cc.due,-3),'09:00','c3_'+a.id+'_'+cc.due,a.name+' 3 天後繳款','待繳 '+amt+'（'+cc.due.slice(5).replace('-','/')+' 到期）');add(cc.due,'09:00','c0_'+a.id+'_'+cc.due,a.name+' 今天繳款','待繳 '+amt)}
+  if(c.rule)for(const x of upcoming(31)){if(x.k==='收入'||x.twd<(c.ruleMin||0))continue;add(addDays(x.dt,-1),'20:00','r_'+x.dt+'_'+x.n,'明天'+(x.tag==='分期'?'分期':'扣款')+'：'+x.n,money(Math.round(x.twd))+(x.a?' · '+x.a:''))}
+  if(c.pend)for(const p of S.settings.pend||[]){if(!p.due)continue;add(p.due,'09:00','p_'+p.id,(p.label||'待入帳')+'到期：'+(p.fs?.n||p.fs?.s||''),money(evalAmt(p.fs?.amt)||0)+' · 到鈴鐺確認入帳')}
+  return out.sort((a,b)=>a.at<b.at?-1:1).slice(0,120)}
+let _ntfLast='',_ntfT=null;
+async function ntfSync(force){if(!window.Cloud||!Cloud.user||!Cloud.db)return;const subs=S.settings.pushSubs||[];if(!subs.length)return;
+  const items=JSON.stringify(notifyItems());const j=JSON.stringify(subs)+items;if(!force&&j===_ntfLast)return;
+  try{await Cloud.base().collection('kv').doc('notify').set({subs:JSON.stringify(subs),items,u:Date.now()});_ntfLast=j}catch(e){console.warn('notify',e)}}
+function ntfLater(){clearTimeout(_ntfT);_ntfT=setTimeout(()=>ntfSync(),4000)}
+{const _m=mutate;mutate=async function(add=[],del=[]){await _m(add,del);ntfLater()}}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.ready)ntfLater()});
+function b64u(s){const p='='.repeat((4-s.length%4)%4);const b=atob((s+p).replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from(b,c=>c.charCodeAt(0))}
+async function ntfEnable(){if(!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window))return toast(/iPhone|iPad/.test(navigator.userAgent)&&!navigator.standalone?'請先用 Safari「分享 → 加入主畫面」，再從主畫面打開 App 開啟通知':'這個瀏覽器不支援推播');
+  if(!window.Cloud||!Cloud.user)return toast('請先登入雲端同步');
+  const perm=await Notification.requestPermission();if(perm!=='granted')return toast('沒有取得通知權限，可到 iPhone 設定 → 通知 開啟');
+  try{const reg=await navigator.serviceWorker.ready;let sub=await reg.pushManager.getSubscription();if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(VAPID_PUB)});
+    const j=sub.toJSON();const subs=(S.settings.pushSubs||[]).filter(x=>x.endpoint!==j.endpoint);subs.push({endpoint:j.endpoint,keys:j.keys,dev:(navigator.userAgent.match(/iPhone|iPad|Mac|Android|Windows/)||['裝置'])[0],at:TODAY()});
+    S.settings.pushSubs=subs.slice(-5);await saveKV('settings');await ntfSync(true);render(true);toast('已開啟推播提醒')}catch(e){toast('開啟失敗：'+(e.message||e))}}
+async function ntfDisable(){try{const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();if(sub){const ep=sub.endpoint;await sub.unsubscribe();S.settings.pushSubs=(S.settings.pushSubs||[]).filter(x=>x.endpoint!==ep)}}catch(e){}
+  await saveKV('settings');await ntfSync(true);render(true);toast('這台裝置已關閉推播')}
+function pageNotify(){const c=ntfCfg();const subs=S.settings.pushSubs||[];const items=notifyItems();const perm=('Notification' in window)?Notification.permission:'unsupported';
+  const tg=(k,l,h)=>`<label style="display:flex;gap:10px;align-items:flex-start"><input type="checkbox" data-ntf="${k}" ${c[k]?'checked':''} style="margin-top:4px"><div><b>${l}</b><div class="hint">${h}</div></div></label>`;
+  return{back:1,head:`<h1>推播提醒</h1>`,body:`
+  <div class="sum"><div class="lbl">這台裝置</div><div style="font-size:17px;margin:4px 0">${perm==='granted'&&subs.length?'已開啟':'尚未開啟'}</div>
+   <div class="btns"><button class="btn pri" data-act="ntf-on">開啟這台裝置的推播</button>${subs.length?'<button class="btn" data-act="ntf-off">關閉</button><button class="btn" data-act="ntf-sync">立即更新排程</button>':''}</div>
+   <div class="hint">iPhone 需 iOS 16.4 以上，而且要從「主畫面」上的 App 圖示打開才能開啟通知。已登記 ${subs.length} 台裝置。</div></div>
+  <div class="card stack">${tg('card','信用卡繳款','繳款日前 3 天與當天早上 9 點，提醒待繳金額（繳清後就不會再提醒）。')}${tg('rule','週期、分期扣款','扣款前一天晚上 8 點提醒。')}${tg('pend','待入帳、尾款到期','到期當天早上 9 點提醒。')}</div>
+  <div class="grp"><div class="grph"><span>接下來的提醒</span><span>${items.length}</span></div><div class="list">${items.slice(0,15).map(x=>`<div class="li"><div class="grow"><div>${esc(x.t)}</div><small class="num">${x.at.slice(5).replace('-','/').replace('T',' ')} · ${esc(x.b)}</small></div></div>`).join('')||'<div class="empty">未來 30 天沒有提醒</div>'}</div>
+  <div class="hint">提醒由 GitHub 每小時檢查一次發送，可能晚幾分鐘到幾十分鐘。打開 App 時會自動更新排程。</div></div>`}}
+PAGES.notify=pageNotify;
+{const _more2=PAGES.more;PAGES.more=function(){const r=_more2();const n=(S.settings.pushSubs||[]).length;
+  r.body=r.body.replace(/(<button class="li" data-act="push" data-p="applepay")/,`<button class="li" data-act="push" data-p="notify"><div class="grow"><div>推播提醒</div><small>${n?'已開啟 · '+n+' 台裝置':'繳款日、扣款前一天提醒'}</small></div><span class="chev">${IC.chev}</span></button>$1`);return r}}
+Object.assign(ACT,{'ntf-on':()=>ntfEnable(),'ntf-off':()=>ntfDisable(),'ntf-sync':async()=>{await ntfSync(true);toast('已更新提醒排程')}});
+document.addEventListener('change',async e=>{const t=e.target;if(t.matches&&t.matches('[data-ntf]')){S.settings.ntf={...ntfCfg(),[t.dataset.ntf]:t.checked?1:0};await saveKV('settings');ntfSync(true);render(true)}});
 
 /* ================= 金額計算機鍵盤：+ − × ÷，觸控裝置取代系統數字鍵盤 ================= */
 const CALC_TOUCH=matchMedia('(pointer:coarse)').matches;

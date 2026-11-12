@@ -1,0 +1,106 @@
+name: 股票收盤價
+on:
+  schedule:
+    - cron: '30 9 * * 1-5'    # 週一至週五 17:30（台灣時間），台股收盤資料公布後
+    - cron: '30 22 * * 1-5'   # 週二至週六 06:30（台灣時間），美股收盤後
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 抓取上市、上櫃收盤價
+        run: |
+          python3 - <<'PY'
+          import json, os, re, urllib.request, datetime
+          TW = datetime.timezone(datetime.timedelta(hours=8))
+          HDR = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36', 'Accept': 'application/json,text/csv,*/*'}
+          def get(url):
+              with urllib.request.urlopen(urllib.request.Request(url, headers=HDR), timeout=40) as r:
+                  return r.read().decode('utf-8-sig', 'ignore')
+          def num(v):
+              try: return float(str(v).replace(',', '').strip())
+              except Exception: return 0.0
+          def roc(d):   # 1151111 → 2026-11-11
+              d = re.sub(r'\D', '', str(d))
+              if len(d) == 7: return '%04d-%s-%s' % (int(d[:3]) + 1911, d[3:5], d[5:7])
+              if len(d) == 8: return '%s-%s-%s' % (d[:4], d[4:6], d[6:8])
+              return ''
+          old = json.load(open('prices.json', encoding='utf-8')) if os.path.exists('prices.json') else {'d': '', 'p': {}}
+          p = {k: v for k, v in old.get('p', {}).items() if not (len(v) > 2 and v[2] == 'USD')}; day = ''
+          # 上市（含 ETF）
+          try:
+              rows = json.loads(get('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'))
+              n = 0
+              for r in rows:
+                  c, v = r.get('Code', ''), num(r.get('ClosingPrice'))
+                  if c and v > 0: p[c] = [r.get('Name', ''), v]; n += 1
+                  day = day or roc(r.get('Date', ''))
+              print('上市', n, '檔', day)
+          except Exception as e: print('上市失敗', repr(e))
+          # 上櫃
+          try:
+              rows = json.loads(get('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes'))
+              n = 0
+              for r in rows:
+                  c = r.get('SecuritiesCompanyCode') or r.get('Code') or ''
+                  v = num(r.get('Close') or r.get('ClosingPrice'))
+                  if c and v > 0: p[c] = [r.get('CompanyName') or r.get('Name', ''), v]; n += 1
+              print('上櫃', n, '檔')
+          except Exception as e: print('上櫃失敗', repr(e))
+          out = {'d': day or old.get('d', ''), 'u': datetime.datetime.now(TW).strftime('%Y-%m-%d %H:%M'), 'p': p}
+          if out['p'] != old.get('p') or out['d'] != old.get('d'):
+              json.dump(out, open('prices.json', 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
+              print('已更新 prices.json，共', len(p), '檔')
+          else: print('沒有變動')
+          PY
+      - name: 美股收盤價（只寫進你的私人收件匣，不公開）
+        env:
+          OWNER_UID: ${{ secrets.OWNER_UID }}
+          BOT_EMAIL: ${{ secrets.BOT_EMAIL }}
+          BOT_PASSWORD: ${{ secrets.BOT_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, datetime, urllib.request
+          E = os.environ
+          if not (E.get('OWNER_UID') and E.get('BOT_EMAIL') and E.get('BOT_PASSWORD')):
+              print('尚未設定記帳助理密鑰，略過美股'); raise SystemExit(0)
+          KEY = 'AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo'   # 與網站相同，本來就是公開的
+          BASE = 'https://firestore.googleapis.com/v1/projects/money-app-54e0d/databases/(default)/documents/users/' + E['OWNER_UID']
+          HDR = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36'}
+          def req(url, body=None, h=None):
+              r = urllib.request.Request(url, data=json.dumps(body).encode() if body is not None else None, headers={'Content-Type': 'application/json', **HDR, **(h or {})})
+              return urllib.request.urlopen(r, timeout=40).read().decode('utf-8-sig', 'ignore')
+          tok = json.loads(req('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + KEY,
+                               {'email': E['BOT_EMAIL'], 'password': E['BOT_PASSWORD'], 'returnSecureToken': True}))['idToken']
+          A = {'Authorization': 'Bearer ' + tok}
+          info = json.loads(req(BASE + '/kv/botinfo', h=A)).get('fields', {})
+          tick = json.loads(info.get('us', {}).get('stringValue', '[]') or '[]')
+          tick = [t for t in tick if re.fullmatch(r'[A-Z][A-Z.\-]{0,9}', t)]
+          print('持有美股', len(tick), '檔')   # 不印代號，避免出現在公開的執行紀錄
+          p = {}; day = ''
+          for t in tick:
+              v, d = 0.0, ''
+              try:
+                  m = json.loads(req('https://query1.finance.yahoo.com/v8/finance/chart/%s?range=5d&interval=1d' % t))['chart']['result'][0]['meta']
+                  v = float(m.get('regularMarketPrice') or 0)
+                  d = datetime.datetime.fromtimestamp(m.get('regularMarketTime', 0), datetime.timezone(datetime.timedelta(hours=-5))).strftime('%Y-%m-%d')
+              except Exception: pass
+              if v <= 0:
+                  try:
+                      c = req('https://stooq.com/q/l/?s=%s.us&f=sd2t2c&h&e=csv' % t.lower()).splitlines()[1].split(',')
+                      v = float(c[3]); d = c[1]
+                  except Exception: pass
+              if v > 0: p[t] = [t, v, 'USD', d]; day = max(day, d)
+          print('取得', len(p), '檔')
+          if p:
+              req(BASE + '/inbox', {'fields': {'kind': {'stringValue': 'px'}, 'd': {'stringValue': day}, 'p': {'stringValue': json.dumps(p)}}}, A)
+              print('已寫入收件匣')
+          PY
+      - name: 提交
+        run: |
+          git config user.name 'github-actions'; git config user.email 'actions@users.noreply.github.com'
+          git add prices.json
+          git diff --cached --quiet || (git commit -m "股價 $(date +%F)" && git push)
