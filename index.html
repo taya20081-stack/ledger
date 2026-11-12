@@ -1564,14 +1564,19 @@ Object.assign(ACT,{
 
 /* ---------- Claude 對話記帳收件匣：users/{uid}/inbox/{id} ----------
    文件欄位：kind('exp'|'inc') amt n c s a(帳戶名稱或id) dt tm p sh cu fee
-   修改週期：kind='updrule' n="週期名稱" wk('prev'|'next'|'' 遇假日提前/延後/不調整)，未入帳記錄會依新設定重算；刪除週期：kind='delrule' n="週期名稱1,名稱2"（只刪由 Claude 建立的週期及未到期記錄）；週期可加 sp(JSON 字串 [{n,s,amt,c?}]) 做成一個大項含多個細項
+   修改週期：kind='updrule' n="週期名稱" wk('prev'|'next'|'' 遇假日提前/延後/不調整)，未入帳記錄會依新設定重算；刪除週期：kind='delrule' n="週期名稱1,名稱2"（只刪由 Claude 建立的週期及未到期記錄）；分期（單筆合併，不拆本金／利息）：kind='inst' n=名稱 amt=每期金額 cnt=總期數 sno=本次第一筆的期數 dt=該期日期 tot=分期總額(顯示用) rate=年利率(顯示用) a c s；週期可加 sp(JSON 字串 [{n,s,amt,c?}]) 做成一個大項含多個細項
    週期（選填）：rep('D'|'W'|'M'|'Y') iv(間隔,預設1) md(每月指定日,如 "4,8,12") cnt(總次數,0=無限) sno(起始期數,預設1，例如接續舊週期填 8) wk('prev'|'next'遇假日) ；有 rep 時 dt 為起始日，建立週期規則而非單筆                    */
 let inboxBusy=Promise.resolve();
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&typeof Cloud!=='undefined'&&Cloud.user)Cloud.pollInbox()});
 function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
   if(!Cloud.decided){await new Promise(r=>{const t=setInterval(()=>{if(Cloud.decided){clearInterval(t);r()}},300)})}
-  const add=[],dels=[],newRules=[],delNames=[],upds=[];
+  const add=[],dels=[],newRules=[],delNames=[],upds=[],insts=[];
   for(const d of docs){const x=d.data()||{};const id='ib_'+d.id;
+    if(x.kind==='inst'){const amt=Math.abs(+x.amt),k=parseInt(x.cnt)||0,acct=S.accts.find(a=>a.id===x.a||a.name===x.a);
+      if(!S.rules.some(q=>q.id===id)&&amt>0&&k>1&&acct&&/^\d{4}-\d{2}-\d{2}$/.test(x.dt||'')){const sno=Math.max(1,Math.min(k,parseInt(x.sno)||1));const nm=String(x.n||'分期付款').slice(0,80);const tm=/^\d{2}:\d{2}$/.test(x.tm||'')?x.tm:'00:00';const day=+x.dt.slice(8),o=Date.now();
+        const recs=[];for(let i=sno;i<=k;i++){recs.push({id:uid(),a:acct.id,t:'支出',c:x.c||'個人支出',s:x.s||'',m:-amt,f:0,d:0,n:nm,sh:String(x.sh||'').slice(0,60),dt:addMonths(x.dt,i-sno,day),tm,p:String(x.p||'').slice(0,60),ds:nm+'・第 '+i+'/'+k+' 期',tg:'claude',w:'',k:'',g:id,o:o+i})}
+        insts.push({rule:{id,fq:'I',name:nm,total:Math.abs(+x.tot)||amt*k,n:k,rate:parseFloat(x.rate)||0,start:x.dt,a:acct.id,off:sno-1,u:o},recs})}
+      dels.push(d.ref);continue}
     if(x.kind==='updrule'){upds.push({n:String(x.n||'').trim(),wk:x.wk});dels.push(d.ref);continue}
     if(x.kind==='delrule'){String(x.n||'').split(/[,、]/).map(t=>t.trim()).filter(Boolean).forEach(t=>delNames.push(t));dels.push(d.ref);continue}
     if(!S.byId.has(id)){const amt=Math.abs(+x.amt);if(isFinite(amt)&&amt>0){
@@ -1602,6 +1607,7 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
       S.recs.forEach(r=>{if(!r.x&&r.dt>td&&r.id.startsWith(rule.id+'_')&&/_\d+_\d+$/.test(r.id))dd.push(r.id)});
       rule.done=keep;rule.u=Date.now();ch=true}}
     if(ch){await saveKV('rules');if(dd.length)await mutate([],dd);await runRules();scheduleRender();toast('Claude 幫你更新了週期設定')}}
+  if(insts.length){for(const q of insts){S.rules.push(q.rule)}await saveKV('rules');await mutate(insts.flatMap(q=>q.recs));scheduleRender();toast('Claude 幫你建了 '+insts.length+' 個分期：'+insts.map(q=>q.rule.name).join('、'))}
   dels.forEach(ref=>ref.delete().catch(()=>{}));
 }).catch(e=>{Cloud.inboxErr='處理失敗：'+(e&&e.message||e)})}
 ACT['copy-uid']=el=>{const v=Cloud.user?.uid||'';(navigator.clipboard?.writeText(v)||Promise.reject()).then(()=>toast('已複製 UID'),()=>toast('請長按 UID 文字手動複製'))};
