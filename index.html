@@ -413,7 +413,7 @@ body.calc-on #sb{padding-bottom:330px}
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v1.9.18';
+window.APP_VER='v1.9.19';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1024,8 +1024,8 @@ function pageMore(){
   const it=(p,t,s)=>`<button class="li" data-act="push" data-p="${p}"><div class="grow"><div>${t}</div><small>${s}</small></div><span class="chev">${IC.chev}</span></button>`;
   const debtN=debtSummary().filter(x=>Math.abs(x.v)>0.004&&!debtStopped(x)).length;
   const bk=S.settings.lastBackup?new Date(S.settings.lastBackup).toLocaleString('zh-TW',{hour12:false}):'從未備份';
-  return{head:`<h1>更多</h1>`,body:`${!window.__ARTIFACT__?`<div class="grp" style="margin-top:0"><div class="list">${it('cloud','雲端同步','<span id="cloud-label">'+esc(Cloud.label())+'</span>')}</div></div>`:''}<div class="grp"><div class="list">${it('budget','預算',S.budgets.total?'每月 '+money(S.budgets.total):'尚未設定')}${it('projects','專案',D.projs.length+' 個專案')}${it('debts','應收應付',debtN+' 筆未結清')}${it('rules','週期與分期',S.rules.filter(r=>r.fq!=='I'&&r.on).length+' 個週期 · '+S.rules.filter(r=>r.fq==='I').length+' 個分期')}${it('search','搜尋與批次編輯','名稱、商家、描述、專案、金額')}</div></div>
-  <div class="grp"><div class="list">${it('cats','分類管理',S.cats.exp.length+' 個支出主類別 · '+S.cats.inc.length+' 個收入主類別')}${it('rates','匯率','更新：'+(S.rates.at||'—'))}${it('backup','備份與同步','上次備份：'+bk)}${it('settings','設定','主題、統計排除分類、清除資料')}</div></div>
+  return{head:`<h1>更多</h1>`,body:`${!window.__ARTIFACT__?`<div class="grp" style="margin-top:0"><div class="list">${it('cloud','雲端同步','<span id="cloud-label">'+esc(Cloud.label())+'</span>')}${it('backup','備份與同步','上次備份：'+bk)}</div></div>`:`<div class="grp" style="margin-top:0"><div class="list">${it('backup','備份與同步','上次備份：'+bk)}</div></div>`}<div class="grp"><div class="list">${it('budget','預算',S.budgets.total?'每月 '+money(S.budgets.total):'尚未設定')}${it('projects','專案',D.projs.length+' 個專案')}${it('debts','應收應付',debtN+' 筆未結清')}${it('rules','週期與分期',S.rules.filter(r=>r.fq!=='I'&&r.on).length+' 個週期 · '+S.rules.filter(r=>r.fq==='I').length+' 個分期')}${it('search','搜尋與批次編輯','名稱、商家、描述、專案、金額')}</div></div>
+  <div class="grp"><div class="list">${it('cats','分類管理',S.cats.exp.length+' 個支出主類別 · '+S.cats.inc.length+' 個收入主類別')}${it('rates','匯率','更新：'+(S.rates.at||'—'))}${it('settings','設定','主題、統計排除分類、清除資料')}</div></div>
   <div class="hint mt">共 ${D.live.length.toLocaleString()} 筆記錄 · ${S.accts.length} 個帳戶${DB.mem?' · <b class="neg">此環境無法永久儲存</b>':''}</div><div class="appver">存摺記帳 ${window.APP_VER||''}</div>`};
 }
 function pageBudget(){
