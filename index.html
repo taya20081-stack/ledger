@@ -130,6 +130,7 @@ button{cursor:pointer}
 /* accounts */
 .grp{margin-top:18px}
 .grph{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);letter-spacing:.08em;padding:0 4px 6px}
+.pfh{width:100%;background:var(--card,#fff);border:1px solid var(--line,#e5e5e5);border-radius:14px;padding:14px 16px;margin-bottom:8px;font-size:15px;color:inherit;letter-spacing:0;cursor:pointer}
 .list{background:var(--paper);border:1px solid var(--rule);border-radius:14px;overflow:hidden}
 .li{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--rule);cursor:pointer;width:100%;background:none;border-left:0;border-right:0;border-top:0;text-align:left}
 .li:last-child{border-bottom:0}
@@ -418,7 +419,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.2';
+window.APP_VER='v2.0.3';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -2730,11 +2731,12 @@ function holdGuess(){const have=new Set((S.settings.hold||[]).map(h=>h.code));co
   for(const r of D.live){if(r.dt<since||r.t!=='支出'||!(r.c==='投資'||/股票|申購|基金/.test(r.s||'')))continue;const x=/^\s*(\d{4,6}[A-Z]?)\s*([^\d\s]{0,12})/.exec(r.n||'');if(!x||have.has(x[1]))continue;const o=m.get(x[1])||{code:x[1],name:x[2]||'',n:0,last:''};o.n++;if(r.dt>o.last)o.last=r.dt;if(!o.name&&x[2])o.name=x[2];m.set(x[1],o)}
   return[...m.values()].sort((a,b)=>a.last<b.last?1:-1).slice(0,15)}
 function pfList(){const H=S.settings.hold||[];const o=[];for(const h of H){const p=h.pf||'我的';if(!o.includes(p))o.push(p)}return o}
+const PF_OPEN=new Set();   // 股票市值頁：展開中的組合（預設全部收合）
 function pageInvest(){const H=S.settings.hold||[];const mvOf=h=>(+h.px||0)*(+h.sh||0)*rateOf(h.cu||'TWD');const tot=H.reduce((t,h)=>t+mvOf(h),0);
   const pd=H.filter(h=>h.pxd&&!h.pxManual&&(h.cu||'TWD')==='TWD').map(h=>h.pxd).sort().pop();
   const pfs=pfList().map(pf=>{const rs=H.map((h,i)=>({h,i})).filter(x=>(x.h.pf||'我的')===pf);const t=rs.reduce((s,x)=>s+mvOf(x.h),0);
-    return`<div class="grp"><div class="grph"><span>${esc(pf)}</span><span class="num">${money(Math.round(t))}</span></div><div class="list">${rs.map(({h,i})=>{const cu=h.cu||'TWD';return`<button class="li" data-act="hd-edit" data-i="${i}"><div class="grow"><div>${esc(h.name||h.code)} <small class="num">${esc(h.code)}</small></div>
-      <small class="num">${(+h.sh||0).toLocaleString('zh-TW',{maximumFractionDigits:5})} 股 × ${h.px?(cu!=='TWD'?cu+' ':'')+(+h.px).toLocaleString('zh-TW',{maximumFractionDigits:2}):'尚無價格'}${h.pxManual?'（手動）':h.pxd?' · '+h.pxd.slice(5).replace('-','/'):''}</small></div><div class="r num">${h.px?money(Math.round(mvOf(h))):'—'}</div></button>`}).join('')}</div></div>`}).join('');
+    const op=PF_OPEN.has(pf);return`<div class="grp"><button class="grph pfh" data-act="pf-tog" data-pf="${esc(pf)}"><span>${op?'▾':'▸'} ${esc(pf)} · ${rs.length} 檔</span><span class="num">${money(Math.round(t))}</span></button>${op?`<div class="list">${rs.map(({h,i})=>{const cu=h.cu||'TWD';return`<button class="li" data-act="hd-edit" data-i="${i}"><div class="grow"><div>${esc(h.name||h.code)} <small class="num">${esc(h.code)}</small></div>
+      <small class="num">${(+h.sh||0).toLocaleString('zh-TW',{maximumFractionDigits:5})} 股 × ${h.px?(cu!=='TWD'?cu+' ':'')+(+h.px).toLocaleString('zh-TW',{maximumFractionDigits:2}):'尚無價格'}${h.pxManual?'（手動）':h.pxd?' · '+h.pxd.slice(5).replace('-','/'):''}</small></div><div class="r num">${h.px?money(Math.round(mvOf(h))):'—'}</div></button>`}).join('')}</div>`:''}</div>`}).join('');
   return{back:1,head:`<h1>股票市值</h1><button class="ibtn" data-act="px-refresh" aria-label="更新股價">${IC.sync||'↻'}</button>`,body:`
   <div class="sum"><div class="lbl">持股市值（TWD）${pd?' · 台股 '+pd.slice(5).replace('-','/')+' 收盤':''}</div><div class="huge num">${fmt(Math.round(tot))}</div>
    ${pfList().length>1?`<div class="kv mt">${pfList().map(pf=>`<div><div class="lbl">${esc(pf)}</div><div class="v num">${fmt(Math.round(H.filter(h=>(h.pf||'我的')===pf).reduce((s,h)=>s+mvOf(h),0)))}</div></div>`).join('')}</div>`:''}
@@ -2804,7 +2806,7 @@ Object.assign(ACT,{
   'hd-bulk':async()=>{let n=0;for(const line of($('#hd-bulk').value||'').split(/\n/)){const c=line.split(/[,，\t]/).map(x=>x.trim());if(c.length<3)continue;const sh=evalAmt(c[2].replace(/,/g,''));if(!c[1]||!(sh>0))continue;holdUpsert(c[0],c[1],sh,0,'');n++}
     if(!n)return toast('沒有讀到持股，格式：組合, 代號, 股數');await saveKV('settings');await loadPrices(true);render(true);toast('已匯入 '+n+' 檔')},
   'hd-guess':el=>{$('#hd-code').value=el.dataset.code;$('#hd-sh').focus();toast('請填股數後按「加入」')},
-  'hd-edit':el=>holdEditSheet(+el.dataset.i),
+  'hd-edit':el=>holdEditSheet(+el.dataset.i),'pf-tog':el=>{const k=el.dataset.pf;PF_OPEN.has(k)?PF_OPEN.delete(k):PF_OPEN.add(k);render(true)},
   'hd-save':async el=>{const h=(S.settings.hold||[])[+el.dataset.i];if(!h)return;const sh=evalAmt($('#he-sh').value);if(!(sh>=0))return toast('股數不正確');
     h.pf=$('#he-pf').value.trim()||'我的';h.sh=sh;const px=$('#he-px').value.trim();
     if(px){const v=evalAmt(px);if(!(v>0))return toast('價格不正確');h.px=v;h.pxManual=1;h.pxd=TODAY()}else if(h.pxManual){h.pxManual=0;h.px=0}
