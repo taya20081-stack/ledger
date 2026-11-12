@@ -617,7 +617,9 @@ function buildRecords0(fs){
     case'exp':
       if(fs.splits&&fs.splits.length){const g=uid();return fs.splits.filter(x=>evalAmt(x.amt)>0).map((x,i)=>R({a:fs.a,t:'支出',c:x.c,s:x.s,m:-evalAmt(x.amt),n:(x.n||'').trim(),gn:base.n||'',sh:fs.sh||'',g,f:i===0?-fee:0,d:i===0?disc:0}))}
       return[R({a:fs.a,t:'支出',c:fs.c,s:fs.s,m:-amt,f:-fee,d:disc,sh:(fs.sh||'').trim()})];
-    case'inc':return[R({a:fs.a,t:'收入',c:fs.c,s:fs.s,m:amt,f:-fee})];
+    case'inc':
+      if(fs.splits&&fs.splits.length){const g=uid();return fs.splits.filter(x=>evalAmt(x.amt)>0).map((x,i)=>R({a:fs.a,t:'收入',c:x.c,s:x.s,m:evalAmt(x.amt),n:(x.n||'').trim(),gn:base.n||'',sh:(fs.sh||'').trim(),g,f:i===0?-fee:0}))}
+      return[R({a:fs.a,t:'收入',c:fs.c,s:fs.s,m:amt,f:-fee,sh:(fs.sh||'').trim()})];
     case'tr':{const k=uid();const to=D.acct.get(fs.a2);const sub=to&&to.grp==='信用卡'?'信用卡繳款':'轉帳';
       const a2=evalAmt(fs.amt2);const inAmt=isFinite(a2)&&a2>0?a2:amt;
       return[R({a:fs.a,t:'轉出',c:'轉帳',s:sub,m:-amt,f:-fee,k}),R({a:fs.a2,t:'轉入',c:'轉帳',s:sub,m:inAmt,k,o:base.o+1})]}
@@ -1564,13 +1566,15 @@ Object.assign(ACT,{
 
 /* ---------- Claude 對話記帳收件匣：users/{uid}/inbox/{id} ----------
    文件欄位：kind('exp'|'inc') amt n c s a(帳戶名稱或id) dt tm p sh cu fee
+   刪除週期：kind='delrule' n="週期名稱1,名稱2"（只刪由 Claude 建立的週期及未到期記錄）；週期可加 sp(JSON 字串 [{n,s,amt,c?}]) 做成一個大項含多個細項
    週期（選填）：rep('D'|'W'|'M'|'Y') iv(間隔,預設1) md(每月指定日,如 "4,8,12") cnt(總次數,0=無限) wk('prev'|'next'遇假日) ；有 rep 時 dt 為起始日，建立週期規則而非單筆                    */
 let inboxBusy=Promise.resolve();
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&typeof Cloud!=='undefined'&&Cloud.user)Cloud.pollInbox()});
 function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
   if(!Cloud.decided){await new Promise(r=>{const t=setInterval(()=>{if(Cloud.decided){clearInterval(t);r()}},300)})}
-  const add=[],dels=[],newRules=[];
+  const add=[],dels=[],newRules=[],delNames=[];
   for(const d of docs){const x=d.data()||{};const id='ib_'+d.id;
+    if(x.kind==='delrule'){String(x.n||'').split(/[,、]/).map(t=>t.trim()).filter(Boolean).forEach(t=>delNames.push(t));dels.push(d.ref);continue}
     if(!S.byId.has(id)){const amt=Math.abs(+x.amt);if(isFinite(amt)&&amt>0){
       const kind=x.kind==='inc'?'inc':'exp';const acct=S.accts.find(a=>a.id===x.a||a.name===x.a)||D.acct.get(S.settings.lastA)||S.accts.find(a=>!a.arch);
       if(acct){const ck=kind==='inc'?'inc':'exp';let c=x.c,s=x.s;const m=S.cats[ck].find(q=>q.n===c);
@@ -1580,13 +1584,17 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
         if(x.cu&&x.cu!==acct.cur){r.cu=x.cu;r.xr=+(fxOn(x.cu,dt)/fxOn(acct.cur,dt)).toPrecision(6)}
         if(/^[DWMY]$/.test(x.rep||'')){
           if(!S.rules.some(q=>q.id===id)){
-            const rule={id,name:r.n||r.s||'',fs:{kind,a:acct.id,c,s:s||'',amt:String(amt),n:r.n,p:r.p,sh:r.sh,ds:'',w:'',tm,dt,fee:r.f?String(Math.abs(r.f)):'',disc:'',cu:r.cu||'',xr:'',ids:[],splits:null},fq:x.rep,iv:Math.max(1,parseInt(x.iv)||1),start:dt,end:'',cnt:parseInt(x.cnt)||0,done:0,next:'',on:1,off:0,wk:(x.wk==='prev'||x.wk==='next')?x.wk:'',u:Date.now()};
+            let sp=null;try{const aa=typeof x.sp==='string'?JSON.parse(x.sp):x.sp;if(Array.isArray(aa)&&aa.length)sp=aa.map(q=>({c:q.c||c,s:q.s||'',amt:String(Math.abs(+q.amt)||0),n:String(q.n||'').slice(0,80)}))}catch(e){}
+            const rule={id,name:r.n||r.s||'',fs:{kind,a:acct.id,c,s:s||'',amt:String(sp?sp.reduce((t,q)=>t+(+q.amt),0):amt),n:r.n,p:r.p,sh:r.sh,ds:'',w:'',tm,dt,fee:r.f?String(Math.abs(r.f)):'',disc:'',cu:r.cu||'',xr:'',ids:[],splits:sp},fq:x.rep,iv:Math.max(1,parseInt(x.iv)||1),start:dt,end:'',cnt:parseInt(x.cnt)||0,done:0,next:'',on:1,off:0,wk:(x.wk==='prev'||x.wk==='next')?x.wk:'',u:Date.now()};
             if(x.rep==='M'&&x.md){const md=[...new Set((Array.isArray(x.md)?x.md:String(x.md).split(/[,、\s]+/)).map(Number).filter(q=>q>=1&&q<=32))].sort((a,b)=>a-b);
               if(md.length){rule.md=md;const sd=+dt.slice(8),last=daysIn(+dt.slice(0,4),+dt.slice(5,7));rule.m0=md.filter(q=>Math.min(q,last)<sd).length}}
             newRules.push(rule)}
         }else add.push(r)}}}
     dels.push(d.ref)}
   if(newRules.length){S.rules.push(...newRules);await saveKV('rules');await runRules();scheduleRender();toast('Claude 幫你建了 '+newRules.length+' 個週期：'+newRules.slice(0,3).map(q=>q.name+'（'+ruleDesc(q)+'）').join('、'))}
+  if(delNames.length){const td=TODAY();const gone=S.rules.filter(q=>q.fq!=='I'&&String(q.id).startsWith('ib_')&&delNames.includes(q.name));
+    if(gone.length){const ids=S.recs.filter(r=>!r.x&&r.dt>td&&/_\d+_\d+$/.test(r.id)&&gone.some(q=>r.id.startsWith(q.id+'_'))).map(r=>r.id);
+      S.rules=S.rules.filter(q=>!gone.includes(q));await saveKV('rules');if(ids.length)await mutate([],ids);scheduleRender();toast('Claude 幫你刪除了 '+gone.length+' 個週期')}}
   if(add.length){Cloud.inboxN=(Cloud.inboxN||0)+add.length;await mutate(add);scheduleRender();toast('Claude 幫你記了 '+add.length+' 筆：'+add.slice(0,3).map(r=>(r.n||r.s)+' '+fmt(Math.abs(r.m))).join('、'))}
   dels.forEach(ref=>ref.delete().catch(()=>{}));
 }).catch(e=>{Cloud.inboxErr='處理失敗：'+(e&&e.message||e)})}
