@@ -419,7 +419,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.3';
+window.APP_VER='v2.0.4';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -2822,7 +2822,7 @@ document.addEventListener('change',async e=>{const t=e.target;
   if(t.id==='rc-file'&&t.files&&t.files[0]){const txt=await readTextFile(t.files[0]);t.value='';rcRun(t.dataset.id,txt)}});
 
 /* ---------- 推播提醒：App 把未來 30 天的提醒寫到 kv/notify，GitHub 排程每小時用記帳助理帳號讀取並發送 ---------- */
-const VAPID_PUB='BLZN1RRX7V0G8oU5kup6Ma0Vx2gb7Bw_psRL5q8baj6190NQxYuiFodV7_s0o36ityRvpj8e-1tWkgN0ojPeXSI';
+const VAPID_PUB='BNRR8U8w982WoTEk56OYHNbsQoQVSy-QuWDQTiQLJ8XUW-X1OttHDlcHIPETchMOL8D4lIuzxDpdajLHoJDVbIU';
 function ntfCfg(){return Object.assign({card:1,rule:1,pend:1,ruleMin:0},S.settings.ntf||{})}
 function notifyItems(){const c=ntfCfg();const td=TODAY(),to=addDays(td,30);const out=[];const add=(dt,tm,id,t,b)=>{if(dt>=td&&dt<=to)out.push({id,at:dt+'T'+tm,t,b})};
   if(c.card)for(const a of S.accts){if(a.arch||a.grp!=='信用卡')continue;const cc=cardCycle(a);if(!cc||!cc.due||!(cc.remain>0))continue;const amt=money(Math.round(cc.remain));
