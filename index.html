@@ -413,7 +413,7 @@ body.calc-on #sb{padding-bottom:330px}
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v1.9.16';
+window.APP_VER='v1.9.17';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -953,6 +953,45 @@ function pageWelcome(){
   <div class="feat"><div><b>多帳戶 · 多幣別</b>現金、銀行、信用卡、電子票證與外幣帳戶，依匯率換算淨資產。</div><div><b>信用卡帳單</b>結帳日、繳款日、本期消費與待繳金額，到期前提醒。</div><div><b>預算與專案</b>月預算、分類預算、每日可用額度；專案追蹤旅遊或車輛支出。</div><div><b>週期 · 分期 · 範本</b>固定扣款自動入帳，分期本息均攤，常用記錄一鍵帶入。</div><div><b>應收應付</b>借出、代墊、借入、還款，依對象結算。</div><div><b>統計圖表</b>分類占比、月趨勢、淨資產走勢，支援排除特定分類。</div></div></div>`};
 }
 function acctBal(a){return D.bal.get(a.id)||0}
+
+function comboChart(labels,exp,inc,nw){
+  const W=640,H=230,L=50,R=54,T=10,B=26;const bmax=Math.max(1,...exp,...inc);const step=niceStep(bmax);const top=Math.max(step,Math.ceil(bmax/step)*step);
+  let lo=Math.min(...nw),hi=Math.max(...nw);if(lo===hi){lo-=1;hi+=1}const pad=(hi-lo)*.08;lo-=pad;hi+=pad;
+  const yb=v=>T+(H-T-B)*(1-v/top),yn=v=>T+(H-T-B)*(1-(v-lo)/(hi-lo));const n=labels.length,gw=(W-L-R)/n,bw=Math.max(3,Math.min(14,(gw-4)/2));
+  let g='';for(let v=0;v<=top+1e-9;v+=step)g+=`<line class="${v===0?'gl0':'gl'}" x1="${L}" x2="${W-R}" y1="${yb(v)}" y2="${yb(v)}"/><text class="ax" x="${L-6}" y="${yb(v)+4}" text-anchor="end">${shortNum(v)}</text>`;
+  for(let k=0;k<=4;k++){const v=lo+(hi-lo)*k/4;g+=`<text class="ax" x="${W-R+6}" y="${yn(v)+4}" text-anchor="start">${shortNum(v)}</text>`}
+  const every=Math.ceil(n/8);
+  labels.forEach((lb,i)=>{const cx=L+gw*i+gw/2;
+    g+=`<rect class="be" x="${cx-bw-.5}" y="${yb(exp[i])}" width="${bw}" height="${Math.max(0,yb(0)-yb(exp[i]))}" rx="2"><title>${esc(lb)} 支出 ${fmt(exp[i])}</title></rect><rect class="bi" x="${cx+.5}" y="${yb(inc[i])}" width="${bw}" height="${Math.max(0,yb(0)-yb(inc[i]))}" rx="2"><title>${esc(lb)} 收入 ${fmt(inc[i])}</title></rect>`;
+    if(i%every===0||i===n-1)g+=`<text class="axc" x="${cx}" y="${H-8}" text-anchor="middle">${esc(lb)}</text>`});
+  const pts=nw.map((v,i)=>(L+gw*i+gw/2).toFixed(1)+','+yn(v).toFixed(1));
+  g+=`<path class="ln" d="M${pts.join(' L')}"/>`;nw.forEach((v,i)=>{g+=`<circle class="md sa" cx="${L+gw*i+gw/2}" cy="${yn(v)}" r="${i===n-1?4.5:2.4}"><title>${esc(labels[i])} 淨資產 ${fmt(v)}</title></circle>`});
+  return`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="收支與淨資產走勢">${g}</svg>`;
+}
+function acctChartHTML(){
+  const mode=S.acctMode||'M',td=TODAY();const bks=trendBuckets(mode,td);const ts=sumBuckets(bks);
+  const act=new Set(S.accts.filter(a=>!a.arch).map(a=>a.id));let base=S.accts.reduce((x,a)=>x+(a.arch?0:(a.init||0)*rateOf(a.cur)),0);
+  const asc=D.live.slice().reverse();let j=0;const nw=[];
+  for(const b of bks){const lim=b.to<td?b.to:td;while(j<asc.length&&asc[j].dt<=lim){const r=asc[j];if(act.has(r.a)&&r.dt<=td)base+=val(r)*rateOf(curOf(r));j++}nw.push(Math.round(base))}
+  const last=ts[ts.length-1]||{exp:0,inc:0};const lb=bks[bks.length-1];const names={D:'按日',W:'按週',M:'按月',Y:'按年'};
+  return`<div class="card" style="margin-top:12px"><div class="toolbar"><div class="seg">${['D','W','M','Y'].map(k=>`<button class="${mode===k?'on':''}" data-act="acct-chart" data-k="${k}">${names[k]}</button>`).join('')}</div><span class="hint" style="margin:0"><i class="lgd se"></i>支出<i class="lgd si"></i>收入<i class="lgd" style="background:var(--accent)"></i>淨資產</span></div>
+  ${comboChart(bks.map(b=>b.short),ts.map(x=>x.exp),ts.map(x=>x.inc),nw)}
+  <div class="toolbar" style="margin-top:6px"><span class="num" style="font-weight:600">${esc(periodRange(mode,lb.anchor).label)}</span><span class="num"><span class="neg">支 ${fmt(last.exp)}</span>　<span class="pos">收 ${fmt(last.inc)}</span></span></div></div>`;
+}
+function pageInst(id){
+  const r=S.rules.find(x=>x.id===id&&x.fq==='I');if(!r)return{back:1,head:'<h1>分期付款</h1>',body:'<div class="empty">找不到這筆分期</div>'};
+  const td=TODAY();const gs=(D.groups.get(id)||[]).filter(x=>!x.x);const byDt=new Map();
+  for(const x of gs){let o=byDt.get(x.dt);if(!o)byDt.set(x.dt,o={dt:x.dt,pr:0,int:0,a:x.a,ids:[]});if(x.t==='利息')o.int-=x.m;else o.pr-=x.m;o.ids.push(x.id)}
+  const per=[...byDt.values()].sort((a,b)=>a.dt<b.dt?-1:1);const off=r.off||0;const a=D.acct.get(r.a);
+  const paid=per.filter(p=>p.dt<=td);const left=per.filter(p=>p.dt>td);const sum=l=>Math.round(l.reduce((s,p)=>s+p.pr+p.int,0));
+  const hasInt=per.some(p=>p.int>0);
+  const rows=per.map((p,i)=>{const fut=p.dt>td;const tot=Math.round(p.pr+p.int);
+    return`<div class="pbr${fut?' future':''}" data-act="edit-rec" data-id="${p.ids[0]}" role="button" tabindex="0"><div class="d num">${p.dt.slice(2).replace(/-/g,'/')}</div><div class="m"><div>第 ${i+1+off} / ${r.n} 期${fut?'<span class="pill warn">未入帳</span>':''}</div><small class="num">${hasInt?'本金 '+fmt(Math.round(p.pr))+' · 利息 '+fmt(Math.round(p.int)):''}</small></div><div class="a num neg">${fmt(-tot)}</div></div>`}).join('');
+  return{back:1,head:`<h1>${esc(r.name)}</h1>`,body:`<div class="sum"><div class="lbl">分期付款${a?' · '+esc(a.name):''}</div><div class="huge num">${money(Math.round(left.length?sum(left):0))}</div><div class="hint">剩餘未繳 · 已繳 ${paid.length+off} / ${r.n} 期 · 剩 ${left.length} 期</div>
+    <div class="pbar" style="margin:8px 0"><i style="width:${Math.round((paid.length+off)/Math.max(1,r.n)*100)}%"></i></div>
+    <div class="kv"><div><div class="lbl">分期總額</div><div class="v num">${money(r.total)}</div></div><div><div class="lbl">年利率</div><div class="v num">${r.rate?r.rate+'%':'—'}</div></div><div><div class="lbl">每期約</div><div class="v num">${per.length?money(Math.round(per[Math.min(paid.length,per.length-1)].pr+per[Math.min(paid.length,per.length-1)].int)):'—'}</div></div><div><div class="lbl">本次已入帳</div><div class="v num">${money(sum(paid))}</div></div></div></div>
+    <div class="pb"><div class="pbh"><span>日期</span><span>期數</span><span>金額</span><span></span></div>${rows||'<div class="empty">尚無記錄</div>'}</div>`};
+}
 function pageAccts(){
   let asset=0,debt=0;const show=S.accts.filter(a=>S.settings.showArch||!a.arch);
   for(const a of S.accts){if(a.arch)continue;const v=acctBal(a)*rateOf(a.cur);if(v>=0)asset+=v;else debt+=v}asset=Math.round(asset);debt=Math.round(debt);
@@ -963,6 +1002,7 @@ function pageAccts(){
       return`<button class="li" data-act="push" data-p="acct" data-id="${a.id}"><div class="grow"><div>${esc(a.name)}${a.arch?'<span class="pill">已封存</span>':''}</div>${cc?`<small>本期 ${money(cc.cyc)} · ${cc.due?'繳款日 '+cc.due.slice(5).replace('-','/'):'結帳日 '+a.stmt+' 日'}</small>`:a.cur!=='TWD'?`<small>${a.cur} · 1 = ${S.rates.r[a.cur]||'?'} TWD</small>`:''}</div><div class="r"><div class="num ${b<0?'neg':''}">${money(b,a.cur)}</div>${a.cur!=='TWD'?`<small class="num">≈ ${money(Math.round(b*rateOf(a.cur)))}</small>`:''}</div><span class="chev">${IC.chev}</span></button>`}).join('')}</div></div>`}
   return{head:`<h1>帳戶</h1><button class="ibtn" data-act="acct-new" aria-label="新增帳戶">${IC.plus}</button>`,
     body:`<div class="sum"><div class="lbl">淨資產（TWD）</div><div class="huge num">${fmt(asset+debt)}</div><div class="sumrow" style="grid-template-columns:repeat(2,minmax(0,1fr))"><div><div class="lbl">資產</div><div class="num" style="font-size:17px">${fmt(asset)}</div></div><div><div class="lbl">負債</div><div class="num neg" style="font-size:17px">${fmt(debt)}</div></div></div></div>
+    ${acctChartHTML()}
     <div class="toolbar mt"><div class="chips"><button class="chip${S.settings.hideZero?' on':''}" data-act="toggle-set" data-k="hideZero">隱藏餘額 0</button><button class="chip${S.settings.showArch?' on':''}" data-act="toggle-set" data-k="showArch">顯示已封存</button></div><button class="btn sm" data-act="add" data-kind="tr">轉帳</button></div>${groups||'<div class="empty">尚未建立帳戶</div>'}`};
 }
 function pageAcct(id){
@@ -1077,7 +1117,7 @@ function pageSettings(){
   <div class="card stack"><div class="lbl">危險操作</div><button class="btn danger" data-act="wipe">清除此裝置上的所有資料</button>${window.Cloud&&Cloud.user?`<button class="btn danger" data-act="acct-delete">刪除帳號（含雲端資料）</button>`:''}</div><div class="hint mt">存摺記帳 ${esc(window.APP_VER||'')}</div>`};
 }
 /* ================= render ================= */
-const PAGES={home:pageHome,accts:pageAccts,stats:pageStats,more:pageMore,acct:pageAcct,budget:pageBudget,projects:pageProjects,project:pageProject,debts:pageDebts,debt:pageDebt,rules:pageRules,tpls:pageTpls,cats:pageCats,rates:pageRates,backup:pageBackup,settings:pageSettings,search:pageSearch};
+const PAGES={home:pageHome,accts:pageAccts,stats:pageStats,more:pageMore,acct:pageAcct,inst:pageInst,budget:pageBudget,projects:pageProjects,project:pageProject,debts:pageDebts,debt:pageDebt,rules:pageRules,tpls:pageTpls,cats:pageCats,rates:pageRates,backup:pageBackup,settings:pageSettings,search:pageSearch};
 function render(keepScroll){
   if(!S.ready)return;
   const top=S.stack[S.stack.length-1];
@@ -1230,6 +1270,7 @@ const ACT={
   'edit-rec':el=>{const r=S.byId.get(el.dataset.id);if(r)openEditor(recordToForm(r),true)},
   month:el=>{S.month=shiftYM(S.month,+el.dataset.d);render();window.scrollTo(0,0)},
   'home-more':()=>{S.homeLimit[S.month]=(S.homeLimit[S.month]||400)+400;render(true)},
+  'acct-chart':el=>{S.acctMode=el.dataset.k;render(true)},
   'acct-more':()=>{S.acctLimit+=500;render(true)},
   'search-more':()=>{S.search.limit+=500;render(true)},
   'ef-kind':el=>{const k=el.dataset.k;if(EF.kind===k)return;const keep={a:EF.a,dt:EF.dt,tm:EF.tm,amt:EF.amt,n:EF.n,p:EF.p,ds:EF.ds,ids:EF.ids,_edit:EF._edit};const n=blankForm(k);Object.assign(n,keep);if(k==='tr'){n.a2=S.accts.find(a=>a.id!==n.a&&!a.arch)?.id||''}EF=n;renderEditor()},
@@ -2436,7 +2477,7 @@ function pageRules(){
     return{r,n:r.n||pr.length,paidN,left,remain,next:next?.dt||'',per,end:pr.length?pr[pr.length-1].dt:'',a:D.acct.get(r.a)?.name||''}});
   const act=inst.filter(x=>x.left>0).sort((a,b)=>(a.next<b.next?-1:1)),fin=inst.filter(x=>x.left<=0);
   const totRemain=Math.round(act.reduce((s,x)=>s+x.remain,0));const totPer=Math.round(act.reduce((s,x)=>s+x.per,0));
-  const instLi=o=>`<div class="li sch"><div class="grow"><div>${esc(o.r.name)}${o.left>0?'':'<span class="pill">已繳清</span>'}</div>
+  const instLi=o=>`<div class="li sch"><div class="grow" data-act="push" data-p="inst" data-id="${o.r.id}" role="button" tabindex="0" style="cursor:pointer"><div>${esc(o.r.name)}${o.left>0?'':'<span class="pill">已繳清</span>'}</div>
     <div class="pbar"><i style="width:${Math.round(o.paidN/Math.max(1,o.n)*100)}%"></i></div>
     <small class="num">已繳 ${o.paidN} / ${o.n} 期${o.left>0?` · 剩 ${o.left} 期 · 剩餘 ${money(Math.round(o.remain))}`:''}</small>
     <small class="num">${o.left>0?`每期約 ${money(Math.round(o.per))} · 下一期 ${o.next.replace(/-/g,'/')} · 到 ${o.end.replace(/-/g,'/')}`:`總額 ${money(o.r.total)} · ${o.end.replace(/-/g,'/')} 結束`}${o.a?' · '+esc(o.a):''}</small></div>
