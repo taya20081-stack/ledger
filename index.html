@@ -1563,12 +1563,13 @@ Object.assign(ACT,{
 });
 
 /* ---------- Claude 對話記帳收件匣：users/{uid}/inbox/{id} ----------
-   文件欄位：kind('exp'|'inc') amt n c s a(帳戶名稱或id) dt tm p sh cu fee                     */
+   文件欄位：kind('exp'|'inc') amt n c s a(帳戶名稱或id) dt tm p sh cu fee
+   週期（選填）：rep('D'|'W'|'M'|'Y') iv(間隔,預設1) md(每月指定日,如 "4,8,12") cnt(總次數,0=無限) wk('prev'|'next'遇假日) ；有 rep 時 dt 為起始日，建立週期規則而非單筆                    */
 let inboxBusy=Promise.resolve();
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&typeof Cloud!=='undefined'&&Cloud.user)Cloud.pollInbox()});
 function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
   if(!Cloud.decided){await new Promise(r=>{const t=setInterval(()=>{if(Cloud.decided){clearInterval(t);r()}},300)})}
-  const add=[],dels=[];
+  const add=[],dels=[],newRules=[];
   for(const d of docs){const x=d.data()||{};const id='ib_'+d.id;
     if(!S.byId.has(id)){const amt=Math.abs(+x.amt);if(isFinite(amt)&&amt>0){
       const kind=x.kind==='inc'?'inc':'exp';const acct=S.accts.find(a=>a.id===x.a||a.name===x.a)||D.acct.get(S.settings.lastA)||S.accts.find(a=>!a.arch);
@@ -1577,8 +1578,15 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
         const dt=/^\d{4}-\d{2}-\d{2}$/.test(x.dt||'')?x.dt:TODAY();const tm=/^\d{2}:\d{2}$/.test(x.tm||'')?x.tm:NOWTM();
         const r={id,a:acct.id,t:kind==='inc'?'收入':'支出',c,s:s||'',m:kind==='inc'?amt:-amt,f:-(Math.abs(+x.fee)||0),d:0,n:String(x.n||'').slice(0,80),sh:String(x.sh||'').slice(0,60),dt,tm,p:String(x.p||'').slice(0,60),ds:'',tg:'claude',w:'',k:'',g:'',o:Date.now()};
         if(x.cu&&x.cu!==acct.cur){r.cu=x.cu;r.xr=+(fxOn(x.cu,dt)/fxOn(acct.cur,dt)).toPrecision(6)}
-        add.push(r)}}}
+        if(/^[DWMY]$/.test(x.rep||'')){
+          if(!S.rules.some(q=>q.id===id)){
+            const rule={id,name:r.n||r.s||'',fs:{kind,a:acct.id,c,s:s||'',amt:String(amt),n:r.n,p:r.p,sh:r.sh,ds:'',w:'',tm,dt,fee:r.f?String(Math.abs(r.f)):'',disc:'',cu:r.cu||'',xr:'',ids:[],splits:null},fq:x.rep,iv:Math.max(1,parseInt(x.iv)||1),start:dt,end:'',cnt:parseInt(x.cnt)||0,done:0,next:'',on:1,off:0,wk:(x.wk==='prev'||x.wk==='next')?x.wk:'',u:Date.now()};
+            if(x.rep==='M'&&x.md){const md=[...new Set((Array.isArray(x.md)?x.md:String(x.md).split(/[,、\s]+/)).map(Number).filter(q=>q>=1&&q<=32))].sort((a,b)=>a-b);
+              if(md.length){rule.md=md;const sd=+dt.slice(8),last=daysIn(+dt.slice(0,4),+dt.slice(5,7));rule.m0=md.filter(q=>Math.min(q,last)<sd).length}}
+            newRules.push(rule)}
+        }else add.push(r)}}}
     dels.push(d.ref)}
+  if(newRules.length){S.rules.push(...newRules);await saveKV('rules');await runRules();scheduleRender();toast('Claude 幫你建了 '+newRules.length+' 個週期：'+newRules.slice(0,3).map(q=>q.name+'（'+ruleDesc(q)+'）').join('、'))}
   if(add.length){Cloud.inboxN=(Cloud.inboxN||0)+add.length;await mutate(add);scheduleRender();toast('Claude 幫你記了 '+add.length+' 筆：'+add.slice(0,3).map(r=>(r.n||r.s)+' '+fmt(Math.abs(r.m))).join('、'))}
   dels.forEach(ref=>ref.delete().catch(()=>{}));
 }).catch(e=>{Cloud.inboxErr='處理失敗：'+(e&&e.message||e)})}
