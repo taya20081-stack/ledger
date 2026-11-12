@@ -1565,7 +1565,7 @@ Object.assign(ACT,{
 /* ---------- Claude 對話記帳收件匣：users/{uid}/inbox/{id} ----------
    文件欄位：kind('exp'|'inc') amt n c s a(帳戶名稱或id) dt tm p sh cu fee
    修改週期：kind='updrule' n="週期名稱" wk('prev'|'next'|'' 遇假日提前/延後/不調整)，未入帳記錄會依新設定重算；刪除週期：kind='delrule' n="週期名稱1,名稱2"（只刪由 Claude 建立的週期及未到期記錄）；週期可加 sp(JSON 字串 [{n,s,amt,c?}]) 做成一個大項含多個細項
-   週期（選填）：rep('D'|'W'|'M'|'Y') iv(間隔,預設1) md(每月指定日,如 "4,8,12") cnt(總次數,0=無限) wk('prev'|'next'遇假日) ；有 rep 時 dt 為起始日，建立週期規則而非單筆                    */
+   週期（選填）：rep('D'|'W'|'M'|'Y') iv(間隔,預設1) md(每月指定日,如 "4,8,12") cnt(總次數,0=無限) sno(起始期數,預設1，例如接續舊週期填 8) wk('prev'|'next'遇假日) ；有 rep 時 dt 為起始日，建立週期規則而非單筆                    */
 let inboxBusy=Promise.resolve();
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&typeof Cloud!=='undefined'&&Cloud.user)Cloud.pollInbox()});
 function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
@@ -1584,7 +1584,7 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
         if(/^[DWMY]$/.test(x.rep||'')){
           if(!S.rules.some(q=>q.id===id)){
             let sp=null;try{const aa=typeof x.sp==='string'?JSON.parse(x.sp):x.sp;if(Array.isArray(aa)&&aa.length)sp=aa.map(q=>({c:q.c||c,s:q.s||'',amt:String(Math.abs(+q.amt)||0),n:String(q.n||'').slice(0,80)}))}catch(e){}
-            const rule={id,name:r.n||r.s||'',fs:{kind,a:acct.id,c,s:s||'',amt:String(sp?sp.reduce((t,q)=>t+(+q.amt),0):amt),n:r.n,p:r.p,sh:r.sh,ds:'',w:'',tm,dt,fee:r.f?String(Math.abs(r.f)):'',disc:'',cu:r.cu||'',xr:'',ids:[],splits:sp},fq:x.rep,iv:Math.max(1,parseInt(x.iv)||1),start:dt,end:'',cnt:parseInt(x.cnt)||0,done:0,next:'',on:1,off:0,wk:(x.wk==='prev'||x.wk==='next')?x.wk:'',u:Date.now()};
+            const rule={id,name:r.n||r.s||'',fs:{kind,a:acct.id,c,s:s||'',amt:String(sp?sp.reduce((t,q)=>t+(+q.amt),0):amt),n:r.n,p:r.p,sh:r.sh,ds:'',w:'',tm,dt,fee:r.f?String(Math.abs(r.f)):'',disc:'',cu:r.cu||'',xr:'',ids:[],splits:sp},fq:x.rep,iv:Math.max(1,parseInt(x.iv)||1),start:dt,end:'',cnt:parseInt(x.cnt)||0,done:0,next:'',on:1,off:Math.max(0,(parseInt(x.sno)||1)-1),wk:(x.wk==='prev'||x.wk==='next')?x.wk:'',u:Date.now()};
             if(x.rep==='M'&&x.md){const md=[...new Set((Array.isArray(x.md)?x.md:String(x.md).split(/[,、\s]+/)).map(Number).filter(q=>q>=1&&q<=32))].sort((a,b)=>a-b);
               if(md.length){rule.md=md;const sd=+dt.slice(8),last=daysIn(+dt.slice(0,4),+dt.slice(5,7));rule.m0=md.filter(q=>Math.min(q,last)<sd).length}}
             newRules.push(rule)}
