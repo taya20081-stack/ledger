@@ -82,10 +82,10 @@ jobs:
           print('持有美股', len(tick), '檔')   # 不印代號，避免出現在公開的執行紀錄
           p = {}; day = ''
           for t in tick:
-              v, d = 0.0, ''
+              v, d, nm = 0.0, '', t
               try:
                   m = json.loads(req('https://query1.finance.yahoo.com/v8/finance/chart/%s?range=5d&interval=1d' % t))['chart']['result'][0]['meta']
-                  v = float(m.get('regularMarketPrice') or 0)
+                  v = float(m.get('regularMarketPrice') or 0); nm = (m.get('shortName') or m.get('longName') or t)[:40]
                   d = datetime.datetime.fromtimestamp(m.get('regularMarketTime', 0), datetime.timezone(datetime.timedelta(hours=-5))).strftime('%Y-%m-%d')
               except Exception: pass
               if v <= 0:
@@ -93,7 +93,7 @@ jobs:
                       c = req('https://stooq.com/q/l/?s=%s.us&f=sd2t2c&h&e=csv' % t.lower()).splitlines()[1].split(',')
                       v = float(c[3]); d = c[1]
                   except Exception: pass
-              if v > 0: p[t] = [t, v, 'USD', d]; day = max(day, d)
+              if v > 0: p[t] = [nm, v, 'USD', d]; day = max(day, d)
           print('取得', len(p), '檔')
           if p:
               req(BASE + '/inbox', {'fields': {'kind': {'stringValue': 'px'}, 'd': {'stringValue': day}, 'p': {'stringValue': json.dumps(p)}}}, A)

@@ -419,7 +419,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.6';
+window.APP_VER='v2.0.7';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -2735,7 +2735,7 @@ function subHTML(){const cs=subCands();if(!cs.length)return'';window._subs=cs;
    持股 S.settings.hold=[{id,pf(組合),code,name,sh,cu,cost(選填，原幣),px,pxd,pxManual}] */
 const PRICE_URL='https://raw.githubusercontent.com/taya20081-stack/ledger/main/prices.json';
 let PX=null;   // {d, p:{code:[name,close,cur?]}}，只在本機快取
-function pxApply(P){let n=0;for(const h of S.settings.hold||[]){if(h.pxManual)continue;const q=P&&P[h.code];if(q&&(!h.pxd||(q[3]||'')>=h.pxd||!q[3])){h.px=+q[1];if(q[3])h.pxd=q[3];if(!h.name)h.name=q[0];if(q[2])h.cu=q[2];n++}}return n}
+function pxApply(P){let n=0;for(const h of S.settings.hold||[]){if(h.pxManual)continue;const q=P&&P[h.code];if(q&&(!h.pxd||(q[3]||'')>=h.pxd||!q[3])){h.px=+q[1];if(q[3])h.pxd=q[3];if(!h.name||h.name===h.code)h.name=US_NAMES[String(h.code).toUpperCase()]||(q[0]&&q[0]!==h.code?q[0]:h.code);if(q[2])h.cu=q[2];n++}}return n}
 async function loadPrices(force){const H=S.settings.hold||[];if(!H.length&&!force)return false;const td=TODAY();if(!force&&S.settings.pxFor===td&&PX)return false;
   try{const res=await fetch(PRICE_URL+'?t='+Date.now(),{cache:'no-store'});if(!res.ok)return false;PX=await res.json();let n=0;
     for(const h of H){if(h.pxManual)continue;const q=PX.p&&PX.p[h.code];if(q){h.px=+q[1];h.pxd=q[3]||PX.d;if(!h.name)h.name=q[0];if(q[2])h.cu=q[2];n++}}n+=pxApply(S.settings.pxx&&S.settings.pxx.p);
@@ -2753,11 +2753,13 @@ function holdGuess(){const have=new Set((S.settings.hold||[]).map(h=>h.code));co
   for(const r of D.live){if(r.dt<since||r.t!=='支出'||!(r.c==='投資'||/股票|申購|基金/.test(r.s||'')))continue;const x=/^\s*(\d{4,6}[A-Z]?)\s*([^\d\s]{0,12})/.exec(r.n||'');if(!x||have.has(x[1]))continue;const o=m.get(x[1])||{code:x[1],name:x[2]||'',n:0,last:''};o.n++;if(r.dt>o.last)o.last=r.dt;if(!o.name&&x[2])o.name=x[2];m.set(x[1],o)}
   return[...m.values()].sort((a,b)=>a.last<b.last?1:-1).slice(0,15)}
 function pfList(){const H=S.settings.hold||[];const o=[];for(const h of H){const p=h.pf||'我的';if(!o.includes(p))o.push(p)}return o}
+const US_NAMES={NVDA:'輝達',TSLA:'特斯拉',QQQ:'那斯達克100 ETF',AAPL:'蘋果',MSFT:'微軟',GOOGL:'Alphabet A',GOOG:'Alphabet C',AMZN:'亞馬遜',META:'Meta',AVGO:'博通',AMD:'超微',INTC:'英特爾',TSM:'台積電 ADR',NFLX:'Netflix',ORCL:'甲骨文',CRM:'Salesforce',ADBE:'Adobe',QCOM:'高通',MU:'美光',PLTR:'Palantir',COST:'好市多',WMT:'沃爾瑪',JPM:'摩根大通',V:'Visa',MA:'萬事達卡','BRK-B':'波克夏 B',BRK_B:'波克夏 B',UNH:'聯合健康',XOM:'埃克森美孚',KO:'可口可樂',DIS:'迪士尼',BA:'波音',BABA:'阿里巴巴',SPY:'標普500 ETF (SPY)',VOO:'標普500 ETF (VOO)',IVV:'標普500 ETF (IVV)',VTI:'美國全市場 ETF',VT:'全世界股票 ETF',DIA:'道瓊 ETF',IWM:'羅素2000 ETF',SOXX:'費城半導體 ETF (SOXX)',SMH:'半導體 ETF (SMH)',ARKK:'ARK 創新 ETF',SCHD:'美國高股息 ETF (SCHD)',VYM:'高股息 ETF (VYM)',BND:'美國總體債券 ETF',TLT:'20年期美債 ETF'};
+function holdName(h){const c=String(h.code||'');if(h.name&&h.name!==c)return h.name;return US_NAMES[c]||h.name||c}
 const PF_OPEN=new Set();   // 股票市值頁：展開中的組合（預設全部收合）
 function pageInvest(){const H=S.settings.hold||[];const mvOf=h=>(+h.px||0)*(+h.sh||0)*rateOf(h.cu||'TWD');const tot=H.reduce((t,h)=>t+mvOf(h),0);
   const pd=H.filter(h=>h.pxd&&!h.pxManual&&(h.cu||'TWD')==='TWD').map(h=>h.pxd).sort().pop();
   const pfs=pfList().map(pf=>{const rs=H.map((h,i)=>({h,i})).filter(x=>(x.h.pf||'我的')===pf);const t=rs.reduce((s,x)=>s+mvOf(x.h),0);
-    const op=PF_OPEN.has(pf);return`<div class="grp"><button class="grph pfh" data-act="pf-tog" data-pf="${esc(pf)}"><span>${op?'▾':'▸'} ${esc(pf)} · ${rs.length} 檔</span><span class="num">${money(Math.round(t))}</span></button>${op?`<div class="list">${rs.map(({h,i})=>{const cu=h.cu||'TWD';return`<button class="li" data-act="hd-edit" data-i="${i}"><div class="grow"><div>${esc(h.name||h.code)} <small class="num">${esc(h.code)}</small></div>
+    const op=PF_OPEN.has(pf);return`<div class="grp"><button class="grph pfh" data-act="pf-tog" data-pf="${esc(pf)}"><span>${op?'▾':'▸'} ${esc(pf)} · ${rs.length} 檔</span><span class="num">${money(Math.round(t))}</span></button>${op?`<div class="list">${rs.map(({h,i})=>{const cu=h.cu||'TWD';return`<button class="li" data-act="hd-edit" data-i="${i}"><div class="grow"><div>${esc(holdName(h))} <small class="num">${esc(h.code)}</small></div>
       <small class="num">${(+h.sh||0).toLocaleString('zh-TW',{maximumFractionDigits:5})} 股 × ${h.px?(cu!=='TWD'?cu+' ':'')+(+h.px).toLocaleString('zh-TW',{maximumFractionDigits:2}):'尚無價格'}${h.pxManual?'（手動）':h.pxd?' · '+h.pxd.slice(5).replace('-','/'):''}</small></div><div class="r num">${h.px?money(Math.round(mvOf(h))):'—'}</div></button>`}).join('')}</div>`:''}</div>`}).join('');
   return{back:1,head:`<h1>股票市值</h1><button class="ibtn" data-act="px-refresh" aria-label="更新股價">${IC.sync||'↻'}</button>`,body:`
   <div class="sum"><div class="lbl">持股市值（TWD）${pd?' · 台股 '+pd.slice(5).replace('-','/')+' 收盤':''}</div><div class="huge num">${fmt(Math.round(tot))}</div>
@@ -2768,7 +2770,8 @@ function pageInvest(){const H=S.settings.hold||[];const mvOf=h=>(+h.px||0)*(+h.s
    <button class="btn pri" data-act="hd-add">加入</button></div>
   <details class="card"><summary class="lbl" style="cursor:pointer">批次貼上持股</summary><div class="stack" style="margin-top:8px"><div class="hint">每行一檔：<code>組合, 代號, 股數</code>。同組合同代號會覆蓋股數。美股代號（英文）自動當成美元計價。</div><textarea class="in" id="hd-bulk" rows="6" placeholder="我的, 0050, 1000&#10;我的, AAPL, 2.5"></textarea><button class="btn" data-act="hd-bulk">匯入</button></div></details>`}}
 function holdEditSheet(i){const h=(S.settings.hold||[])[i];if(!h)return;
-  openSheet((h.name||h.code)+' '+h.code,`<div class="grid2"><label class="field"><span>股數</span><input class="in num" id="he-sh" inputmode="decimal" value="${esc(h.sh)}"></label><label class="field"><span>組合</span><input class="in" id="he-pf" value="${esc(h.pf||'我的')}"></label></div>
+  openSheet(holdName(h)+' '+h.code,`<div class="grid2"><label class="field"><span>股數</span><input class="in num" id="he-sh" inputmode="decimal" value="${esc(h.sh)}"></label><label class="field"><span>組合</span><input class="in" id="he-pf" value="${esc(h.pf||'我的')}"></label></div>
+  <label class="field"><span>名稱</span><input class="in" id="he-nm" value="${esc(holdName(h))}"></label>
   <label class="field"><span>手動價格（留空＝自動帶收盤價）</span><input class="in num" id="he-px" inputmode="decimal" value="${h.pxManual?esc(h.px):''}" placeholder="${h.px&&!h.pxManual?'目前 '+h.px:''}"></label>
   <div class="btns fill"><button class="btn danger" data-act="hd-del" data-i="${i}">刪除</button><button class="btn pri" data-act="hd-save" data-i="${i}">儲存</button></div>`)}
 function holdUpsert(pf,code,sh,cost,cu){const H=S.settings.hold||(S.settings.hold=[]);code=String(code).trim().toUpperCase();pf=String(pf||'我的').trim()||'我的';
@@ -2830,7 +2833,7 @@ Object.assign(ACT,{
   'hd-guess':el=>{$('#hd-code').value=el.dataset.code;$('#hd-sh').focus();toast('請填股數後按「加入」')},
   'hd-edit':el=>holdEditSheet(+el.dataset.i),'pf-tog':el=>{const k=el.dataset.pf;PF_OPEN.has(k)?PF_OPEN.delete(k):PF_OPEN.add(k);render(true)},
   'hd-save':async el=>{const h=(S.settings.hold||[])[+el.dataset.i];if(!h)return;const sh=evalAmt($('#he-sh').value);if(!(sh>=0))return toast('股數不正確');
-    h.pf=$('#he-pf').value.trim()||'我的';h.sh=sh;const px=$('#he-px').value.trim();
+    h.pf=$('#he-pf').value.trim()||'我的';h.sh=sh;{const nm=($('#he-nm')?.value||'').trim();if(nm&&nm!==holdName(h))h.name=nm.slice(0,40)}const px=$('#he-px').value.trim();
     if(px){const v=evalAmt(px);if(!(v>0))return toast('價格不正確');h.px=v;h.pxManual=1;h.pxd=TODAY()}else if(h.pxManual){h.pxManual=0;h.px=0}
     await saveKV('settings');closeSheet();await loadPrices(true);render(true);toast('已儲存')},
   'hd-del':async el=>{const H=S.settings.hold||[];const h=H[+el.dataset.i];if(!h)return;closeSheet();if(!await askConfirm('刪除持股「'+esc(h.code+' '+(h.name||''))+'」？','刪除'))return;H.splice(H.indexOf(h),1);await saveKV('settings');render(true)},
