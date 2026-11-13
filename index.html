@@ -419,7 +419,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.4';
+window.APP_VER='v2.0.5';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1616,16 +1616,18 @@ Object.assign(ACT,{
 /* ---------- Claude 對話記帳收件匣：users/{uid}/inbox/{id} ----------
    文件欄位：kind('exp'|'inc') amt n c s a(帳戶名稱或id) dt tm p sh cu fee
    修改週期：kind='updrule' n="週期名稱" wk('prev'|'next'|'' 遇假日提前/延後/不調整)，未入帳記錄會依新設定重算；刪除週期：kind='delrule' n="週期名稱1,名稱2"（只刪由 Claude 建立的週期及未到期記錄）；分期（單筆合併，不拆本金／利息）：kind='inst' n=名稱 amt=每期金額 cnt=總期數 sno=本次第一筆的期數 dt=該期日期 tot=分期總額(顯示用) rate=年利率(顯示用) a c s；週期可加 sp(JSON 字串 [{n,s,amt,c?}]) 做成一個大項含多個細項
+   修改／刪除單筆：kind='edit'|'del' 用 dt(必填) n(原名稱,必填) tm a(選填) 找記錄，必須剛好 1 筆才動作；edit 可改 nn(新名稱) amt c s sh p fee na(新帳戶) ndt ntm
    週期（選填）：rep('D'|'W'|'M'|'Y') iv(間隔,預設1) md(每月指定日,如 "4,8,12") cnt(總次數,0=無限) sno(起始期數,預設1，例如接續舊週期填 8) wk('prev'|'next'遇假日) ；有 rep 時 dt 為起始日，建立週期規則而非單筆                    */
 let inboxBusy=Promise.resolve();
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&typeof Cloud!=='undefined'&&Cloud.user)Cloud.pollInbox()});
 function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
   if(!Cloud.decided){await new Promise(r=>{const t=setInterval(()=>{if(Cloud.decided){clearInterval(t);r()}},300)})}
-  const add=[],dels=[],newRules=[],delNames=[],upds=[],insts=[];
+  const add=[],dels=[],newRules=[],delNames=[],upds=[],insts=[],eds=[];
   let apN=0,apDup=0,apUnk=0,pxN=0;
   for(const d of docs){const x=d.data()||{};const id='ib_'+d.id;
     if(x.src==='ap'){if(!S.byId.has(id)){const o=apRecord(x,id);if(o.r){add.push(o.r);apN++;if(!o.sure)apUnk++}else if(o.skip==='dup')apDup++}dels.push(d.ref);continue}
     if(x.kind==='px'){try{const q=JSON.parse(x.p||'{}');const cur=S.settings.pxx||{d:'',p:{}};if((x.d||'')>=(cur.d||'')){S.settings.pxx={d:x.d||'',p:{...cur.p,...q}};pxApply(S.settings.pxx.p);pxN++}}catch(e){}dels.push(d.ref);continue}
+    if(x.kind==='edit'||x.kind==='del'){eds.push(x);dels.push(d.ref);continue}
     if(x.kind==='inst'){const amt=Math.abs(+x.amt),k=parseInt(x.cnt)||0,acct=S.accts.find(a=>a.id===x.a||a.name===x.a);
       if(!S.rules.some(q=>q.id===id)&&amt>0&&k>1&&acct&&/^\d{4}-\d{2}-\d{2}$/.test(x.dt||'')){const sno=Math.max(1,Math.min(k,parseInt(x.sno)||1));const nm=String(x.n||'分期付款').slice(0,80);const tm=/^\d{2}:\d{2}$/.test(x.tm||'')?x.tm:'00:00';const day=+x.dt.slice(8),o=Date.now();
         const recs=[];for(let i=sno;i<=k;i++){recs.push({id:uid(),a:acct.id,t:'支出',c:x.c||'個人支出',s:x.s||'',m:-amt,f:0,d:0,n:nm,sh:String(x.sh||'').slice(0,60),dt:addMonths(x.dt,i-sno,day),tm,p:String(x.p||'').slice(0,60),ds:nm+'・第 '+i+'/'+k+' 期',tg:'claude',w:'',k:'',g:id,o:o+i})}
@@ -1665,6 +1667,22 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
       rule.done=keep;rule.u=Date.now();ch=true}}
     if(ch){await saveKV('rules');if(dd.length)await mutate([],dd);await runRules();scheduleRender();toast('Claude 幫你更新了週期設定')}}
   if(insts.length){for(const q of insts){S.rules.push(q.rule)}await saveKV('rules');await mutate(insts.flatMap(q=>q.recs));scheduleRender();toast('Claude 幫你建了 '+insts.length+' 個分期：'+insts.map(q=>q.rule.name).join('、'))}
+  if(eds.length){const up=[],rm=[],bad=[],okN=[];
+    for(const x of eds){const nm=String(x.n||'').trim();const dt=String(x.dt||'');if(!nm||!/^\d{4}-\d{2}-\d{2}$/.test(dt)){bad.push((nm||'?')+'（資料不完整）');continue}
+      const hit=D.live.filter(r=>r.dt===dt&&((r.n||'')===nm||(!r.n&&r.s===nm))&&(!x.tm||r.tm===x.tm)&&(!x.a||r.a===x.a||D.acct.get(r.a)?.name===x.a));
+      if(hit.length!==1){bad.push(nm+'（找到 '+hit.length+' 筆）');continue}const r=hit[0];
+      if(x.kind==='del'){rm.push(r.id);okN.push('刪除 '+nm);continue}
+      const o={...r};if(x.nn!=null&&String(x.nn).trim())o.n=String(x.nn).trim().slice(0,80);
+      if(x.amt!=null&&isFinite(+x.amt)&&Math.abs(+x.amt)>0)o.m=(r.m<0?-1:1)*Math.abs(+x.amt);
+      if(x.fee!=null&&isFinite(+x.fee))o.f=-Math.abs(+x.fee);
+      if(x.c){const ck=r.m<0?'exp':'inc';const cm=S.cats[ck].find(q=>q.n===x.c);if(cm){o.c=x.c;o.s=x.s!=null&&cm.subs.includes(x.s)?x.s:(cm.subs.includes(o.s)?o.s:(cm.subs[0]||''))}}
+      else if(x.s!=null){const cm=S.cats[r.m<0?'exp':'inc'].find(q=>q.n===r.c);if(cm&&cm.subs.includes(x.s))o.s=x.s}
+      if(x.sh!=null)o.sh=String(x.sh).slice(0,60);if(x.p!=null)o.p=String(x.p).slice(0,60);
+      if(x.na){const ac=S.accts.find(a=>a.id===x.na||a.name===x.na);if(ac)o.a=ac.id}
+      if(/^\d{4}-\d{2}-\d{2}$/.test(x.ndt||''))o.dt=x.ndt;if(/^\d{2}:\d{2}$/.test(x.ntm||''))o.tm=x.ntm;
+      up.push(o);okN.push(nm+(o.n!==nm?' → '+o.n:''))}
+    if(up.length||rm.length){await mutate(up,rm);scheduleRender()}
+    toast([okN.length?'Claude 幫你修改了：'+okN.slice(0,3).join('、'):'',bad.length?'沒有修改：'+bad.slice(0,3).join('、'):''].filter(Boolean).join('；'))}
   dels.forEach(ref=>ref.delete().catch(()=>{}));
 }).catch(e=>{Cloud.inboxErr='處理失敗：'+(e&&e.message||e)})}
 ACT['copy-uid']=el=>{const v=Cloud.user?.uid||'';(navigator.clipboard?.writeText(v)||Promise.reject()).then(()=>toast('已複製 UID'),()=>toast('請長按 UID 文字手動複製'))};
