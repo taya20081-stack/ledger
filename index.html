@@ -419,7 +419,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.5';
+window.APP_VER='v2.0.6';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1616,6 +1616,7 @@ Object.assign(ACT,{
 /* ---------- Claude 對話記帳收件匣：users/{uid}/inbox/{id} ----------
    文件欄位：kind('exp'|'inc') amt n c s a(帳戶名稱或id) dt tm p sh cu fee
    修改週期：kind='updrule' n="週期名稱" wk('prev'|'next'|'' 遇假日提前/延後/不調整)，未入帳記錄會依新設定重算；刪除週期：kind='delrule' n="週期名稱1,名稱2"（只刪由 Claude 建立的週期及未到期記錄）；分期（單筆合併，不拆本金／利息）：kind='inst' n=名稱 amt=每期金額 cnt=總期數 sno=本次第一筆的期數 dt=該期日期 tot=分期總額(顯示用) rate=年利率(顯示用) a c s；週期可加 sp(JSON 字串 [{n,s,amt,c?}]) 做成一個大項含多個細項
+   分項（同一張收據）：sp=JSON 字串 [{c,s,amt,n}]（2 項以上），n 為整張的名稱可留空，fee 只算在第一項
    修改／刪除單筆：kind='edit'|'del' 用 dt(必填) n(原名稱,必填) tm a(選填) 找記錄，必須剛好 1 筆才動作；edit 可改 nn(新名稱) amt c s sh p fee na(新帳戶) ndt ntm
    週期（選填）：rep('D'|'W'|'M'|'Y') iv(間隔,預設1) md(每月指定日,如 "4,8,12") cnt(總次數,0=無限) sno(起始期數,預設1，例如接續舊週期填 8) wk('prev'|'next'遇假日) ；有 rep 時 dt 為起始日，建立週期規則而非單筆                    */
 let inboxBusy=Promise.resolve();
@@ -1649,7 +1650,10 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
             if(x.rep==='M'&&x.md){const md=[...new Set((Array.isArray(x.md)?x.md:String(x.md).split(/[,、\s]+/)).map(Number).filter(q=>q>=1&&q<=32))].sort((a,b)=>a-b);
               if(md.length){rule.md=md;const sd=+dt.slice(8),last=daysIn(+dt.slice(0,4),+dt.slice(5,7));rule.m0=md.filter(q=>Math.min(q,last)<sd).length}}
             newRules.push(rule)}
-        }else add.push(r)}}}
+        }else{let sp=null;try{const aa=typeof x.sp==='string'?JSON.parse(x.sp):x.sp;if(Array.isArray(aa)&&aa.length>1)sp=aa}catch(e){}
+          if(sp){const g=uid(),ck=kind==='inc'?'inc':'exp';sp.forEach((q,i)=>{const v=Math.abs(+q.amt)||0;if(!(v>0))return;let qc=q.c||c,qs=q.s||'';const qm=S.cats[ck].find(z=>z.n===qc);if(!qm){qc=c;qs=s||''}else if(!qm.subs.includes(qs))qs=qm.subs[0]||'';
+            add.push({...r,id:id+'_'+i,c:qc,s:qs,m:kind==='inc'?v:-v,n:String(q.n||'').slice(0,80),gn:r.n,g,f:i===0?r.f:0})})}
+          else add.push(r)}}}}
     dels.push(d.ref)}
   if(newRules.length){S.rules.push(...newRules);await saveKV('rules');await runRules();scheduleRender();toast('Claude 幫你建了 '+newRules.length+' 個週期：'+newRules.slice(0,3).map(q=>q.name+'（'+ruleDesc(q)+'）').join('、'))}
   if(delNames.length){const td=TODAY();const gone=S.rules.filter(q=>q.fq!=='I'&&String(q.id).startsWith('ib_')&&delNames.includes(q.name));
