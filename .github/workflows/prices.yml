@@ -1,7 +1,9 @@
 name: 股票收盤價
 on:
   schedule:
-    - cron: '30 9 * * 1-5'    # 週一至週五 17:30（台灣時間），台股收盤資料公布後
+    - cron: '40 6 * * 1-5'    # 週一至週五 14:40（台灣時間），證交所當日收盤行情公布後
+    - cron: '30 9 * * 1-5'    # 17:30 再抓一次（GitHub 排程偶爾延遲或漏跑）
+    - cron: '30 12 * * 1-5'   # 20:30 補抓
     - cron: '30 22 * * 1-5'   # 週二至週六 06:30（台灣時間），美股收盤後
   workflow_dispatch:
 permissions:
@@ -30,26 +32,74 @@ jobs:
               return ''
           old = json.load(open('prices.json', encoding='utf-8')) if os.path.exists('prices.json') else {'d': '', 'p': {}}
           p = {k: v for k, v in old.get('p', {}).items() if not (len(v) > 2 and v[2] == 'USD')}; day = ''
-          # 上市（含 ETF）
-          try:
-              rows = json.loads(get('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'))
-              n = 0
+          today = datetime.datetime.now(TW).strftime('%Y-%m-%d')
+          def mi_index(d):   # 證交所「每日收盤行情」，收盤後約 14:30 就有當天資料
+              j = json.loads(get('https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?response=json&date=%s&type=ALLBUT0999' % d.replace('-', '')))
+              out = {}
+              for t in j.get('tables', []) or []:
+                  if '每日收盤行情' not in (t.get('title') or ''): continue
+                  f = t.get('fields') or []
+                  ic, iname, iv = f.index('證券代號'), f.index('證券名稱'), f.index('收盤價')
+                  for r in t.get('data') or []:
+                      v = num(re.sub('<[^>]+>', '', str(r[iv])))
+                      if r[ic] and v > 0: out[str(r[ic]).strip()] = [str(r[iname]).strip(), v]
+              return out
+          def tpex_day(d):   # 櫃買中心當日收盤
+              y, m, dd = d.split('-')
+              j = json.loads(get('https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes?date=%s%%2F%s%%2F%s&id=&response=json' % (y, m, dd)))
+              out = {}
+              for t in j.get('tables', []) or []:
+                  f = t.get('fields') or []
+                  if '代號' not in f or '收盤' not in f: continue
+                  ic, iname, iv = f.index('代號'), f.index('名稱'), f.index('收盤')
+                  for r in t.get('data') or []:
+                      v = num(r[iv])
+                      if r[ic] and v > 0: out[str(r[ic]).strip()] = [str(r[iname]).strip(), v]
+              return out
+          def openapi_twse():
+              rows = json.loads(get('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL')); d = ''; out = {}
               for r in rows:
                   c, v = r.get('Code', ''), num(r.get('ClosingPrice'))
-                  if c and v > 0: p[c] = [r.get('Name', ''), v]; n += 1
-                  day = day or roc(r.get('Date', ''))
-              print('上市', n, '檔', day)
-          except Exception as e: print('上市失敗', repr(e))
-          # 上櫃
-          try:
-              rows = json.loads(get('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes'))
-              n = 0
+                  if c and v > 0: out[c] = [r.get('Name', ''), v]
+                  d = d or roc(r.get('Date', ''))
+              return d, out
+          def openapi_tpex():
+              rows = json.loads(get('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes')); d = ''; out = {}
               for r in rows:
                   c = r.get('SecuritiesCompanyCode') or r.get('Code') or ''
                   v = num(r.get('Close') or r.get('ClosingPrice'))
-                  if c and v > 0: p[c] = [r.get('CompanyName') or r.get('Name', ''), v]; n += 1
-              print('上櫃', n, '檔')
-          except Exception as e: print('上櫃失敗', repr(e))
+                  if c and v > 0: out[c] = [r.get('CompanyName') or r.get('Name', ''), v]
+                  d = d or roc(r.get('Date', ''))
+              return d, out
+          # 上市：先抓當天（MI_INDEX），沒有才用 openapi（openapi 通常晚一天才更新）
+          tw_d, tw = '', {}
+          for back in range(0, 6):
+              d = (datetime.datetime.now(TW) - datetime.timedelta(days=back)).strftime('%Y-%m-%d')
+              if d < (old.get('d') or ''): break
+              try:
+                  x = mi_index(d)
+                  if len(x) > 500: tw_d, tw = d, x; break
+              except Exception as e: print('MI_INDEX', d, '失敗', repr(e)[:120])
+          try:
+              od, ox = openapi_twse()
+              if od > tw_d and len(ox) > 500: tw_d, tw = od, ox
+          except Exception as e: print('openapi 上市失敗', repr(e)[:120])
+          print('上市', len(tw), '檔', tw_d)
+          # 上櫃
+          ot_d, ot = '', {}
+          if tw_d:
+              try:
+                  x = tpex_day(tw_d)
+                  if len(x) > 200: ot_d, ot = tw_d, x
+              except Exception as e: print('櫃買當日失敗', repr(e)[:120])
+          if not ot:
+              try: ot_d, ot = openapi_tpex()
+              except Exception as e: print('openapi 上櫃失敗', repr(e)[:120])
+          print('上櫃', len(ot), '檔', ot_d)
+          day = max(tw_d, ot_d)
+          if day and day < (old.get('d') or ''):
+              print('抓到的資料比現有的舊，不更新'); raise SystemExit(0)
+          p.update(ot); p.update(tw)
           out = {'d': day or old.get('d', ''), 'u': datetime.datetime.now(TW).strftime('%Y-%m-%d %H:%M'), 'p': p}
           if out['p'] != old.get('p') or out['d'] != old.get('d'):
               json.dump(out, open('prices.json', 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
@@ -82,10 +132,10 @@ jobs:
           print('持有美股', len(tick), '檔')   # 不印代號，避免出現在公開的執行紀錄
           p = {}; day = ''
           for t in tick:
-              v, d, nm = 0.0, '', t
+              v, d = 0.0, ''
               try:
                   m = json.loads(req('https://query1.finance.yahoo.com/v8/finance/chart/%s?range=5d&interval=1d' % t))['chart']['result'][0]['meta']
-                  v = float(m.get('regularMarketPrice') or 0); nm = (m.get('shortName') or m.get('longName') or t)[:40]
+                  v = float(m.get('regularMarketPrice') or 0)
                   d = datetime.datetime.fromtimestamp(m.get('regularMarketTime', 0), datetime.timezone(datetime.timedelta(hours=-5))).strftime('%Y-%m-%d')
               except Exception: pass
               if v <= 0:
@@ -93,7 +143,7 @@ jobs:
                       c = req('https://stooq.com/q/l/?s=%s.us&f=sd2t2c&h&e=csv' % t.lower()).splitlines()[1].split(',')
                       v = float(c[3]); d = c[1]
                   except Exception: pass
-              if v > 0: p[t] = [nm, v, 'USD', d]; day = max(day, d)
+              if v > 0: p[t] = [t, v, 'USD', d]; day = max(day, d)
           print('取得', len(p), '檔')
           if p:
               req(BASE + '/inbox', {'fields': {'kind': {'stringValue': 'px'}, 'd': {'stringValue': day}, 'p': {'stringValue': json.dumps(p)}}}, A)
