@@ -390,6 +390,7 @@ h1{font-weight:700}
 .pcard{border:0;box-shadow:0 2px 10px rgba(40,44,60,.05)}
 .row.hrow{border-bottom:0}
 @media (max-width:959px){.tab.add span.plus{border-width:4px;width:70px;height:70px;margin-top:-34px}.tab.add svg{stroke:var(--ink)}}
+.seg.dims{flex-wrap:nowrap;overflow-x:auto;max-width:100%;scrollbar-width:none}.seg.dims::-webkit-scrollbar{display:none}.seg.dims button{white-space:nowrap;flex:none}
 .seg.full{display:flex}.seg.full button{flex:1}
 .li.sch small{display:block}
 .pbar{height:6px;border-radius:99px;background:var(--paper2);margin:6px 0 4px;overflow:hidden}
@@ -413,15 +414,13 @@ body.calc-on #sb{padding-bottom:330px}
 .steps{margin:0;padding-left:20px;display:grid;gap:8px;font-size:14px;line-height:1.55}.steps code{font-size:12px;background:var(--paper2);border-radius:4px;padding:1px 4px;word-break:break-all}
 details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-details-marker{display:none}
 
-.osrow .osline{display:flex;gap:8px;align-items:center;font-size:14px}.osrow input[type=checkbox]{width:18px;height:18px;margin:0}
-
 </style>
 </head>
 <body>
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.28';
+window.APP_VER='v2.0.8';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -575,14 +574,6 @@ async function botRates(force){const td=TODAY();if(!force&&S.rates.botFor===td)r
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.ready)botRates().then(ok=>{if(ok)render(true)})});
 function wkAdj(d,wk){if(!wk)return d;let g=0;while(isOffDay(d)&&g++<15)d=addDays(d,wk==='prev'?-1:1);return d}
 const RULE_AHEAD=62;   // 週期記錄預先產生到未來幾天（未到期的顯示「未入帳」，不計入餘額）
-/* 週期名稱：名稱 > 分項名稱 > 分項小類（分項記錄頂層的 c/s 只是預設值，不能拿來當名稱） > 小類 */
-/* 專案改名／合併：記錄、週期與範本（含分項）、完成／開啟狀態一起搬 */
-async function renProj(old,nv){const merge=D.live.some(r=>r.p===nv);const rs=D.live.filter(r=>r.p===old).map(r=>({...r,p:nv}));if(rs.length)await mutate(rs);
-  const fix=f=>{let h=false;if(f&&f.p===old){f.p=nv;h=true}if(f&&Array.isArray(f.splits))f.splits.forEach(x=>{if(x.p===old){x.p=nv;h=true}});return h};
-  let nr=0;for(const r of S.rules){if(fix(r.fs)){r.u=Date.now();nr++}}if(nr)await saveKV('rules');let nt=0;for(const t of S.tpls||[]){if(fix(t.fs)){t.u=Date.now();nt++}}if(nt)await saveKV('tpls');
-  for(const k of['projDone','projOpen']){const m={...(S.settings[k]||{})};if(old in m){if(!(nv in m))m[nv]=m[old];delete m[old];S.settings[k]=m}}await saveKV('settings');return{recs:rs.length,rules:nr,merge}}
-function ruleName(f,fb){if(!f)return fb||'';if(f.n&&String(f.n).trim())return String(f.n).trim();const sp=Array.isArray(f.splits)&&f.splits.length?f.splits:null;if(sp){const x=sp.find(y=>y.n&&String(y.n).trim())||sp[0];return String(x.n||'').trim()||x.s||x.c||fb||''}return f.s||fb||''}
-function rLabel(r){if(!r)return'';if(r.fq==='I')return r.name||'';const f=r.fs||{};return(Array.isArray(f.splits)&&f.splits.length&&!(f.n&&String(f.n).trim()))?ruleName(f,r.name):(r.name||ruleName(f))}
 function ruleOf(r){const m=/^(.+)_(\d+)_\d+$/.exec(r&&r.id||'');if(!m)return null;const rule=S.rules.find(x=>x.id===m[1]&&x.fq!=='I');return rule?{rule,k:+m[2]}:null}
 function ruleOccDate(rule,k){return wkAdj(occDate(rule,k),rule.wk)}
 function ruleNext(rule){if(!rule.on)return'';const td=TODAY();for(let k=0;k<2000;k++){if(rule.cnt&&k+(rule.off||0)>=rule.cnt)return'';const d=ruleOccDate(rule,k);if(rule.end&&d>rule.end)return'';if(d>td){if(k<rule.done){const x=S.byId.get(rule.id+'_'+k+'_0');if(!x||x.x)continue}return d}}return''}
@@ -611,37 +602,17 @@ function amortize(total,n,ratePct){
   return out;
 }
 
-/* 子類別改名：分類清單、記錄、週期規則一起更新 */
-async function renameSub(k,cn,old,nv){const c=S.cats[k].find(q=>q.n===cn);if(!c)return 0;const j=c.subs.indexOf(old);if(j<0)return 0;
-  if(c.subs.includes(nv))c.subs.splice(j,1);else c.subs[j]=nv;S.cats.u=Date.now();await saveKV('cats');
-  const ic=(S.settings.icons||{})[cn+'|'+old];if(ic){const m={...S.settings.icons};delete m[cn+'|'+old];m[cn+'|'+nv]=ic;S.settings.icons=m;await saveKV('settings')}
-  const t=k==='exp'?'支出':'收入';const rs=D.live.filter(r=>r.t===t&&r.c===cn&&r.s===old).map(r=>({...r,s:nv}));if(rs.length)await mutate(rs);
-  let rc=0;for(const r of S.rules){const f=r.fs;if(!f)continue;let hit=false;if(f.c===cn&&f.s===old){f.s=nv;hit=true}if(Array.isArray(f.splits))f.splits.forEach(x=>{if(x.c===cn&&x.s===old){x.s=nv;hit=true}});if(hit){r.u=Date.now();rc++}}
-  if(rc)await saveKV('rules');return rs.length}
 /* ================= record building ================= */
 function blankForm(kind='exp'){
   const lastA=S.settings.lastA&&D.acct.has(S.settings.lastA)?S.settings.lastA:(S.accts.find(a=>!a.arch)?.id||'');
   const c0=S.cats.exp[0];
   return{kind,a:lastA,a2:'',amt:'',amt2:'',c:kind==='inc'?S.cats.inc[0]?.n:c0?.n,s:kind==='inc'?S.cats.inc[0]?.subs[0]:c0?.subs[0],
-    n:'',sh:'',p:'',w:'',fee:'',disc:'',ds:'',cu:'',xr:'',dt:TODAY(),tm:NOWTM(),act:'lend',st:'紅利回饋',rep:'',iv:1,cnt:'',splits:null,ids:[],os:false};
+    n:'',sh:'',p:'',w:'',fee:'',disc:'',ds:'',cu:'',xr:'',dt:TODAY(),tm:NOWTM(),act:'lend',st:'紅利回饋',rep:'',iv:1,cnt:'',splits:null,ids:[]};
 }
 function buildRecords(fs){
   const out=buildRecords0(fs);const ac=D.acct.get(fs.a)?.cur||'TWD';
   if(fs.kind!=='tr'&&fs.cu&&fs.cu!==ac){const xr=evalAmt(fs.xr)>0?evalAmt(fs.xr):+(rateOf(fs.cu)/rateOf(ac)).toPrecision(6);out.forEach(r=>{if(r.a===fs.a){r.cu=fs.cu;r.xr=xr}})}
-  if(fs.kind==='exp'&&fs.os&&!fs._edit){const fr=osFeeRec(out);if(fr)out.push(fr)}
   return out;
-}
-/* 海外交易：另記一筆 1.5% 手續費（以帳戶幣別計，四捨五入） */
-const OS_RATE=0.015;
-function osShops(){return S.settings.osShops||[]}
-function isOsShop(sh){sh=String(sh||'').trim().toLowerCase();return!!sh&&osShops().some(x=>x.toLowerCase()===sh)}
-function osFeeOf(total){return Math.round(Math.abs(total)*OS_RATE)}
-function osFeeRec(recs){
-  const main=recs.filter(r=>r.t==='支出');if(!main.length)return null;
-  const tot=main.reduce((t,r)=>t+Math.abs(val(r)),0);const fee=osFeeOf(tot);if(!(fee>0))return null;
-  const m0=main[0];const pc=S.cats.exp.find(q=>q.n==='個人支出'&&q.subs.includes('手續費'));
-  const cat=pc?{t:'支出',c:'個人支出',s:'手續費'}:{t:'手續費',c:'手續費',s:'手續費'};
-  const r={...m0,...cat,id:uid(),m:-fee,f:0,d:0,g:'',n:'海外交易手續費',o:(m0.o||Date.now())+1,ds:'海外交易 1.5%（'+(m0.gn||m0.n||m0.s||'')+'）'};delete r.gn;delete r.cu;delete r.xr;return r;
 }
 function buildRecords0(fs){
   const amt=evalAmt(fs.amt);const fee=evalAmt(fs.fee)||0;const disc=evalAmt(fs.disc)||0;
@@ -1061,8 +1032,8 @@ function pageMore(){
   const it=(p,t,s)=>`<button class="li" data-act="push" data-p="${p}"><div class="grow"><div>${t}</div><small>${s}</small></div><span class="chev">${IC.chev}</span></button>`;
   const debtN=debtSummary().filter(x=>Math.abs(x.v)>0.004&&!debtStopped(x)).length;
   const bk=S.settings.lastBackup?new Date(S.settings.lastBackup).toLocaleString('zh-TW',{hour12:false}):'從未備份';
-  return{head:`<h1>更多</h1>`,body:`${!window.__ARTIFACT__?`<div class="grp" style="margin-top:0"><div class="list">${it('cloud','雲端同步','<span id="cloud-label">'+esc(Cloud.label())+'</span>')}${it('backup','備份與同步','上次備份：'+bk)}</div></div>`:`<div class="grp" style="margin-top:0"><div class="list">${it('backup','備份與同步','上次備份：'+bk)}</div></div>`}<div class="grp"><div class="list">${it('cats','分類管理',S.cats.exp.length+' 個支出主類別 · '+S.cats.inc.length+' 個收入主類別')}</div></div><div class="grp"><div class="list">${it('debts','應收應付',debtN+' 筆未結清')}${it('rules','週期與分期',S.rules.filter(r=>r.fq!=='I'&&r.on).length+' 個週期 · '+S.rules.filter(r=>r.fq==='I').length+' 個分期')}${it('budget','預算',S.budgets.total?'每月 '+money(S.budgets.total):'尚未設定')}${it('projects','專案',D.projs.length+' 個專案')}${it('search','搜尋與批次編輯','名稱、商家、描述、專案、金額')}</div></div>
-  <div class="grp"><div class="list">${it('rates','匯率','更新：'+(S.rates.at||'—'))}${it('settings','設定','推播提醒、主題、統計排除分類、清除資料')}</div></div>
+  return{head:`<h1>更多</h1>`,body:`${!window.__ARTIFACT__?`<div class="grp" style="margin-top:0"><div class="list">${it('cloud','雲端同步','<span id="cloud-label">'+esc(Cloud.label())+'</span>')}${it('backup','備份與同步','上次備份：'+bk)}</div></div>`:`<div class="grp" style="margin-top:0"><div class="list">${it('backup','備份與同步','上次備份：'+bk)}</div></div>`}<div class="grp"><div class="list">${it('budget','預算',S.budgets.total?'每月 '+money(S.budgets.total):'尚未設定')}${it('projects','專案',D.projs.length+' 個專案')}${it('debts','應收應付',debtN+' 筆未結清')}${it('rules','週期與分期',S.rules.filter(r=>r.fq!=='I'&&r.on).length+' 個週期 · '+S.rules.filter(r=>r.fq==='I').length+' 個分期')}${it('search','搜尋與批次編輯','名稱、商家、描述、專案、金額')}</div></div>
+  <div class="grp"><div class="list">${it('cats','分類管理',S.cats.exp.length+' 個支出主類別 · '+S.cats.inc.length+' 個收入主類別')}${it('rates','匯率','更新：'+(S.rates.at||'—'))}${it('settings','設定','主題、統計排除分類、清除資料')}</div></div>
   <div class="hint mt">共 ${D.live.length.toLocaleString()} 筆記錄 · ${S.accts.length} 個帳戶${DB.mem?' · <b class="neg">此環境無法永久儲存</b>':''}</div><div class="appver">存摺記帳 ${window.APP_VER||''}</div>`};
 }
 function pageBudget(){
@@ -1121,7 +1092,7 @@ function pageRulesOld(){
   const rs=S.rules.filter(r=>r.fq!=='I');const ins=S.rules.filter(r=>r.fq==='I');const td=TODAY();
   const fsLabel=fs=>{const a=D.acct.get(fs.a);return(fs.n||fs.s||fs.c||(fs.kind==='tr'?'轉帳':''))+' · '+(a?.name||'')};
   return{back:1,head:`<h1>週期與分期</h1>`,body:`<div class="btns"><button class="btn pri sm" data-act="rule-new">新增週期記錄</button><button class="btn sm" data-act="inst-new">新增分期付款</button></div>
-  <div class="grp"><div class="grph"><span>週期記錄</span><span>${rs.length}</span></div><div class="list">${rs.length?rs.map(r=>`<div class="li"><div class="grow"><div>${esc(rLabel(r)||fsLabel(r.fs))}${r.on?'':'<span class="pill">已暫停</span>'}</div><small>${ruleDesc(r)} · ${r.fs.kind==='tr'?'':''}${money(evalAmt(r.fs.amt)||0,D.acct.get(r.fs.a)?.cur)}${r.next?' · 下次 '+r.next.replace(/-/g,'/'):' · 已結束'}</small></div><button class="btn sm" data-act="rule-toggle" data-id="${r.id}">${r.on?'暫停':'啟用'}</button><button class="btn sm danger" data-act="rule-del" data-id="${r.id}">刪除</button></div>`).join(''):'<div class="empty">記帳時選擇「重複」即可建立，例如房租、訂閱、薪資。到期日開啟 App 時會自動入帳。</div>'}</div></div>
+  <div class="grp"><div class="grph"><span>週期記錄</span><span>${rs.length}</span></div><div class="list">${rs.length?rs.map(r=>`<div class="li"><div class="grow"><div>${esc(r.name||fsLabel(r.fs))}${r.on?'':'<span class="pill">已暫停</span>'}</div><small>${ruleDesc(r)} · ${r.fs.kind==='tr'?'':''}${money(evalAmt(r.fs.amt)||0,D.acct.get(r.fs.a)?.cur)}${r.next?' · 下次 '+r.next.replace(/-/g,'/'):' · 已結束'}</small></div><button class="btn sm" data-act="rule-toggle" data-id="${r.id}">${r.on?'暫停':'啟用'}</button><button class="btn sm danger" data-act="rule-del" data-id="${r.id}">刪除</button></div>`).join(''):'<div class="empty">記帳時選擇「重複」即可建立，例如房租、訂閱、薪資。到期日開啟 App 時會自動入帳。</div>'}</div></div>
   <div class="grp"><div class="grph"><span>分期付款</span><span>${ins.length}</span></div><div class="list">${ins.length?ins.map(r=>{const gs=D.groups.get(r.id)||[];const left=gs.filter(x=>x.dt>td&&x.t==='支出').length;const paid=gs.filter(x=>x.dt<=td&&x.t==='支出').reduce((s,x)=>s-x.m,0);
     return`<div class="li"><div class="grow"><div>${esc(r.name)}</div><small class="num">${money(r.total)} · ${r.n} 期 · 年利率 ${r.rate}% · 已付本金 ${money(paid)} · 剩 ${left} 期</small></div><button class="btn sm danger" data-act="inst-del" data-id="${r.id}">刪除</button></div>`}).join(''):'<div class="empty">分期會一次產生各期本金與利息記錄，未到期的顯示為「未入帳」，不計入餘額。</div>'}</div></div>`};
 }
@@ -1194,9 +1165,6 @@ function renderEditor(){
   const acctRow=f.kind==='tr'?`<div class="grid2"><label class="field"><span>從</span><select class="in" id="f-a" data-f="a" data-rr="1">${acctOptions(f.a,1)}</select></label><label class="field"><span>到</span><select class="in" id="f-a2" data-f="a2" data-rr="1">${acctOptions(f.a2,1)}</select></label></div>${diffCur?`<label class="field"><span>轉入金額（${acB.cur}）${f._sugg&&!f.amt2?' · 依匯率約 '+fmt(f._sugg,acB.cur):''}</span><input class="in num" id="f-amt2" data-f="amt2" data-calc inputmode="${CALC_IM}" value="${esc(f.amt2||'')}" placeholder="${f._sugg||''}"></label>`:''}`
     :`<label class="field"><span>帳戶</span><select class="in" id="f-a" data-f="a" data-rr="1">${acctOptions(f.a)}</select></label>`;
   const feeRow=['exp','inc','tr'].includes(f.kind)?`<label class="field"><span>手續費${ei&&f.cu&&f.cu!==cur?'（'+f.cu+'）':''}</span><input class="in num" id="f-fee" data-f="fee" data-calc inputmode="${CALC_IM}" value="${esc(f.fee)}" placeholder="0"></label>`:'';
-  if(!f._edit&&f.kind==='exp'&&f._osFor!==(f.sh||'')){f._osFor=f.sh||'';if(isOsShop(f.sh)){f.os=true;f.osShop=true}else f.osShop=false}
-  const osRow=f.kind==='exp'&&!f._edit&&!(f.mode==='inst')?(()=>{const tot=f.splits?f.splits.reduce((t,x)=>t+(evalAmt(x.amt)||0),0):(evalAmt(f.amt)||0);const xr=f.cu&&f.cu!==cur?(evalAmt(f.xr)>0?evalAmt(f.xr):rateOf(f.cu)/rateOf(cur)):1;const fe=osFeeOf(tot*xr);
-    return`<label class="field osrow"><span>海外交易</span><span class="osline"><input type="checkbox" id="f-os" data-f="os" data-rr="1" ${f.os?'checked':''}> 是，另記一筆 1.5% 海外交易手續費<b id="f-osamt">${f.os&&fe>0?'：'+money(fe,cur):''}</b></span>${f.sh?`<span class="osline"><input type="checkbox" id="f-osshop" data-f="osShop" data-rr="1" ${f.osShop?'checked':''}> 「${esc(f.sh)}」是海外店家（之後選這個商家會自動勾選）</span>`:''}</label>`})():'';
   const pIn=f._pIn,shIn=f._shIn;f._pIn=f._shIn=false;
   const projRow=pIn?`<label class="field"><span>專案</span><input class="in" id="f-p" data-f="p" value="${esc(f.p)}" placeholder="輸入專案名稱，會帶出相符的專案" autocomplete="off"><div id="f-p-sugg" class="nsug" hidden></div></label>`
     :`<label class="field"><span>專案</span><select class="in" id="f-p-sel">${projOptions(f.p)}</select></label>`;
@@ -1206,7 +1174,7 @@ function renderEditor(){
   sb.innerHTML=`<div class="toolbar"><div class="seg" role="tablist">${kinds.map(([k,l])=>`<button class="${f.kind===k?'on':''}" data-act="ef-kind" data-k="${k}">${l}</button>`).join('')}</div>${f._edit?'':`<div class="btns"><button class="btn sm" data-act="inv-scan">${IC.qr}掃發票</button><button class="btn sm" data-act="rc-open">掃明細</button></div>`}</div>
   ${f.kind==='sys'?`<label class="field"><span>類型</span><select class="in" id="f-st" data-f="st" data-rr="1">${SYS_T.filter(t=>!SYS_HIDE.has(t)||f.st===t).map(t=>`<option ${t===f.st?'selected':''}>${t}</option>`).join('')}</select></label>`:''}
   ${f.kind==='debt'?`<div class="field"><span>動作</span><div class="chips">${Object.entries(DEBT_ACT).map(([k,v])=>`<button class="chip${f.act===k?' on':''}" data-act="ef-debt" data-k="${k}">${v[3]}<small style="opacity:.7">${v[0]==='應收款項'?'應收':'應付'}</small></button>`).join('')}</div></div><label class="field"><span>對象</span><input class="in" id="f-w" data-f="w" list="dl-who" value="${esc(f.w)}" placeholder="例如：家人、同事姓名"></label>`:''}
-  ${dateRow}${catPicker}${splits}${amtBox}${feeRow}${acctRow}${projRow}${shopRow}${osRow}${nameRow}
+  ${dateRow}${catPicker}${splits}${amtBox}${feeRow}${acctRow}${projRow}${shopRow}${nameRow}
   ${!f._edit&&['exp','inc','tr'].includes(f.kind)?(()=>{const md=f.mode||(f.rep?'rep':'');const canI=f.kind==='exp'&&!f.splits;
     const seg=`<div class="field"><span>記帳方式</span><div class="seg full"><button class="${!md?'on':''}" data-act="ef-mode" data-k="">單次</button><button class="${md==='rep'?'on':''}" data-act="ef-mode" data-k="rep">週期</button>${canI?`<button class="${md==='inst'?'on':''}" data-act="ef-mode" data-k="inst">分期</button>`:''}</div></div>`;
     const postSel=`<label class="field"><span>入帳方式</span><select class="in" id="f-post" data-f="post"><option value="">立即入帳</option><option value="m" ${f.post==='m'?'selected':''}>手動確認後入帳</option></select></label>`;
@@ -1215,7 +1183,7 @@ function renderEditor(){
     return seg+`<div class="grid2">${postSel}<label class="field"><span>訂金尾款追蹤</span><select class="in" id="f-dep" data-act-change="ef-dep"><option value="">關閉</option><option value="1" ${f.dep?'selected':''}>開啟</option></select></label></div>${f.dep?`<div class="grid2"><label class="field"><span>總金額（上面金額＝訂金）</span><input class="in num" id="f-depT" data-f="depT" data-calc inputmode="${CALC_IM}" value="${esc(f.depT||'')}"></label><label class="field"><span>尾款預計日期</span><input class="in" type="date" id="f-depD" data-f="depD" value="${esc(f.depD||'')}"></label></div><div class="hint">存檔後先記訂金；尾款（總金額－訂金）會放進鈴鐺的待入帳清單，付款時點「入帳」即可。</div>`:''}`})():''}
   ${f.kind==='exp'&&!f.splits?`<button class="btn sm" data-act="sp-on" style="justify-self:start">拆成多個分類（分項）</button>`:''}
   ${f._dupMsg?`<div class="note alert" id="ef-dup"><div class="grow"><b>可能重複</b>：同帳戶已有 ${f._dupMsg}。確定不是同一筆，再按一次「儲存」。</div></div>`:''}
-  ${f._edit&&efRule(f)?`<div class="note" style="flex-wrap:wrap"><div class="grow">這是週期記錄「${esc(ruleName(efRule(f).rule.fs,efRule(f).rule.name))}」的第 ${efRule(f).k+1+(efRule(f).rule.off||0)} 期，要改哪些？</div></div><div class="btns fill"><button class="btn pri" data-act="ef-save">只改這一期</button><button class="btn" data-act="ef-save" data-scope="all">這一期和之後都改</button></div>`:`<div class="btns fill"><button class="btn pri" data-act="ef-save">儲存</button>${f._edit?'':`<button class="btn" data-act="ef-save" data-again="1">儲存並再記一筆</button>`}</div>`}
+  ${f._edit&&efRule(f)?`<div class="note" style="flex-wrap:wrap"><div class="grow">這是週期記錄「${esc(efRule(f).rule.name||'')}」的第 ${efRule(f).k+1+(efRule(f).rule.off||0)} 期，要改哪些？</div></div><div class="btns fill"><button class="btn pri" data-act="ef-save">只改這一期</button><button class="btn" data-act="ef-save" data-scope="all">這一期和之後都改</button></div>`:`<div class="btns fill"><button class="btn pri" data-act="ef-save">儲存</button>${f._edit?'':`<button class="btn" data-act="ef-save" data-again="1">儲存並再記一筆</button>`}</div>`}
   <div class="btns">${f._edit?`<button class="btn sm" data-act="ef-copy">複製</button>${f.kind==='exp'?`<button class="btn sm" data-act="ef-refund">退款</button>`:''}`:''}${f._edit?`<button class="btn sm danger" data-act="ef-del" id="ef-del">刪除</button>`:''}</div>
   ${datalists()}`;
 }
@@ -1226,10 +1194,8 @@ function datalists(){
 }
 async function saveEditor(again){
   const f=EF;const err=validate(f);if(err)return toast(err);
-  if(!f._edit&&f.kind==='exp'){const sh=(f.sh||'').trim();if(sh&&f._osFor!==sh&&isOsShop(sh))f.os=true;
-    if(sh&&f._osFor===sh){const L=osShops();const has=isOsShop(sh);if(f.osShop&&!has)S.settings.osShops=[...L,sh];else if(!f.osShop&&has)S.settings.osShops=L.filter(x=>x.toLowerCase()!==sh.toLowerCase());if(!!f.osShop!==has){if(f.osShop)f.os=true;saveKV('settings')}}}
   const recs=buildRecords(f);if(!recs.length)return toast('沒有可儲存的內容');
-  if(!f._edit&&!(f.mode||f.rep)&&(f.kind==='exp'||f.kind==='inc')&&!f.splits&&recs.filter(r=>r.n!=='海外交易手續費').length===1){const dp=dupOf(recs[0]);const sig=recs[0].a+'|'+recs[0].m+'|'+recs[0].dt+'|'+recs[0].tm;
+  if(!f._edit&&!(f.mode||f.rep)&&(f.kind==='exp'||f.kind==='inc')&&!f.splits&&recs.length===1){const dp=dupOf(recs[0]);const sig=recs[0].a+'|'+recs[0].m+'|'+recs[0].dt+'|'+recs[0].tm;
     if(dp&&f._dupSig!==sig){f._dupSig=sig;f._dupMsg=dupText(dp);renderEditor();setTimeout(()=>{const e=$('#ef-dup');e&&e.scrollIntoView({block:'center'})},50);return toast('可能重複，再按一次儲存仍會記錄')}}
   const del=[];
   if(f._edit){const old=f.ids.map(id=>S.byId.get(id)).filter(Boolean);recs.forEach((r,i)=>{if(old[i]){r.id=old[i].id;r.o=old[i].o;if(old[i].k&&r.k){/*keep pair id*/r.k=old[0].k||r.k}if(old[i].g&&f.kind==='exp'&&!f.splits)r.g=old[i].g}});
@@ -1243,22 +1209,21 @@ async function saveEditor(again){
       if(p.int>0)out.push({id:uid(),a:f.a,t:'利息',c:'利息支出',s:'利息支出',m:-p.int,f:0,d:0,n:'分期利息',sh:f.sh||'',dt,tm:f.tm||'10:00',p:f.p||'',ds,tg:'',w:'',k:'',g:id,o:o+i*2+1})});
     S.rules.push({id,fq:'I',name,total:t,n:k,rate:r,start:f.dt,a:f.a,off,u:Date.now()});await saveKV('rules');S.settings.lastA=f.a;saveKV('settings');await mutate(out);closeSheet();if(S.view==='home'&&!S.stack.length){S.day=f.dt;S.month=f.dt.slice(0,7)}render(true);toast('已建立分期：第 '+(off+1)+'～'+k+' 期，每期約 '+money(plan[0].pr+plan[0].int));return}
   if(md==='rep'&&!f.rep)f.rep='M';
-  if(!f._edit&&md==='rep'&&f.rep){const rule={id:uid(),name:ruleName(f),fs:{...f,ids:[],rep:'',mode:'',post:'',sno:'',wk:'',mdays:null,_edit:false},fq:f.rep,iv:Math.max(1,parseInt(f.iv)||1),start:f.dt,end:'',cnt:parseInt(f.cnt)||0,done:0,next:'',on:1,off:Math.max(0,(parseInt(f.sno)||1)-1),wk:f.wk||'',u:Date.now()};
+  if(!f._edit&&md==='rep'&&f.rep){const rule={id:uid(),name:f.n||f.s||'',fs:{...f,ids:[],rep:'',mode:'',post:'',sno:'',wk:'',mdays:null,_edit:false},fq:f.rep,iv:Math.max(1,parseInt(f.iv)||1),start:f.dt,end:'',cnt:parseInt(f.cnt)||0,done:0,next:'',on:1,off:Math.max(0,(parseInt(f.sno)||1)-1),wk:f.wk||'',u:Date.now()};
     if(f.rep==='M'&&f.mdays&&f.mdays.length){rule.md=[...new Set(f.mdays)].sort((x,y)=>x-y);const sd=+f.dt.slice(8),last=daysIn(+f.dt.slice(0,4),+f.dt.slice(5,7));rule.m0=rule.md.filter(d=>Math.min(d,last)<sd).length}
     S.rules.push(rule);await saveKV('rules');closeSheet();await runRules();toast('已建立週期記錄'+(ruleNext(rule)?'，下次 '+ruleNext(rule).replace(/-/g,'/'):''));if(S.view==='home'&&!S.stack.length){S.day=f.dt<=TODAY()?f.dt:S.day}render(true);return}
   if(!f._edit&&!md&&f.post==='m'){S.settings.pend=[...(S.settings.pend||[]),{id:uid(),fs:{...f,ids:[],post:'',dep:'',mode:''},due:f.dt,label:'待確認'}];await saveKV('settings');closeSheet();render(true);toast('已放入待入帳，請到鈴鐺確認');return}
   if(!f._edit&&!md&&f.dep){const tot=evalAmt(f.depT),dp=evalAmt(f.amt);if(!(tot>dp))return toast('總金額需大於訂金');
     S.settings.pend=[...(S.settings.pend||[]),{id:uid(),fs:{...f,ids:[],post:'',dep:'',depT:'',depD:'',mode:'',amt:String(r2(tot-dp)),n:(f.n||f.s||'')+'（尾款）',dt:f.depD||f.dt},due:f.depD||'',label:'尾款'}];recs.forEach(r=>{if(r.n&&!/訂金/.test(r.n))r.n+='（訂金）'})}
   if(f._edit&&f._scope==='all'){const ro=efRule(f);if(ro){const{rule,k}=ro;
-      rule.fs={...rule.fs,...f,ids:[],rep:'',mode:'',post:'',sno:'',wk:'',dep:'',_edit:false,_scope:'',dt:rule.fs.dt,os:!!rule.fs.os};delete rule.fs._pend;rule.name=ruleName(f,rule.name);rule.u=Date.now();
+      rule.fs={...rule.fs,...f,ids:[],rep:'',mode:'',post:'',sno:'',wk:'',dep:'',_edit:false,_scope:'',dt:rule.fs.dt};delete rule.fs._pend;rule.name=f.n||f.s||rule.name;rule.u=Date.now();
       for(let q=k+1;q<rule.done;q++){const old=S.recs.filter(r=>!r.x&&r.id.startsWith(rule.id+'_'+q+'_'));if(!old.length)continue;const nw=ruleBuild(rule,q);const keep=new Set(nw.map(r=>r.id));nw.forEach(r=>{const o=S.byId.get(r.id);if(o)r.o=o.o});recs.push(...nw);old.forEach(o=>{if(!keep.has(o.id))del.push(o.id)})}
       await saveKV('rules')}}
   if(f._pend){S.settings.pend=(S.settings.pend||[]).filter(x=>x.id!==f._pend)}
   S.settings.lastA=f.a;saveKV('settings');
   await mutate(recs,del);
   const v=f.kind==='exp'?(f.splits?f.splits.reduce((s,x)=>s+(evalAmt(x.amt)||0),0):evalAmt(f.amt)):evalAmt(f.amt);
-  const osr=recs.find(r=>r.n==='海外交易手續費'&&!r.f&&f.os);
-  toast((f._edit?'已更新 ':'已記錄 ')+({exp:'支出',inc:'收入',tr:'轉帳',debt:'借貸',sys:f.st}[f.kind])+' '+money(v,D.acct.get(f.a)?.cur)+(osr?'＋海外交易手續費 '+money(-osr.m,D.acct.get(f.a)?.cur):''));
+  toast((f._edit?'已更新 ':'已記錄 ')+({exp:'支出',inc:'收入',tr:'轉帳',debt:'借貸',sys:f.st}[f.kind])+' '+money(v,D.acct.get(f.a)?.cur));
   if(again){const n=blankForm(f.kind);Object.assign(n,{a:f.a,a2:f.a2,c:f.c,s:f.s,dt:f.dt,p:f.p});EF=n;renderEditor();setTimeout(()=>$('#f-amt')&&$('#f-amt').focus(),50)}
   else closeSheet();
   if(!f._edit&&S.view==='home'&&!S.stack.length){S.day=f.dt;S.month=f.dt.slice(0,7)}
@@ -1363,7 +1328,7 @@ const ACT={
   'save-budget':async()=>{const roll=!!$('#bg-roll')?.checked;const B={total:evalAmt($('#bg-total').value)||0,cats:{},u:Date.now(),roll,since:roll?(S.budgets.roll&&S.budgets.since?S.budgets.since:TODAY().slice(0,7)):''};document.querySelectorAll('[data-bc]').forEach(i=>{const v=evalAmt(i.value);if(v>0)B.cats[i.dataset.bc]=v});S.budgets=B;await saveKV('budgets');render(true);toast('已儲存預算')},
   'proj-done':async el=>{const k=el.dataset.id;const m={...(S.settings.projDone||{})};const o={...(S.settings.projOpen||{})};if(el.dataset.on){m[k]=TODAY();delete o[k]}else{delete m[k];o[k]=1}S.settings.projDone=m;S.settings.projOpen=o;await saveKV('settings');render(true);toast(el.dataset.on?'已標記為完成':'已重新開啟')},
   'proj-done-list':()=>{S.projDoneOpen=!S.projDoneOpen;render(true)},
-  'proj-rename':async el=>{const old=el.dataset.id;const v=await askText('重新命名專案（輸入已有的專案名稱＝合併）',old,'新名稱');if(!v||!v.trim()||v.trim()===old)return;const n=await renProj(old,v.trim());S.stack[S.stack.length-1].id=v.trim();render();toast((n.merge?'已合併到「'+v.trim()+'」：':'已更新 ')+n.recs+' 筆'+(n.rules?'、週期 '+n.rules+' 個':''))},
+  'proj-rename':async el=>{const old=el.dataset.id;const v=await askText('重新命名專案',old,'新名稱');if(!v||!v.trim()||v.trim()===old)return;const rs=D.live.filter(r=>r.p===old).map(r=>({...r,p:v.trim()}));await mutate(rs);if((S.settings.projDone||{})[old]){const m={...S.settings.projDone};m[v.trim()]=m[old];delete m[old];S.settings.projDone=m;await saveKV('settings')}S.stack[S.stack.length-1].id=v.trim();render();toast('已更新 '+rs.length+' 筆')},
   'rule-new':()=>{const f=blankForm('exp');f.rep='M';f.mode='rep';openEditor(f)},
   'rule-toggle':async el=>{const r=S.rules.find(x=>x.id===el.dataset.id);r.on=r.on?0:1;r.u=Date.now();const td=TODAY();
     if(!r.on){const ids=[];let first=-1;for(let q=0;q<r.done;q++){if(ruleOccDate(r,q)>td){if(first<0)first=q;S.recs.forEach(x=>{if(!x.x&&x.id.startsWith(r.id+'_'+q+'_'))ids.push(x.id)})}}if(first>=0)r.done=first;await saveKV('rules');if(ids.length)await mutate([],ids)}
@@ -1391,7 +1356,7 @@ const ACT={
   'se-save':async el=>{const k=S.catTab||'exp';const c=S.cats[k][+el.dataset.i];const j=+el.dataset.j;const old=c.subs[j];const t=k==='exp'?'支出':'收入';const nv=$('#se-n').value.trim();const ic=$('#se-ic').value.trim();
     if(!nv)return toast('請輸入名稱');if(nv!==old&&c.subs.includes(nv))return toast('已有同名子類別');
     const m={...(S.settings.icons||{})};delete m[c.n+'|'+old];const def=(CAT_ICON[c.n]||{subs:{}}).subs[nv]||'';if(ic&&ic!==def)m[c.n+'|'+nv]=ic;S.settings.icons=m;await saveKV('settings');
-    if(nv!==old)await renameSub(k,c.n,old,nv)
+    if(nv!==old){c.subs[j]=nv;S.cats.u=Date.now();await saveKV('cats');const rs=D.live.filter(r=>r.t===t&&r.c===c.n&&r.s===old).map(r=>({...r,s:nv}));await mutate(rs)}
     closeSheet();render(true);toast('已儲存')},
   'cat-del':async el=>{const k=S.catTab||'exp';S.cats[k].splice(+el.dataset.i,1);S.cats.u=Date.now();await saveKV('cats');recompute();render(true)},
   'rates-save':async()=>{document.querySelectorAll('[data-rate]').forEach(i=>{const v=parseFloat(i.value);if(v>0)S.rates.r[i.dataset.rate]=v});S.rates.src='手動輸入';S.rates.at=TODAY();S.rates.u=Date.now();await saveKV('rates');render(true);toast('已儲存匯率')},
@@ -1454,7 +1419,6 @@ document.addEventListener('compositionend',e=>{const t=e.target;if(!t.dataset||!
 document.addEventListener('input',e=>{const t=e.target;
   if(t.dataset.f&&EF){EF[t.dataset.f]=t.type==='checkbox'?t.checked:t.value;
     if(t.dataset.f==='amt'){const ev=evalAmt(t.value);const el=$('#f-ev');if(el)el.textContent=/[+\-−*/×÷]/.test(t.value.slice(1))&&isFinite(ev)?'= '+fmt(ev,D.acct.get(EF.a)?.cur||'TWD'):''}
-    if(EF.os&&(t.dataset.f==='amt'||t.dataset.f==='xr')){const el=$('#f-osamt');if(el){const cur=D.acct.get(EF.a)?.cur||'TWD';const xr=EF.cu&&EF.cu!==cur?(evalAmt(EF.xr)>0?evalAmt(EF.xr):rateOf(EF.cu)/rateOf(cur)):1;const fe=osFeeOf((evalAmt(EF.amt)||0)*xr);el.textContent=fe>0?'：'+money(fe,cur):''}}
     if(t.dataset.rr)renderEditor();return}
   if(t.dataset.sp!=null&&EF){const i=+t.dataset.sp;const sp=EF.splits[i];if(t.dataset.spf==='cat'){const[c,s]=t.value.split('\u0001');sp.c=c;sp.s=s}else sp[t.dataset.spf]=t.value;if(t.dataset.spf==='amt'){const lbl=document.querySelector('#sb .field>span');if(lbl)lbl.innerHTML='分項（合計 <span class="num">'+fmt(EF.splits.reduce((s,x)=>s+(evalAmt(x.amt)||0),0))+'</span>）'}return}
   if(t.dataset.sf){S.search[t.dataset.sf]=t.value;S.search.limit=300;if(e.isComposing)return;clearTimeout(sTimer);const txt=t.tagName==='INPUT'&&t.type!=='date';sTimer=setTimeout(()=>searchUpd(txt),txt?250:0)}
@@ -1577,7 +1541,7 @@ const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],fi
   },
   pushKV(k){if(!this.user||!this.decided)return;let v=S[k];if(k==='settings'){v={...v};LOCAL_SETTINGS.forEach(x=>delete v[x])}
     const u=S.kvu[k]||Date.now();this.remoteKV[k]=u;const w=[this.base().collection('kv').doc(k).set({j:JSON.stringify(v),u})];
-    if(k==='cats'||k==='accts'||(k==='settings'&&usCodes()+JSON.stringify(osShops())!==_usLast)){_usLast=usCodes()+JSON.stringify(osShops());w.push(this.base().collection('kv').doc('botinfo').set(botInfo()))}this.track(w)},
+    if(k==='cats'||k==='accts'||(k==='settings'&&usCodes()!==_usLast)){_usLast=usCodes();w.push(this.base().collection('kv').doc('botinfo').set(botInfo()))}this.track(w)},
   track(commits,sizes){if(!commits.length)return;this.writing+=commits.length;commits.forEach((c,i)=>{const k=sizes?sizes[i]||0:0;this.wTot+=k;c.then(()=>{this.wDone+=k;refreshCloudUI()},()=>{})});refreshCloudUI();
     Promise.all(commits).then(()=>{this.lastSync=Date.now()}).catch(e=>{this.err='寫入失敗：'+(e.code||e.message);this.state='error'}).finally(()=>{this.writing-=commits.length;if(!this.writing){this.wTot=this.wDone=0}refreshCloudUI()})},
   label(){
@@ -1661,7 +1625,7 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
   if(!Cloud.decided){await new Promise(r=>{const t=setInterval(()=>{if(Cloud.decided){clearInterval(t);r()}},300)})}
   const add=[],dels=[],newRules=[],delNames=[],upds=[],insts=[],eds=[];
-  let apN=0,apDup=0,apUnk=0,pxN=0;const mvq=[];
+  let apN=0,apDup=0,apUnk=0,pxN=0;
   for(const d of docs){const x=d.data()||{};const id='ib_'+d.id;
     if(x.src==='ap'){if(!S.byId.has(id)){const o=apRecord(x,id);if(o.r){add.push(o.r);apN++;if(!o.sure)apUnk++}else if(o.skip==='dup')apDup++}dels.push(d.ref);continue}
     if(x.kind==='px'){try{const q=JSON.parse(x.p||'{}');const cur=S.settings.pxx||{d:'',p:{}};if((x.d||'')>=(cur.d||'')){S.settings.pxx={d:x.d||'',p:{...cur.p,...q}};pxApply(S.settings.pxx.p);pxN++}}catch(e){}dels.push(d.ref);continue}
@@ -1671,15 +1635,6 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
         const recs=[];for(let i=sno;i<=k;i++){recs.push({id:uid(),a:acct.id,t:'支出',c:x.c||'個人支出',s:x.s||'',m:-amt,f:0,d:0,n:nm,sh:String(x.sh||'').slice(0,60),dt:addMonths(x.dt,i-sno,day),tm,p:String(x.p||'').slice(0,60),ds:nm+'・第 '+i+'/'+k+' 期',tg:'claude',w:'',k:'',g:id,o:o+i})}
         insts.push({rule:{id,fq:'I',name:nm,total:Math.abs(+x.tot)||amt*k,n:k,rate:parseFloat(x.rate)||0,start:x.dt,a:acct.id,off:sno-1,u:o},recs})}
       dels.push(d.ref);continue}
-    if(x.kind==='rensub'){const k=x.k==='inc'?'inc':'exp';const n=await renameSub(k,String(x.c||''),String(x.s||''),String(x.ns||'').trim());toast(n||S.cats[k].some(q=>q.n===x.c&&q.subs.includes(String(x.ns||'').trim()))?'Claude 已把「'+x.c+'・'+x.s+'」改名為「'+x.ns+'」（'+n+' 筆記錄）':'找不到子類別：'+x.c+'・'+x.s);dels.push(d.ref);continue}
-    if(x.kind==='clrshop'){const pats=String(x.n||'').split(/[,、，]/).map(t=>t.trim()).filter(Boolean).map(t=>new RegExp('^'+t.replace(/[.+?^${}()|[\]\\]/g,'\\$&').replace(/\*/g,'.*')+'$','i'));
-      const ch=D.live.filter(r=>r.sh&&pats.some(re=>re.test(r.sh))).map(r=>({...r,sh:''}));const names=[...new Set(D.live.filter(r=>r.sh&&pats.some(re=>re.test(r.sh))).map(r=>r.sh))];
-      if(ch.length){S.lastUndo=ch.map(r=>({...S.byId.get(r.id)}));await mutate(ch);scheduleRender();toast('Claude 清除了 '+names.length+' 家商家名稱（'+ch.length+' 筆）：'+names.join('、')+'；可在搜尋頁復原')}else toast('沒有符合的商家：'+String(x.n||''));
-      dels.push(d.ref);continue}
-    if(x.kind==='mvproj'){mvq.push(x);dels.push(d.ref);continue}
-    if(x.kind==='renproj'){const o=String(x.o||'').trim(),nv=String(x.nv||'').trim();if(o&&nv&&o!==nv){const n=await renProj(o,nv);toast('專案「'+o+'」→「'+nv+'」：'+n.recs+' 筆'+(n.rules?'、週期 '+n.rules+' 個':''))}dels.push(d.ref);continue}
-    if(x.kind==='gold'){const q=parseFloat(x.q);if(q>=0){S.settings.gold={...(S.settings.gold||{}),q,u:GOLD_U[x.u]?x.u:'錢'};await saveKV('settings');toast('黃金：'+q+' '+S.settings.gold.u)}dels.push(d.ref);continue}
-    if(x.kind==='osshop'){const L=new Set(S.settings.osShops||[]);const rm=x.rm==='1';String(x.n||'').split(/[,、，]/).map(t=>t.trim()).filter(Boolean).forEach(t=>rm?L.delete(t):L.add(t));S.settings.osShops=[...L];await saveKV('settings');toast('海外店家：'+(rm?'移除 ':'加入 ')+String(x.n||''));dels.push(d.ref);continue}
     if(x.kind==='updrule'){upds.push({n:String(x.n||'').trim(),wk:x.wk});dels.push(d.ref);continue}
     if(x.kind==='delrule'){String(x.n||'').split(/[,、]/).map(t=>t.trim()).filter(Boolean).forEach(t=>delNames.push(t));dels.push(d.ref);continue}
     if(!S.byId.has(id)){const amt=Math.abs(+x.amt);if(isFinite(amt)&&amt>0){
@@ -1692,19 +1647,15 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
         if(/^[DWMY]$/.test(x.rep||'')){
           if(!S.rules.some(q=>q.id===id)){
             let sp=null;try{const aa=typeof x.sp==='string'?JSON.parse(x.sp):x.sp;if(Array.isArray(aa)&&aa.length)sp=aa.map(q=>({c:q.c||c,s:q.s||'',amt:String(Math.abs(+q.amt)||0),n:String(q.n||'').slice(0,80)}))}catch(e){}
-            const rule={id,name:r.n||r.s||'',fs:{kind,a:acct.id,c,s:s||'',amt:String(sp?sp.reduce((t,q)=>t+(+q.amt),0):amt),n:r.n,p:r.p,sh:r.sh,ds:'',w:'',tm,dt,fee:r.f?String(Math.abs(r.f)):'',disc:'',cu:r.cu||'',xr:'',ids:[],splits:sp,os:(x.os===true||x.os==='1'||x.os===1||isOsShop(x.sh))&&x.os!=='0'},fq:x.rep,iv:Math.max(1,parseInt(x.iv)||1),start:dt,end:'',cnt:parseInt(x.cnt)||0,done:0,next:'',on:1,off:Math.max(0,(parseInt(x.sno)||1)-1),wk:(x.wk==='prev'||x.wk==='next')?x.wk:'',u:Date.now()};
+            const rule={id,name:r.n||r.s||'',fs:{kind,a:acct.id,c,s:s||'',amt:String(sp?sp.reduce((t,q)=>t+(+q.amt),0):amt),n:r.n,p:r.p,sh:r.sh,ds:'',w:'',tm,dt,fee:r.f?String(Math.abs(r.f)):'',disc:'',cu:r.cu||'',xr:'',ids:[],splits:sp},fq:x.rep,iv:Math.max(1,parseInt(x.iv)||1),start:dt,end:'',cnt:parseInt(x.cnt)||0,done:0,next:'',on:1,off:Math.max(0,(parseInt(x.sno)||1)-1),wk:(x.wk==='prev'||x.wk==='next')?x.wk:'',u:Date.now()};
             if(x.rep==='M'&&x.md){const md=[...new Set((Array.isArray(x.md)?x.md:String(x.md).split(/[,、\s]+/)).map(Number).filter(q=>q>=1&&q<=32))].sort((a,b)=>a-b);
               if(md.length){rule.md=md;const sd=+dt.slice(8),last=daysIn(+dt.slice(0,4),+dt.slice(5,7));rule.m0=md.filter(q=>Math.min(q,last)<sd).length}}
             newRules.push(rule)}
         }else{let sp=null;try{const aa=typeof x.sp==='string'?JSON.parse(x.sp):x.sp;if(Array.isArray(aa)&&aa.length>1)sp=aa}catch(e){}
           if(sp){const g=uid(),ck=kind==='inc'?'inc':'exp';sp.forEach((q,i)=>{const v=Math.abs(+q.amt)||0;if(!(v>0))return;let qc=q.c||c,qs=q.s||'';const qm=S.cats[ck].find(z=>z.n===qc);if(!qm){qc=c;qs=s||''}else if(!qm.subs.includes(qs))qs=qm.subs[0]||'';
             add.push({...r,id:id+'_'+i,c:qc,s:qs,m:kind==='inc'?v:-v,n:String(q.n||'').slice(0,80),gn:r.n,g,f:i===0?r.f:0})})}
-          else add.push(r);
-          if(kind==='exp'&&(x.os===true||x.os==='1'||x.os===1||isOsShop(x.sh))&&x.os!=='0'){const fr=osFeeRec(add.filter(q=>q.id===id||q.id.startsWith(id+'_')));if(fr){fr.id=id+'_os';fr.tg='claude';add.push(fr)}}}}}}
+          else add.push(r)}}}}
     dels.push(d.ref)}
-  /* 部分搬移專案（依日期區間）：放在整個專案改名之後處理，避免同一批收件匣先後順序錯亂 */
-  for(const x of mvq){const o=String(x.o||'').trim(),nv=String(x.nv||'').trim(),d1=x.d1||'0000',d2=x.d2||'9999';if(!o||!nv)continue;
-    const rs=D.live.filter(r=>r.p===o&&r.dt>=d1&&r.dt<=d2).map(r=>({...r,p:nv}));if(rs.length){await mutate(rs);toast('已把「'+o+'」中 '+d1+'～'+d2+' 的 '+rs.length+' 筆移到「'+nv+'」')}}
   if(newRules.length){S.rules.push(...newRules);await saveKV('rules');await runRules();scheduleRender();toast('Claude 幫你建了 '+newRules.length+' 個週期：'+newRules.slice(0,3).map(q=>q.name+'（'+ruleDesc(q)+'）').join('、'))}
   if(delNames.length){const td=TODAY();const gone=S.rules.filter(q=>q.fq!=='I'&&String(q.id).startsWith('ib_')&&delNames.includes(q.name));
     if(gone.length){const ids=S.recs.filter(r=>!r.x&&r.dt>td&&/_\d+_\d+$/.test(r.id)&&gone.some(q=>r.id.startsWith(q.id+'_'))).map(r=>r.id);
@@ -1742,7 +1693,7 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
 ACT['copy-uid']=el=>{const v=Cloud.user?.uid||'';(navigator.clipboard?.writeText(v)||Promise.reject()).then(()=>toast('已複製 UID'),()=>toast('請長按 UID 文字手動複製'))};
 
 /* 給 Claude 專用帳號讀的精簡清單：只有分類與帳戶名稱，不含金額 */
-function botInfo(){return{cats:JSON.stringify({exp:S.cats.exp.map(c=>({n:c.n,subs:c.subs})),inc:S.cats.inc.map(c=>({n:c.n,subs:c.subs}))}),accts:JSON.stringify(S.accts.filter(a=>!a.arch).map(a=>({id:a.id,name:a.name,cur:a.cur,grp:a.grp}))),lastA:D.acct.get(S.settings.lastA)?.name||'',us:usCodes(),os:JSON.stringify(osShops()),u:Date.now()}}
+function botInfo(){return{cats:JSON.stringify({exp:S.cats.exp.map(c=>({n:c.n,subs:c.subs})),inc:S.cats.inc.map(c=>({n:c.n,subs:c.subs}))}),accts:JSON.stringify(S.accts.filter(a=>!a.arch).map(a=>({id:a.id,name:a.name,cur:a.cur,grp:a.grp}))),lastA:D.acct.get(S.settings.lastA)?.name||'',us:usCodes(),u:Date.now()}}
 function usCodes(){return JSON.stringify([...new Set((S.settings.hold||[]).map(h=>String(h.code||'').toUpperCase()).filter(c=>/^[A-Z][A-Z.\-]{0,9}$/.test(c)))].sort())}
 let _usLast=null;
 
@@ -1993,12 +1944,22 @@ function multiLine(labels,series){
     s.vals.forEach((v,i)=>{if(n<=31||i===n-1)g+=`<circle class="md ${s.cls}" cx="${x(i)}" cy="${y(v)}" r="${i===n-1?4.5:2.6}"><title>${esc(labels[i])} ${esc(s.name)} ${fmt(v)}</title></circle>`})}
   return`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="折線圖">${g}</svg>`;
 }
-const DIMS=[['cat','分類'],['proj','專案'],['shop','商家']];
-const NONE={proj:'（未指定專案）',shop:'（未填商家）'};
-function dimKey(r,dim){return dim==='cat'?r.c:dim==='proj'?(r.p||NONE.proj):(r.sh||NONE.shop)}
+const DIMS=[['cat','分類'],['acct','帳戶'],['proj','專案'],['name','名稱'],['shop','商家']];
+const DIML=Object.fromEntries(DIMS);
+const NONE={proj:'（未指定專案）',shop:'（未填商家）',acct:'（無帳戶）',agrp:'（未分組）',name:'（未填名稱）',tag:'（無標籤）',obj:'（未填對象）'};
+const isNone=n=>Object.values(NONE).includes(n);
+// 一筆記錄在某維度的所有鍵（標籤可多個，其餘一個）
+function dimKeys(r,dim){
+  if(dim==='tag'){const t=(r.tg||'').split(/[,，、\s]+/).map(x=>x.replace(/^#/,'').trim()).filter(Boolean);return t.length?[...new Set(t)]:[NONE.tag]}
+  return[dimKey(r,dim)]}
+function dimKey(r,dim){switch(dim){case'cat':return r.c;case'proj':return r.p||NONE.proj;case'shop':return r.sh||NONE.shop;
+  case'acct':return r.a||NONE.acct;case'agrp':{const a=D.acct.get(r.a);return(a&&a.grp)||NONE.agrp}
+  case'name':return r.n||r.gn||NONE.name;case'obj':return r.w||NONE.obj;case'tag':return dimKeys(r,'tag')[0]}
+  return r.c}
+const dimHas=(r,dim,v)=>dim==='tag'?dimKeys(r,dim).includes(v):dimKey(r,dim)===v;
 function pageEntity(dr){
   const st=S.stat,td=TODAY(),mode=st.mode,R=periodRange(mode,st.anchor);
-  const allTime=dr.dim==='proj'&&st.projAll!==0;const pred=r=>dimKey(r,dr.dim)===dr.v;
+  const allTime=dr.dim==='proj'&&st.projAll!==0;const pred=r=>dimHas(r,dr.dim,dr.v);
   const recs=[];let exp=0,inc=0,f='',l='';const ce=new Map(),ci=new Map();
   for(const r of D.live){if(r.dt>td||!pred(r))continue;if(!allTime&&(r.dt<R.from||r.dt>R.to))continue;
     const k=rateOf(curOf(r));const e=spendOf(r)*k,i=incomeOf(r)*k;if(!e&&!i)continue;if(excluded(r)&&e)continue;
@@ -2014,7 +1975,7 @@ function pageEntity(dr){
   const tTitle=SP?'期間走勢（每'+{D:'日',W:'週',M:'月',Y:'年'}[tb[0]?.g||'M']+'）':{D:'近 14 天',W:'近 12 週',M:'近 12 個月',Q:'近 8 季',Y:'近 6 年',C:'期間走勢'}[mode];
   const nav=allTime?'':(mode==='C'?`<div class="grid2" style="flex:1;min-width:0"><input class="in" type="date" id="st-from" data-stset="from" value="${R.from}" aria-label="起日"><input class="in" type="date" id="st-to" data-stset="to" value="${R.to}" aria-label="迄日"></div>`
     :`<div style="display:flex;align-items:center;gap:2px;min-width:0"><button class="ibtn" data-act="stat-nav" data-d="-1" aria-label="上一期">${IC.l}</button><span class="num" style="font-weight:600;white-space:nowrap">${esc(R.label)}</span><button class="ibtn" data-act="stat-nav" data-d="1" aria-label="下一期">${IC.r}</button></div>`);
-  const lbl={proj:'專案',shop:'商家',cat:'分類'}[dr.dim];
+  const lbl=DIML[dr.dim]||'分類';
   return{back:1,head:`<h1>${esc(dr.v)}</h1>`,body:`<div class="stack">
     ${dr.dim==='proj'?`<div class="toolbar"><span class="lbl">範圍</span><div class="seg"><button class="${allTime?'on':''}" data-act="stat-pall" data-k="1">全部期間</button><button class="${allTime?'':'on'}" data-act="stat-pall" data-k="0">指定期間</button></div></div>`:''}
     ${allTime?'':`<div class="toolbar"><div class="seg">${MODES.map(([k,l])=>`<button class="${mode===k?'on':''}" data-act="stat-mode" data-k="${k}">${l}</button>`).join('')}</div></div><div class="toolbar">${nav}</div>`}
@@ -2027,26 +1988,25 @@ function pageEntity(dr){
 function pageStats(){
   if(S.stat.drill&&S.stat.drill.dim!=='cat')return pageEntity(S.stat.drill);
   const st=S.stat;const td=TODAY();const mode=st.mode;const R=periodRange(mode,st.anchor);const dim=st.dim||'cat';const dr=st.drill;
-  const drillPred=dr?(r=>dimKey(r,dr.dim)===dr.v):null;
+  const drillPred=dr?(r=>dimHas(r,dr.dim,dr.v)):null;
   const projScope=(!dr&&dim==='proj')||(dr&&dr.dim==='proj');const allTime=projScope&&st.projAll!==0;
   const inP=allTime?(()=>true):(r=>r.dt>=R.from&&r.dt<=R.to);const kindFn=st.kind==='exp'?spendOf:incomeOf;
-  const shP=st.sh?(r=>st.sh==='__none__'?!r.sh:r.sh===st.sh):null;
-  const pred0=drillPred||(dim!=='cat'?(r=>dimKey(r,dim)!==NONE[dim]):null);const pred=shP?(pred0?(r=>shP(r)&&pred0(r)):shP):pred0;
+  const pred=drillPred||(dim!=='cat'?(r=>!isNone(dimKeys(r,dim)[0])):null);
   // 分組維度：未下鑽時依選擇的維度；下鑽分類→小項目；下鑽專案/商家→大項目
-  const gkey=dr?(dr.dim==='cat'?(r=>r.s||'（無小項目）'):(r=>r.c)):(r=>dimKey(r,dim));
+  const gkeys=dr?(dr.dim==='cat'?(r=>[r.s||'（無小項目）']):(r=>[r.c])):(r=>dimKeys(r,dim));
   const groups=new Map();let total=0;const recs=[];let none=null;const pinfo=new Map();let spanF='',spanT='';
-  for(const r of D.live){if(r.dt>td||!inP(r)||excluded(r))continue;if(shP&&!shP(r))continue;
+  for(const r of D.live){if(r.dt>td||!inP(r)||excluded(r))continue;
     if(projScope&&!dr&&r.p){const k=r.p;let o=pinfo.get(k);if(!o)pinfo.set(k,o={n:k,exp:0,inc:0,c:0,f:r.dt,l:r.dt});const kk=rateOf(curOf(r));const e=spendOf(r)*kk,i=incomeOf(r)*kk;if(e||i){o.exp+=e;o.inc+=i;o.c++;if(r.dt<o.f)o.f=r.dt;if(r.dt>o.l)o.l=r.dt}}
     const v=kindFn(r)*rateOf(curOf(r));if(!v)continue;if(drillPred&&!drillPred(r))continue;
-    if(!dr&&dim!=='cat'&&dimKey(r,dim)===NONE[dim]){if(!none)none={v:0,n:0};none.v+=v;none.n++;continue}
+    if(!dr&&dim!=='cat'&&isNone(dimKeys(r,dim)[0])){if(!none)none={v:0,n:0};none.v+=v;none.n++;continue}
     if(!spanF||r.dt<spanF)spanF=r.dt;if(!spanT||r.dt>spanT)spanT=r.dt;
-    total+=v;recs.push(r);const k=gkey(r);let g=groups.get(k);if(!g)groups.set(k,g={v:0,n:0,l:[]});g.v+=v;g.n++;g.l.push(r)}
+    total+=v;recs.push(r);for(const k of gkeys(r)){let g=groups.get(k);if(!g)groups.set(k,g={v:0,n:0,l:[]});g.v+=v;g.n++;g.l.push(r)}}
   if(dr){STAT_SUB={};for(const[k,g]of groups)STAT_SUB[k]={l:g.l,v:g.v,t:dr.v+' · '+k,kind:st.kind,lbl:R.label}}
   total=Math.round(total);
   const arr=[...groups.entries()].sort((a,b)=>b[1].v-a[1].v);const ck=st.kind;const gtotal=arr.reduce((x,[,g])=>x+g.v,0);
   const catCol=n=>`var(--c${D.ci.get(ck+':'+n)??(n==='折扣'?11:10)})`;
   const useCatColor=(!dr&&dim==='cat')||(dr&&dr.dim!=='cat');
-  const colOf=(n,i)=>useCatColor?catCol(n):(n===NONE.proj||n===NONE.shop?'var(--c11)':`var(--c${i%11})`);
+  const colOf=(n,i)=>useCatColor?catCol(n):(isNone(n)?'var(--c11)':`var(--c${i%11})`);
   const segs=arr.slice(0,9).map(([n,g],i)=>({n,v:g.v,col:colOf(n,i)}));if(arr.length>9)segs.push({n:'其他',v:arr.slice(9).reduce((s,x)=>s+x[1].v,0),col:'var(--c11)'});
   let PR;if(mode==='C'){const len=dayDiff(R.from,R.to)+1;PR={from:addDays(R.from,-len),to:addDays(R.from,-1)}}else PR=periodRange(mode,shiftAnchor(mode,st.anchor,-1));
   const prevS=sumBuckets([PR],pred)[0];const pv=st.kind==='exp'?prevS.exp:prevS.inc;const chg=allTime?null:(pv?(total-pv)/pv:null);
@@ -2072,15 +2032,15 @@ function pageStats(){
     nw=`<div class="card"><h3>淨資產走勢<small>近 24 個月・以目前匯率換算</small></h3>${multiLine(nwL,[{vals:nwV,cls:'sa',name:'淨資產',area:1}])}<div class="hint">目前 <span class="num">${money(nwV[nwV.length-1])}</span>，24 個月前 <span class="num">${money(nwV[0])}</span></div></div>`}
   let ptable='';if(projScope&&!dr&&pinfo.size){const ps=[...pinfo.values()].sort((a,b)=>a.l<b.l?1:-1);
     ptable=`<div class="card"><h3>各專案統計<small>${ps.length} 個專案・${allTime?'全部期間':esc(R.label)}・點列看明細</small></h3><div class="tbl ptbl"><div class="tr th"><span>專案</span><span>支出</span><span>收入</span><span>筆數</span></div>${ps.map(o=>`<button class="tr" data-act="stat-drill" data-dim="proj" data-v="${esc(o.n)}"><span><b style="font-weight:500">${esc(o.n)}</b><small class="num">${o.f.replace(/-/g,'/')}${o.l!==o.f?' – '+o.l.replace(/-/g,'/'):''}</small></span><span class="num neg">${o.exp?fmt(Math.round(o.exp)):'–'}</span><span class="num pos">${o.inc?fmt(Math.round(o.inc)):'–'}</span><span class="num">${o.c}</span></button>`).join('')}</div></div>`}
-  const showList=mode==='D'||dr;const dimName=DIMS.find(d=>d[0]===dim)[1];
+  const showList=mode==='D'||dr;const dimName=DIML[dim]||'分類';
   const pieLabel=dr?dr.v:(st.kind==='exp'?'支出':'收入');
   const groupTitle=dr?(dr.dim==='cat'?'小項目':'大項目')+'分布':'依'+dimName;
   return{back:dr?1:0,head:`<h1>${dr?esc(dr.v):'統計'}</h1>`,
-    body:`<div class="stack"><div class="toolbar"><div class="seg"><button class="${st.kind==='exp'?'on':''}" data-act="stat-kind" data-k="exp">支出</button><button class="${st.kind==='inc'?'on':''}" data-act="stat-kind" data-k="inc">收入</button></div><select class="in" id="st-sh" data-stsh="1" style="width:auto;max-width:46%;flex:0 1 auto" aria-label="商家"><option value="">全部商家</option><option value="__none__" ${st.sh==='__none__'?'selected':''}>（未填商家）</option>${shopList().map(([n,c])=>`<option value="${esc(n)}" ${st.sh===n?'selected':''}>${esc(n)}（${c}）</option>`).join('')}</select>${allTime?'':`<div class="seg">${MODES.map(([k,l])=>`<button class="${mode===k?'on':''}" data-act="stat-mode" data-k="${k}">${l}</button>`).join('')}</div>`}</div>
+    body:`<div class="stack"><div class="toolbar"><div class="seg"><button class="${st.kind==='exp'?'on':''}" data-act="stat-kind" data-k="exp">支出</button><button class="${st.kind==='inc'?'on':''}" data-act="stat-kind" data-k="inc">收入</button></div>${allTime?'':`<div class="seg">${MODES.map(([k,l])=>`<button class="${mode===k?'on':''}" data-act="stat-mode" data-k="${k}">${l}</button>`).join('')}</div>`}</div>
     ${projScope?`<div class="toolbar"><span class="lbl">專案範圍</span><div class="seg"><button class="${allTime?'on':''}" data-act="stat-pall" data-k="1">全部期間</button><button class="${allTime?'':'on'}" data-act="stat-pall" data-k="0">依上方期間</button></div></div>`:''}
     ${allTime?'':`<div class="toolbar">${nav}</div>${quick}`}
-    ${dr?`<div class="note"><div class="grow">${{cat:'分類',proj:'專案',shop:'商家'}[dr.dim]}：<b>${esc(dr.v)}</b></div><button class="btn sm" data-act="back">返回全部</button></div>`:`<div class="toolbar"><span class="lbl">分組</span><div class="seg">${DIMS.map(([k,l])=>`<button class="${dim===k?'on':''}" data-act="stat-dim" data-k="${k}">${l}</button>`).join('')}</div></div>`}</div>
-    <div class="card"><div class="kv"><div><div class="lbl">${!dr&&dim==='proj'?'專案'+(st.kind==='exp'?'總支出':'總收入'):!dr&&dim==='shop'?'有填商家的'+(st.kind==='exp'?'支出':'收入'):st.kind==='exp'?'總支出':'總收入'}</div><div class="v num" style="font-size:22px">${money(total)}</div></div>${allTime?(spanF?`<div><div class="lbl">期間</div><div class="v num" style="font-size:14px">${spanF.replace(/-/g,'/')}<br>– ${spanT.replace(/-/g,'/')}</div></div>`:''):mode!=='D'?`<div><div class="lbl">日平均</div><div class="v num">${money(Math.round(total/elapsed))}</div></div>`:''}${chg!=null?`<div><div class="lbl">比上一期</div><div class="v num ${chg>0===(st.kind==='exp')?'neg':'pos'}">${chg>0?'+':''}${(chg*100).toFixed(1)}%</div></div>`:''}<div><div class="lbl">筆數</div><div class="v num">${recs.length}</div></div>${!dr&&dim!=='cat'?`<div><div class="lbl">${dimName}數</div><div class="v num">${arr.filter(([n])=>n!==NONE.proj&&n!==NONE.shop).length}</div></div>`:''}</div>
+    ${dr?`<div class="note"><div class="grow">${DIML[dr.dim]||'分類'}：<b>${esc(dr.v)}</b></div><button class="btn sm" data-act="back">返回全部</button></div>`:`<div class="toolbar"><span class="lbl">分組</span><div class="seg dims">${DIMS.map(([k,l])=>`<button class="${dim===k?'on':''}" data-act="stat-dim" data-k="${k}">${l}</button>`).join('')}</div></div>`}</div>
+    <div class="card"><div class="kv"><div><div class="lbl">${!dr&&dim==='proj'?'專案'+(st.kind==='exp'?'總支出':'總收入'):!dr&&dim!=='cat'?'有填'+dimName+'的'+(st.kind==='exp'?'支出':'收入'):st.kind==='exp'?'總支出':'總收入'}</div><div class="v num" style="font-size:22px">${money(total)}</div></div>${allTime?(spanF?`<div><div class="lbl">期間</div><div class="v num" style="font-size:14px">${spanF.replace(/-/g,'/')}<br>– ${spanT.replace(/-/g,'/')}</div></div>`:''):mode!=='D'?`<div><div class="lbl">日平均</div><div class="v num">${money(Math.round(total/elapsed))}</div></div>`:''}${chg!=null?`<div><div class="lbl">比上一期</div><div class="v num ${chg>0===(st.kind==='exp')?'neg':'pos'}">${chg>0?'+':''}${(chg*100).toFixed(1)}%</div></div>`:''}<div><div class="lbl">筆數</div><div class="v num">${recs.length}</div></div>${!dr&&dim!=='cat'?`<div><div class="lbl">${dimName}數</div><div class="v num">${arr.filter(([n])=>!isNone(n)).length}</div></div>`:''}</div>
     ${arr.length?`<h3 style="margin:14px 0 0;font:600 14px var(--serif)">${groupTitle}</h3><div class="donutwrap mt">${donut(segs,Math.round(gtotal),pieLabel)}<div class="legend">${legend}</div></div>`:`<div class="empty">${projScope&&!dr?'沒有設定專案的記錄。記帳時在「專案」欄填名稱即可，例如「202610 日本沖繩」。':'這段期間沒有資料'}</div>`}
     ${none?`<div class="hint mt">${NONE[dim]}的記錄另有 <span class="num">${money(Math.round(none.v))}</span>（${none.n} 筆），未計入上方金額與圖表</div>`:''}${S.settings.excl.length?`<div class="hint mt">已排除：${S.settings.excl.map(esc).join('、')}（在「設定」調整）</div>`:''}</div>
     ${ptable}${tb.length?`<div class="card"><h3>${trendTitle}${dr?' · '+esc(dr.v):''}<small>${dr?'':'<span class="lgd se"></span>支出 <span class="lgd si"></span>收入'}</small></h3>${multiLine(tb.map(b=>b.short),series)}</div>`:''}
@@ -2102,24 +2062,17 @@ Object.assign(ACT,{
   'stat-goto':el=>{S.stat.mode=el.dataset.m;S.stat.anchor=el.dataset.a;render();window.scrollTo(0,0)},
   'stat-quick':el=>{S.stat.to=TODAY();S.stat.from=addDays(TODAY(),+el.dataset.n);render(true)}
 });
-document.addEventListener('change',e=>{const t=e.target;if(t.dataset.stsh){S.stat.sh=t.value;S.stat.drill=null;render(true);return}if(t.dataset.stset){const k=t.dataset.stset;if(!t.value)return;S.stat[k]=t.value;render(true)}});
+document.addEventListener('change',e=>{const t=e.target;if(t.dataset.stset){const k=t.dataset.stset;if(!t.value)return;S.stat[k]=t.value;render(true)}});
 
 /* ---------- 搜尋 ---------- */
 function searchRecs(){
   const q=S.search;const terms=q.q.trim().toLowerCase().split(/\s+/).filter(Boolean);const mn=evalAmt(q.min),mx=evalAmt(q.max);
-  const any=terms.length||q.type||q.a||q.from||q.to||q.c||q.p||q.sh||isFinite(mn)||isFinite(mx);if(!any)return[];
+  const any=terms.length||q.type||q.a||q.from||q.to||q.c||q.p||isFinite(mn)||isFinite(mx);if(!any)return[];
   return D.live.filter(r=>{if(q.type&&r.t!==q.type)return false;if(q.a&&r.a!==q.a)return false;if(q.from&&r.dt<q.from)return false;if(q.to&&r.dt>q.to)return false;
-    if(q.c&&r.c!==q.c)return false;if(q.p&&r.p!==q.p)return false;if(q.sh&&(q.sh==='__none__'?!!r.sh:r.sh!==q.sh))return false;const am=Math.abs(raw(r));if(isFinite(mn)&&am<mn)return false;if(isFinite(mx)&&am>mx)return false;
+    if(q.c&&r.c!==q.c)return false;if(q.p&&r.p!==q.p)return false;const am=Math.abs(raw(r));if(isFinite(mn)&&am<mn)return false;if(isFinite(mx)&&am>mx)return false;
     if(!terms.length)return true;
     const hay=((r.n||'')+' '+(r.gn||'')+' '+(r.sh||'')+' '+(r.c||'')+' '+(r.s||'')+' '+(r.p||'')+' '+(r.w||'')+' '+(D.acct.get(r.a)?.name||'')+' '+Math.abs(r.m)).toLowerCase();return terms.every(t=>hay.includes(t))});
 }
-function shopList(){const m=new Map();for(const r of D.live)if(r.sh)m.set(r.sh,(m.get(r.sh)||0)+1);return[...m.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'zh-Hant'))}
-function shopRank(res){const q=S.search;const m=new Map();let tot=0;
-  for(const r of res){const v=spendOf(r)*rateOf(curOf(r));if(!(v>0))continue;const k=r.sh||'';const o=m.get(k)||{v:0,n:0};o.v+=v;o.n++;m.set(k,o);tot+=v}
-  if(!tot)return'';const arr=[...m.entries()].sort((a,b)=>b[1].v-a[1].v);
-  if(q.sh){const o=arr[0]?.[1];if(!o)return'';return`<div class="card"><div class="kv"><div><div class="lbl">${esc(q.sh==='__none__'?'未填商家':q.sh)}・支出</div><div class="v num" style="font-size:22px">${money(Math.round(o.v))}</div></div><div><div class="lbl">筆數</div><div class="v num">${o.n}</div></div><div><div class="lbl">平均每筆</div><div class="v num">${money(Math.round(o.v/o.n))}</div></div></div></div>`}
-  if(arr.length<2&&!arr[0]?.[0])return'';const top=arr.slice(0,10),mx=top[0][1].v;
-  return`<div class="card"><h3 style="margin:0 0 8px">商家支出排名<small>${arr.filter(x=>x[0]).length} 家</small></h3>${top.map(([n,o])=>`<button class="row" style="display:grid;grid-template-columns:1fr auto;gap:4px 10px;width:100%;text-align:left" data-act="search-shop" data-sh="${esc(n||'__none__')}"><span>${esc(n||'（未填商家）')} <small class="hint">${o.n} 筆・${(o.v/tot*100).toFixed(1)}%</small></span><span class="num">${money(Math.round(o.v))}</span><span class="bar" style="grid-column:1/-1"><i style="width:${(o.v/mx*100).toFixed(1)}%"></i></span></button>`).join('')}${arr.length>10?`<div class="hint">另有 ${arr.length-10} 家，可用上方「全部商家」選單查看</div>`:''}</div>`}
 function searchResHTML(res){
   res=res||searchRecs();const q=S.search;const lim=q.limit;let exp=0,inc=0;
   for(const r of res){const k=rateOf(curOf(r));exp+=spendOf(r)*k;inc+=incomeOf(r)*k}
@@ -2176,7 +2129,6 @@ const rpUpd=()=>{const el=$('#rp-prev');if(el&&RP)el.innerHTML=rpPrevHTML();else
 document.addEventListener('input',e=>{const t=e.target;if(!RP||!t.dataset.rp)return;RP[t.dataset.rp]=t.value;if(e.isComposing)return;clearTimeout(RP._t);RP._t=setTimeout(rpUpd,t.tagName==='SELECT'?0:200)});
 document.addEventListener('compositionend',e=>{const t=e.target;if(!RP||!t.dataset.rp)return;RP[t.dataset.rp]=t.value;clearTimeout(RP._t);RP._t=setTimeout(rpUpd,60)});
 Object.assign(ACT,{
-  'search-shop':el=>{S.search.sh=el.dataset.sh;S.search.limit=300;render(true)},
   'search-range':el=>{S.search.from=el.dataset.f;S.search.to=el.dataset.t;S.search.limit=300;render(true)},
   'replace-open':el=>{const onSearch=(S.stack[S.stack.length-1]||{}).p==='search';RP={f:'sh',scope:(el.dataset.all||!S.search.sel.size)&&onSearch?'all':'sel',find:'',to:'',onSearch};openSheet('批次取代','',{onClose:()=>{RP=null}});renderReplace()},
   'rp-field':el=>{RP.f=el.dataset.k;RP.find='';RP.to='';renderReplace()},
@@ -2562,7 +2514,7 @@ function upcoming(days){const td=TODAY(),to=addDays(td,days);const out=[];
   for(const r of S.rules){if(r.fq==='I'){for(const x of(D.groups.get(r.id)||[])){if(x.x||x.dt<=td||x.dt>to)continue;out.push({dt:x.dt,n:r.name+(x.t==='利息'?'（利息）':''),k:'支出',twd:Math.abs(x.m)*rateOf(curOf(x)),tag:'分期',a:D.acct.get(x.a)?.name||''})}continue}
     if(!r.on)continue;
     for(let k=0;k<2000;k++){if(r.cnt&&k+(r.off||0)>=r.cnt)break;const d=ruleOccDate(r,k);if(d>to||(r.end&&d>r.end))break;if(d<=td)continue;
-      let twd,n=rLabel(r)||ruleKind(r.fs),an=D.acct.get(r.fs.a)?.name||'';
+      let twd,n=r.name||r.fs.n||r.fs.s||ruleKind(r.fs),an=D.acct.get(r.fs.a)?.name||'';
       if(k<r.done){const xs=S.recs.filter(x=>!x.x&&x.id.startsWith(r.id+'_'+k+'_')&&x.t!=='轉入');if(!xs.length)continue;twd=xs.reduce((s,x)=>s+Math.abs(val(x))*rateOf(curOf(x)),0);n=xs[0].n||n;an=D.acct.get(xs[0].a)?.name||an}
       else twd=ruleAmtTWD(r.fs).twd;
       out.push({dt:d,n,k:ruleKind(r.fs),twd,tag:'週期',a:an})}}
@@ -2584,7 +2536,7 @@ function pageRules(){
   // 週期
   const kinds=['支出','收入','轉帳'];const mEq=k=>Math.round(rs.filter(r=>r.on&&ruleNext(r)&&ruleKind(r.fs)===k).reduce((s,r)=>s+ruleAmtTWD(r.fs).twd*rulePerMonth(r),0));
   const ruleLi=r=>{const am=ruleAmtTWD(r.fs);const a=D.acct.get(r.fs.a),a2=D.acct.get(r.fs.a2);const k=ruleKind(r.fs);
-    return`<div class="li sch"><div class="grow"><div>${esc(rLabel(r)||k)}<span class="pill">${k}</span>${r.on?'':'<span class="pill warn">已暫停</span>'}</div>
+    return`<div class="li sch"><div class="grow"><div>${esc(r.name||r.fs.n||r.fs.s||k)}<span class="pill">${k}</span>${r.on?'':'<span class="pill warn">已暫停</span>'}</div>
     <small class="num">${ruleDesc(r)} · ${money(am.v,am.cur)} · ${esc(a?.name||'')}${k==='轉帳'&&a2?' → '+esc(a2.name):''}</small>
     <small class="num">${ruleNext(r)?'下次 '+ruleNext(r).replace(/-/g,'/'):(r.on?'已結束':'已暫停')} · 已入帳 ${rulePosted(r)+(r.off||0)} 次${r.cnt?` · 剩 ${Math.max(0,r.cnt-(r.off||0)-rulePosted(r))} 次`:(r.end?'':' · 無限期')}</small></div>
     <button class="btn sm" data-act="rule-toggle" data-id="${r.id}">${r.on?'暫停':'啟用'}</button><button class="btn sm danger" data-act="rule-del" data-id="${r.id}">刪除</button></div>`};
@@ -2724,23 +2676,14 @@ function pageApplePay(){const uid=window.Cloud&&Cloud.user?Cloud.user.uid:'';con
   ${cards.length?`<div class="grp"><div class="grph"><span>卡片對應帳戶</span><span>${cards.length}</span></div><div class="card stack">${cards.map(([c,o])=>`<label class="field"><span>${esc(c)} · ${o.n} 次 · 最後 ${esc((o.last||'').slice(5).replace('-','/'))}</span><select class="in" data-apmap="${esc(c)}">${opts((S.settings.apMap||{})[c])}</select></label>`).join('')}</div></div>`:''}
   <div class="grp"><div class="grph"><span>一次性設定（iPhone 捷徑）</span></div><div class="card stack">
   ${!uid?'<div class="note alert"><div class="grow">請先到「雲端同步」登入，才會顯示你的寫入網址。</div></div>':''}
-  <div class="lbl">iOS 27 以後（自動化已併入捷徑本身，沒有獨立的「自動化」分頁）</div>
   <ol class="steps">
-   <li>打開「捷徑」App，按右上「＋」新增一個捷徑，名稱取「Apple Pay 記帳」。</li>
-   <li>在最上方的觸發條件（「何時執行／When」，或搜尋框輸入「錢包」）選「<b>錢包：當我點一下卡片</b>」（英文為 When I tap a Wallet pass or payment card）。</li>
-   <li>按觸發條件旁的「⌄」展開：卡片選要記帳的卡（或任何卡片），類別、商家保持「任何」；把「<b>自動化</b>」開關打開、「<b>通知</b>」開關關閉（＝不必確認就執行）。</li>
-   <li>接著加入下面第 2～6 步的動作（與 iOS 17～26 相同）。</li>
-   <li>完成後回「資料庫」→「自動化」，確認這個自動化的開關是開的。</li></ol>
-  <div class="lbl mt">動作（各版本相同）</div>
-  <ol class="steps">
-   <li>iOS 17～26：「捷徑」App →「自動化」→ 右上「＋」→ 選「<b>錢包</b>」（iOS 17～25 叫「交易」），勾選卡片，選「<b>立即執行</b>」→「下一步」→「新增空白自動化」。iOS 27 跳過這步。</li>
+   <li>打開「捷徑」App →「自動化」→ 右上「＋」→ 選「<b>交易</b>」，勾選要自動記帳的卡片，選「<b>立即執行</b>」→「下一步」→「新增空白自動化」。</li>
    <li>加入動作「<b>格式化日期</b>」：日期選「目前日期」，格式選「自訂」，填 <code>yyyy-MM-dd'T'HH:mm</code></li>
    <li>加入動作「<b>取得 URL 內容</b>」：網址貼上下方〔登入網址〕，展開後方法選 <b>POST</b>，要求本文選 <b>JSON</b>，新增 3 個欄位：<br><code>email</code>（文字）＝記帳助理帳號的 Email<br><code>password</code>（文字）＝記帳助理的密碼<br><code>returnSecureToken</code>（布林值）＝是</li>
    <li>加入動作「<b>取得辭典值</b>」：取得「值」，鍵填 <code>idToken</code>，辭典選上一步的「URL 的內容」。</li>
    <li>加入動作「<b>文字</b>」：貼上下方〔本文範本〕，再把〔商家〕〔金額〕〔卡片〕換成「捷徑輸入」的對應變數，〔格式化日期〕換成第 2 步的結果。</li>
    <li>再加入「<b>取得 URL 內容</b>」：網址貼上〔寫入網址〕，方法 <b>POST</b>；標頭新增 <code>Authorization</code>＝<code>Bearer </code>（後面空一格）＋「辭典值」，再新增 <code>Content-Type</code>＝<code>application/json</code>；要求本文選「<b>檔案</b>」，選第 5 步的「文字」。</li>
    <li>完成。用 Apple Pay 刷一次，打開 App 就會看到這筆記錄。</li></ol>
-  <div class="hint">注意：只有實體店用 iPhone／Apple Watch 感應付款會觸發；網購、App 內購不會。若常常沒觸發，到「設定 → 通知 → 錢包」關閉「摘要」或「排程摘要」，交易通知延遲時自動化容易逾時。</div>
   ${cp('登入網址',signUrl)}${cp('寫入網址',fsUrl)}${cp('本文範本',body)}
   <div class="hint">記帳助理帳號只能「新增收件匣」，讀不到你的帳本；密碼只存在你的 iPhone 捷徑裡。</div></div></div>`}}
 
@@ -2804,9 +2747,9 @@ function subHTML(){const cs=subCands();if(!cs.length)return'';window._subs=cs;
 const PRICE_URL='https://raw.githubusercontent.com/taya20081-stack/ledger/main/prices.json';
 let PX=null;   // {d, p:{code:[name,close,cur?]}}，只在本機快取
 function pxApply(P){let n=0;for(const h of S.settings.hold||[]){if(h.pxManual)continue;const q=P&&P[h.code];if(q&&(!h.pxd||(q[3]||'')>=h.pxd||!q[3])){h.px=+q[1];if(q[3])h.pxd=q[3];if(!h.name||h.name===h.code)h.name=US_NAMES[String(h.code).toUpperCase()]||(q[0]&&q[0]!==h.code?q[0]:h.code);if(q[2])h.cu=q[2];n++}}return n}
-async function loadPrices(force){const H=S.settings.hold||[];if(!H.length&&!goldG()&&!force)return false;const td=TODAY();if(!force&&S.settings.pxFor===td&&PX)return false;
+async function loadPrices(force){const H=S.settings.hold||[];if(!H.length&&!force)return false;const td=TODAY();if(!force&&S.settings.pxFor===td&&PX)return false;
   try{const res=await fetch(PRICE_URL+'?t='+Date.now(),{cache:'no-store'});if(!res.ok)return false;PX=await res.json();let n=0;
-    for(const h of H){if(h.pxManual)continue;const q=PX.p&&PX.p[h.code];if(q){h.px=+q[1];h.pxd=q[3]||PX.d;if(!h.name)h.name=q[0];if(q[2])h.cu=q[2];n++}}n+=pxApply(S.settings.pxx&&S.settings.pxx.p);if(goldApply())n++;
+    for(const h of H){if(h.pxManual)continue;const q=PX.p&&PX.p[h.code];if(q){h.px=+q[1];h.pxd=q[3]||PX.d;if(!h.name)h.name=q[0];if(q[2])h.cu=q[2];n++}}n+=pxApply(S.settings.pxx&&S.settings.pxx.p);
     S.settings.pxFor=td;await saveKV('settings');return n>0}catch(e){return false}}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.ready)loadPrices().then(ok=>{if(ok)render(true)})});
 function holdRecs(h){const code=String(h.code||'').trim(),nm=String(h.name||'').trim();const reC=code?new RegExp('(^|[^0-9A-Za-z])'+code.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?![0-9A-Za-z])','i'):null;
@@ -2823,43 +2766,6 @@ function holdGuess(){const have=new Set((S.settings.hold||[]).map(h=>h.code));co
 function pfList(){const H=S.settings.hold||[];const o=[];for(const h of H){const p=h.pf||'我的';if(!o.includes(p))o.push(p)}return o}
 const US_NAMES={NVDA:'輝達',TSLA:'特斯拉',QQQ:'那斯達克100 ETF',AAPL:'蘋果',MSFT:'微軟',GOOGL:'Alphabet A',GOOG:'Alphabet C',AMZN:'亞馬遜',META:'Meta',AVGO:'博通',AMD:'超微',INTC:'英特爾',TSM:'台積電 ADR',NFLX:'Netflix',ORCL:'甲骨文',CRM:'Salesforce',ADBE:'Adobe',QCOM:'高通',MU:'美光',PLTR:'Palantir',COST:'好市多',WMT:'沃爾瑪',JPM:'摩根大通',V:'Visa',MA:'萬事達卡','BRK-B':'波克夏 B',BRK_B:'波克夏 B',UNH:'聯合健康',XOM:'埃克森美孚',KO:'可口可樂',DIS:'迪士尼',BA:'波音',BABA:'阿里巴巴',SPY:'標普500 ETF (SPY)',VOO:'標普500 ETF (VOO)',IVV:'標普500 ETF (IVV)',VTI:'美國全市場 ETF',VT:'全世界股票 ETF',DIA:'道瓊 ETF',IWM:'羅素2000 ETF',SOXX:'費城半導體 ETF (SOXX)',SMH:'半導體 ETF (SMH)',ARKK:'ARK 創新 ETF',SCHD:'美國高股息 ETF (SCHD)',VYM:'高股息 ETF (VYM)',BND:'美國總體債券 ETF',TLT:'20年期美債 ETF'};
 function holdName(h){const c=String(h.code||'');if(h.name&&h.name!==c)return h.name;return US_NAMES[c]||h.name||c}
-/* ---------- 黃金（價格：臺灣銀行黃金存摺「本行買進」每公克，GitHub Action 每天寫進 prices.json 的 GOLD） ----------
-   S.settings.gold={q:數量,u:'錢'|'兩'|'克',px:每克價,pxd:日期}；數量只存在你自己的雲端，不會出現在 GitHub */
-const GOLD_U={'錢':3.75,'兩':37.5,'克':1};
-function goldG(){const g=S.settings.gold;return g&&+g.q>0?+g.q*(GOLD_U[g.u]||3.75):0}
-function goldMV(){const g=S.settings.gold;return g&&g.px?Math.round(goldG()*g.px):0}
-function goldApply(){const g=S.settings.gold;const q=PX&&PX.p&&PX.p.GOLD;if(!g||!q||!(+q[1]>0))return false;if(g.pxd&&(q[3]||'')<g.pxd)return false;g.px=+q[1];g.pxd=q[3]||PX.d;g.src=/國際/.test(q[0]||'')?'國際金價換算':'臺銀黃金存摺買進價';return true}
-function pageGold(){const g=S.settings.gold||{q:'',u:'錢'};const gr=goldG();
-  return{back:1,head:`<h1>黃金市值</h1><button class="ibtn" data-act="px-refresh" aria-label="更新金價">${IC.sync||'↻'}</button>`,body:`
-  <div class="sum"><div class="lbl">黃金市值（TWD）${g.pxd?' · '+g.pxd.slice(5).replace('-','/')+' 牌價':''}</div><div class="huge num">${g.px&&gr?fmt(goldMV()):'—'}</div>
-   ${g.px?`<div class="kv mt"><div><div class="lbl">每公克</div><div class="v num">${fmt(g.px)}</div></div><div><div class="lbl">每錢</div><div class="v num">${fmt(Math.round(g.px*3.75))}</div></div><div><div class="lbl">持有</div><div class="v num">${gr?(+gr.toFixed(2))+' 克':'—'}</div></div></div>`:''}
-   <div class="hint mt">市值＝持有克數 × 每公克金價${g.src?'（目前來源：'+g.src+'）':''}，每個營業日自動更新。優先用臺灣銀行黃金存摺「本行買進」價，抓不到時改用國際金價 × 美元匯率換算（約比臺銀買進價高 0.5%）；1 錢＝3.75 克、1 兩＝37.5 克。不計入「帳戶」頁的淨資產。</div></div>
-  <div class="card stack"><div class="lbl">持有數量</div><div class="grid2"><label class="field"><span>數量</span><input class="in num" id="gd-q" inputmode="decimal" value="${esc(g.q||'')}" placeholder="3"></label><label class="field"><span>單位</span><select class="in" id="gd-u">${Object.keys(GOLD_U).map(u=>`<option${(g.u||'錢')===u?' selected':''}>${u}</option>`).join('')}</select></label></div>
-   <button class="btn pri" data-act="gd-save">儲存</button></div>`}}
-/* ---------- 市值總覽：股票＋黃金＋外匯（外匯＝非台幣帳戶的正餘額，依臺銀現金買入匯率換算） ---------- */
-function fxList(){return S.accts.filter(a=>!a.arch&&(a.cur||'TWD')!=='TWD'&&a.grp!=='信用卡'&&acctBal(a)>0).map(a=>({a,b:acctBal(a),v:Math.round(acctBal(a)*rateOf(a.cur))}))}
-function mktParts(){const H=S.settings.hold||[];const g=S.settings.gold;const fx=fxList();
-  return[{k:'股票',p:'invest',v:holdTotal(),d:H.map(h=>h.pxd||'').sort().pop()||'',sub:H.length?H.length+' 檔':'尚未加入持股'},
-    {k:'黃金',p:'gold',v:goldMV(),d:(g&&g.pxd)||'',sub:goldG()?(+g.q)+' '+(g.u||'錢'):'尚未輸入數量'},
-    {k:'外匯',p:'fx',v:fx.reduce((t,x)=>t+x.v,0),d:S.rates.at||'',sub:fx.length?new Set(fx.map(x=>x.a.cur)).size+' 種幣別':'沒有外幣餘額'}]}
-function mktTotal(){return mktParts().reduce((t,x)=>t+x.v,0)}
-function mktDate(){return mktParts().map(x=>x.d).filter(Boolean).sort().pop()||'—'}
-function pageMarket(){const P=mktParts();const tot=P.reduce((t,x)=>t+x.v,0);const fx=fxList();
-  const row=x=>x.p?`<button class="li" data-act="push" data-p="${x.p}"><div class="grow"><div>${x.k}</div><small>${esc(x.sub)}${x.d?' · 更新：'+x.d:''}</small></div><div class="r num">${x.v?money(x.v):'—'}</div><span class="chev">${IC.chev}</span></button>`
-    :`<div class="li"><div class="grow"><div>${x.k}</div><small>${esc(x.sub)}${x.d?' · 匯率更新：'+esc(x.d):''}</small></div><div class="r num">${x.v?money(x.v):'—'}</div></div>`;
-  return{back:1,head:`<h1>投資市值</h1><button class="ibtn" data-act="px-refresh" aria-label="更新價格">${IC.sync||'↻'}</button>`,body:`
-  <div class="sum"><div class="lbl">投資市值（TWD） · 更新：${esc(mktDate())}</div><div class="huge num">${fmt(tot)}</div>
-   <div class="kv mt">${P.map(x=>`<div><div class="lbl">${x.k}</div><div class="v num">${fmt(x.v)}</div></div>`).join('')}</div>
-   <div class="hint mt">股票：前一交易日收盤價；黃金：每公克金價 × 克數；外匯：外幣帳戶餘額 × 臺銀現金買入匯率。股票、黃金不計入「帳戶」頁淨資產；外匯本來就是帳戶餘額，已含在淨資產內。</div></div>
-  <div class="grp"><div class="list">${P.map(row).join('')}</div></div>
-`}}
-function pageFx(){const fx=fxList();const tot=fx.reduce((t,x)=>t+x.v,0);const by=new Map();for(const x of fx){const o=by.get(x.a.cur)||{cur:x.a.cur,b:0,v:0,L:[]};o.b+=x.b;o.v+=x.v;o.L.push(x);by.set(x.a.cur,o)}
-  const C=[...by.values()].sort((a,b)=>b.v-a.v);
-  return{back:1,head:`<h1>外匯</h1><button class="ibtn" data-act="px-refresh" aria-label="更新">${IC.sync||'↻'}</button>`,body:`
-  <div class="sum"><div class="lbl">外匯市值（TWD） · 匯率更新：${esc(S.rates.at||'—')}</div><div class="huge num">${fmt(tot)}</div>
-   ${C.length?`<div class="kv mt">${C.map(c=>`<div><div class="lbl">${c.cur}</div><div class="v num">${fmt(c.v)}</div></div>`).join('')}</div>`:''}
-   <div class="hint mt">外幣帳戶正餘額 × 臺灣銀行現金買入匯率（不含信用卡），已含在「帳戶」頁淨資產內。</div></div>
-  ${C.map(c=>`<div class="grp"><div class="grph"><span>${c.cur} · ${money(c.b,c.cur)} × ${S.rates.r[c.cur]||'?'}</span><span class="num">${money(c.v)}</span></div><div class="list">${c.L.map(x=>`<button class="li" data-act="push" data-p="acct" data-id="${x.a.id}"><div class="grow"><div>${esc(x.a.name)}</div><small class="num">${money(x.b,x.a.cur)}</small></div><div class="r num">${money(x.v)}</div><span class="chev">${IC.chev}</span></button>`).join('')}</div></div>`).join('')||'<div class="empty">沒有外幣餘額</div>'}`}}
 const PF_OPEN=new Set();   // 股票市值頁：展開中的組合（預設全部收合）
 function pageInvest(){const H=S.settings.hold||[];const mvOf=h=>(+h.px||0)*(+h.sh||0)*rateOf(h.cu||'TWD');const tot=H.reduce((t,h)=>t+mvOf(h),0);
   const pd=H.filter(h=>h.pxd&&!h.pxManual&&(h.cu||'TWD')==='TWD').map(h=>h.pxd).sort().pop();
@@ -2869,7 +2775,7 @@ function pageInvest(){const H=S.settings.hold||[];const mvOf=h=>(+h.px||0)*(+h.s
   return{back:1,head:`<h1>股票市值</h1><button class="ibtn" data-act="px-refresh" aria-label="更新股價">${IC.sync||'↻'}</button>`,body:`
   <div class="sum"><div class="lbl">持股市值（TWD）${pd?' · 台股 '+pd.slice(5).replace('-','/')+' 收盤':''}</div><div class="huge num">${fmt(Math.round(tot))}</div>
    ${pfList().length>1?`<div class="kv mt">${pfList().map(pf=>`<div><div class="lbl">${esc(pf)}</div><div class="v num">${fmt(Math.round(H.filter(h=>(h.pf||'我的')===pf).reduce((s,h)=>s+mvOf(h),0)))}</div></div>`).join('')}</div>`:''}
-   <div class="hint mt">市值＝股數 × 前一交易日收盤價，外幣以臺銀現金買入匯率換算，不計入「帳戶」頁的淨資產。點持股可改股數。</div></div>
+   <div class="hint mt">市值＝股數 × 前一交易日收盤價，外幣以臺銀現金買入匯率換算，會計入「帳戶」頁的淨資產。點持股可改股數。</div></div>
   ${pfs||'<div class="empty">尚未加入持股</div>'}
   <div class="card stack"><div class="lbl">新增持股</div><div class="grid3"><label class="field"><span>組合</span><input class="in" id="hd-pf" list="hd-pfl" value="${esc(pfList()[0]||'我的')}"><datalist id="hd-pfl">${pfList().map(p=>`<option value="${esc(p)}">`).join('')}</datalist></label><label class="field"><span>代號</span><input class="in" id="hd-code" placeholder="2884、NVDA" autocomplete="off"></label><label class="field"><span>股數</span><input class="in num" id="hd-sh" inputmode="decimal" placeholder="1000"></label></div>
    <button class="btn pri" data-act="hd-add">加入</button></div>
@@ -2905,12 +2811,14 @@ function budCarry(ym,cat){const B=S.budgets;if(!B.roll||!B.since||ym<=B.since)re
   for(let k=B.since;k<ym;k=shiftYM(k,1)){const u=monUse(k);carry+=base-(cat?(u.by.get(cat)||0):u.tot)}return Math.round(carry)}
 
 /* ---------- 掛到既有頁面 ---------- */
-PAGES.applepay=pageApplePay;PAGES.gold=pageGold;PAGES.market=pageMarket;PAGES.fx=pageFx;PAGES.recon=pageRecon;PAGES.invest=pageInvest;PAGES.goals=pageGoals;
+PAGES.applepay=pageApplePay;PAGES.recon=pageRecon;PAGES.invest=pageInvest;PAGES.goals=pageGoals;
 {const _more=PAGES.more;PAGES.more=function(){const r=_more();const it=(p,t,s)=>`<button class="li" data-act="push" data-p="${p}"><div class="grow"><div>${t}</div><small>${s}</small></div><span class="chev">${IC.chev}</span></button>`;
   const H=S.settings.hold||[],G=S.settings.goals||[];
-  r.body=r.body.replace(/()(<button class="li" data-act="push" data-p="search")/,`$1${it('goals','存錢目標',G.length?G.length+' 個目標':'設定目標金額與期限')}${it('market','投資市值','股票・黃金・外匯 · '+money(mktTotal())+' · 更新：'+mktDate())}${it('applepay','Apple Pay 自動記帳','刷卡當下自動記一筆')}$2`);return r}}
-{const _accts=PAGES.accts;PAGES.accts=function(){const r=_accts();if(!mktTotal())return r;
-  r.body=r.body.replace(/()(<div class="toolbar mt">)/,`$1<button class="li" data-act="push" data-p="market" style="margin:12px 0 0;border-radius:14px;background:var(--card,#fff)"><div class="grow"><div>投資市值</div><small>股票・黃金・外匯；股票與黃金未計入上方淨資產</small></div><div class="r num">${money(mktTotal())}</div><span class="chev">${IC.chev}</span></button>$2`);return r}}
+  r.body=r.body.replace(/(<div class="grp"><div class="list">)(<button class="li" data-act="push" data-p="cats")/,`$1${it('goals','存錢目標',G.length?G.length+' 個目標':'設定目標金額與期限')}${it('invest','股票市值',H.length?H.length+' 檔 · '+money(holdTotal()):'輸入持股，自動帶收盤價')}${it('applepay','Apple Pay 自動記帳','刷卡當下自動記一筆')}$2`);return r}}
+{const _accts=PAGES.accts;PAGES.accts=function(){const r=_accts();const mv=holdTotal();if(!mv)return r;
+  r.body=r.body.replace(/(<div class="lbl">淨資產（TWD）<\/div><div class="huge num">)([^<]*)(<\/div>)/,(m,a,b,c)=>a+fmt(Math.round(parseFloat(String(b).replace(/[^\d.\-]/g,''))+mv))+c)
+    .replace(/(<div class="lbl">資產<\/div><div class="num" style="font-size:17px">)([^<]*)(<\/div>)/,(m,a,b,c)=>a+fmt(Math.round(parseFloat(String(b).replace(/[^\d.\-]/g,''))+mv))+c)
+    .replace(/(<\/div><\/div><\/div>)(\s*<div class="toolbar mt">)/,`$1<button class="li" data-act="push" data-p="invest" style="margin-top:10px"><div class="grow"><div>股票市值</div><small>已計入上方淨資產</small></div><div class="r num">${money(mv)}</div><span class="chev">${IC.chev}</span></button>$2`);return r}}
 {const _acct=PAGES.acct;PAGES.acct=function(id){const r=_acct(id);r.body=r.body.replace(/(<button class="btn sm" data-act="adjust" data-id="[^"]*">調整餘額<\/button>)/,`$1<button class="btn sm" data-act="push" data-p="recon" data-id="${id}">對帳</button>`);return r}}
 {const _rules=PAGES.rules;PAGES.rules=function(){const r=_rules();const h=subHTML();if(h)r.body=r.body.replace(/(<div class="grp"><div class="grph"><span>週期)/,h+'$1');if(h&&!r.body.includes('可能的訂閱'))r.body+=h;return r}}
 {const _bud=PAGES.budget;PAGES.budget=function(){const r=_bud();const B=S.budgets;
@@ -2928,8 +2836,7 @@ Object.assign(ACT,{
   'sub-make':el=>{const c=(window._subs||[])[+el.dataset.i];if(!c)return;const r=c.last;const f=blankForm('exp');let dt=addMonths(r.dt,1,c.day);while(dt<=TODAY())dt=addMonths(dt,1,c.day);
     Object.assign(f,{a:r.a,c:r.c,s:r.s,n:r.n||'',sh:r.sh||'',p:r.p||'',amt:String(Math.abs(r.m)),tm:r.tm||'09:00',dt,mode:'rep',rep:'M',iv:1});openEditor(f)},
   'sub-ign':async el=>{const c=(window._subs||[])[+el.dataset.i];if(!c)return;S.settings.subIgn=[...(S.settings.subIgn||[]),c.key];await saveKV('settings');render(true)},
-  'gd-save':async()=>{const q=evalAmt($('#gd-q').value);const u=$('#gd-u').value;if(!(q>=0))return toast('請輸入數量');S.settings.gold={...(S.settings.gold||{}),q,u};await saveKV('settings');await loadPrices(true);render(true);toast('已儲存黃金 '+q+' '+u)},
-  'px-refresh':async()=>{toast('更新價格中…');const ok=await loadPrices(true);render(true);toast(ok?'已更新到 '+(PX?.d||'').slice(5).replace('-','/')+' 收盤價':'目前抓不到股價資料（prices.json 尚未建立或網路問題）')},
+  'px-refresh':async()=>{toast('更新股價中…');const ok=await loadPrices(true);render(true);toast(ok?'已更新到 '+(PX?.d||'').slice(5).replace('-','/')+' 收盤價':'目前抓不到股價資料（prices.json 尚未建立或網路問題）')},
   'hd-add':async()=>{const code=($('#hd-code').value||'').trim();const sh=evalAmt($('#hd-sh').value);if(!code)return toast('請輸入代號');if(!(sh>0))return toast('請輸入股數');
     holdUpsert($('#hd-pf').value,code,sh,0);await saveKV('settings');await loadPrices(true);render(true);toast('已加入')},
   'hd-bulk':async()=>{let n=0;for(const line of($('#hd-bulk').value||'').split(/\n/)){const c=line.split(/[,，\t]/).map(x=>x.trim());if(c.length<3)continue;const sh=evalAmt(c[2].replace(/,/g,''));if(!c[1]||!(sh>0))continue;holdUpsert(c[0],c[1],sh,0,'');n++}
@@ -2986,9 +2893,7 @@ function pageNotify(){const c=ntfCfg();const subs=S.settings.pushSubs||[];const 
   <div class="hint">提醒由 GitHub 每小時檢查一次發送，可能晚幾分鐘到幾十分鐘。打開 App 時會自動更新排程。</div></div>`}}
 PAGES.notify=pageNotify;
 {const _more2=PAGES.more;PAGES.more=function(){const r=_more2();const n=(S.settings.pushSubs||[]).length;
-  return r}}
-{const _set=PAGES.settings;PAGES.settings=function(){const r=_set();const n=(S.settings.pushSubs||[]).length;
-  r.body=`<div class="grp" style="margin-top:0"><div class="list"><button class="li" data-act="push" data-p="notify"><div class="grow"><div>推播提醒</div><small>${n?'已開啟 · '+n+' 台裝置':'繳款日、扣款前一天提醒'}</small></div><span class="chev">${IC.chev}</span></button></div></div>`+r.body.replace('<div class="card stack" style="margin-top:0">','<div class="card stack">');return r}}
+  r.body=r.body.replace(/(<button class="li" data-act="push" data-p="applepay")/,`<button class="li" data-act="push" data-p="notify"><div class="grow"><div>推播提醒</div><small>${n?'已開啟 · '+n+' 台裝置':'繳款日、扣款前一天提醒'}</small></div><span class="chev">${IC.chev}</span></button>$1`);return r}}
 Object.assign(ACT,{'ntf-on':()=>ntfEnable(),'ntf-off':()=>ntfDisable(),'ntf-sync':async()=>{await ntfSync(true);toast('已更新提醒排程')}});
 document.addEventListener('change',async e=>{const t=e.target;if(t.matches&&t.matches('[data-ntf]')){S.settings.ntf={...ntfCfg(),[t.dataset.ntf]:t.checked?1:0};await saveKV('settings');ntfSync(true);render(true)}});
 
