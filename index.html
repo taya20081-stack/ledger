@@ -421,7 +421,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.22';
+window.APP_VER='v2.0.23';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -2817,7 +2817,7 @@ function goldG(){const g=S.settings.gold;return g&&+g.q>0?+g.q*(GOLD_U[g.u]||3.7
 function goldMV(){const g=S.settings.gold;return g&&g.px?Math.round(goldG()*g.px):0}
 function goldApply(){const g=S.settings.gold;const q=PX&&PX.p&&PX.p.GOLD;if(!g||!q||!(+q[1]>0))return false;if(g.pxd&&(q[3]||'')<g.pxd)return false;g.px=+q[1];g.pxd=q[3]||PX.d;g.src=/國際/.test(q[0]||'')?'國際金價換算':'臺銀黃金存摺買進價';return true}
 function pageGold(){const g=S.settings.gold||{q:'',u:'錢'};const gr=goldG();
-  return{back:1,head:`<h1>黃金</h1><button class="ibtn" data-act="px-refresh" aria-label="更新金價">${IC.sync||'↻'}</button>`,body:`
+  return{back:1,head:`<h1>黃金市值</h1><button class="ibtn" data-act="px-refresh" aria-label="更新金價">${IC.sync||'↻'}</button>`,body:`
   <div class="sum"><div class="lbl">黃金市值（TWD）${g.pxd?' · '+g.pxd.slice(5).replace('-','/')+' 牌價':''}</div><div class="huge num">${g.px&&gr?fmt(goldMV()):'—'}</div>
    ${g.px?`<div class="kv mt"><div><div class="lbl">每公克</div><div class="v num">${fmt(g.px)}</div></div><div><div class="lbl">每錢</div><div class="v num">${fmt(Math.round(g.px*3.75))}</div></div><div><div class="lbl">持有</div><div class="v num">${gr?(+gr.toFixed(2))+' 克':'—'}</div></div></div>`:''}
    <div class="hint mt">市值＝持有克數 × 每公克金價${g.src?'（目前來源：'+g.src+'）':''}，每個營業日自動更新。優先用臺灣銀行黃金存摺「本行買進」價，抓不到時改用國際金價 × 美元匯率換算（約比臺銀買進價高 0.5%）；1 錢＝3.75 克、1 兩＝37.5 克。不計入「帳戶」頁的淨資產。</div></div>
@@ -2871,7 +2871,7 @@ function budCarry(ym,cat){const B=S.budgets;if(!B.roll||!B.since||ym<=B.since)re
 PAGES.applepay=pageApplePay;PAGES.gold=pageGold;PAGES.recon=pageRecon;PAGES.invest=pageInvest;PAGES.goals=pageGoals;
 {const _more=PAGES.more;PAGES.more=function(){const r=_more();const it=(p,t,s)=>`<button class="li" data-act="push" data-p="${p}"><div class="grow"><div>${t}</div><small>${s}</small></div><span class="chev">${IC.chev}</span></button>`;
   const H=S.settings.hold||[],G=S.settings.goals||[];
-  r.body=r.body.replace(/()(<button class="li" data-act="push" data-p="search")/,`$1${it('goals','存錢目標',G.length?G.length+' 個目標':'設定目標金額與期限')}${it('invest','股票市值',H.length?H.length+' 檔 · '+money(holdTotal())+' · 更新：'+(H.map(h=>h.pxd||'').sort().pop()||'—'):'輸入持股，自動帶收盤價')}${it('gold','黃金',goldG()?(+S.settings.gold.q)+' '+(S.settings.gold.u||'錢')+(S.settings.gold.px?' · '+money(goldMV())+' · 更新：'+(S.settings.gold.pxd||'—'):' · 等待金價'):'輸入持有數量，自動帶臺銀牌價')}${it('applepay','Apple Pay 自動記帳','刷卡當下自動記一筆')}$2`);return r}}
+  r.body=r.body.replace(/()(<button class="li" data-act="push" data-p="search")/,`$1${it('goals','存錢目標',G.length?G.length+' 個目標':'設定目標金額與期限')}${it('invest','股票市值',H.length?H.length+' 檔 · '+money(holdTotal())+' · 更新：'+(H.map(h=>h.pxd||'').sort().pop()||'—'):'輸入持股，自動帶收盤價')}${it('gold','黃金市值',goldG()?(+S.settings.gold.q)+' '+(S.settings.gold.u||'錢')+(S.settings.gold.px?' · '+money(goldMV())+' · 更新：'+(S.settings.gold.pxd||'—'):' · 等待金價'):'輸入持有數量，自動帶臺銀牌價')}${it('applepay','Apple Pay 自動記帳','刷卡當下自動記一筆')}$2`);return r}}
 {const _accts=PAGES.accts;PAGES.accts=function(){const r=_accts();const mv=holdTotal();if(!mv)return r;
   r.body=r.body.replace(/(<\/div><\/div><\/div>)(\s*<div class="toolbar mt">)/,`$1<button class="li" data-act="push" data-p="invest" style="margin-top:10px"><div class="grow"><div>股票市值</div><small>未計入上方淨資產</small></div><div class="r num">${money(mv)}</div><span class="chev">${IC.chev}</span></button>$2`);return r}}
 {const _acct=PAGES.acct;PAGES.acct=function(id){const r=_acct(id);r.body=r.body.replace(/(<button class="btn sm" data-act="adjust" data-id="[^"]*">調整餘額<\/button>)/,`$1<button class="btn sm" data-act="push" data-p="recon" data-id="${id}">對帳</button>`);return r}}
