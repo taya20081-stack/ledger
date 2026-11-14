@@ -421,7 +421,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.25';
+window.APP_VER='v2.0.26';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -575,6 +575,9 @@ async function botRates(force){const td=TODAY();if(!force&&S.rates.botFor===td)r
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.ready)botRates().then(ok=>{if(ok)render(true)})});
 function wkAdj(d,wk){if(!wk)return d;let g=0;while(isOffDay(d)&&g++<15)d=addDays(d,wk==='prev'?-1:1);return d}
 const RULE_AHEAD=62;   // 週期記錄預先產生到未來幾天（未到期的顯示「未入帳」，不計入餘額）
+/* 週期名稱：名稱 > 分項名稱 > 分項小類（分項記錄頂層的 c/s 只是預設值，不能拿來當名稱） > 小類 */
+function ruleName(f,fb){if(!f)return fb||'';if(f.n&&String(f.n).trim())return String(f.n).trim();const sp=Array.isArray(f.splits)&&f.splits.length?f.splits:null;if(sp){const x=sp.find(y=>y.n&&String(y.n).trim())||sp[0];return String(x.n||'').trim()||x.s||x.c||fb||''}return f.s||fb||''}
+function rLabel(r){if(!r)return'';if(r.fq==='I')return r.name||'';const f=r.fs||{};return(Array.isArray(f.splits)&&f.splits.length&&!(f.n&&String(f.n).trim()))?ruleName(f,r.name):(r.name||ruleName(f))}
 function ruleOf(r){const m=/^(.+)_(\d+)_\d+$/.exec(r&&r.id||'');if(!m)return null;const rule=S.rules.find(x=>x.id===m[1]&&x.fq!=='I');return rule?{rule,k:+m[2]}:null}
 function ruleOccDate(rule,k){return wkAdj(occDate(rule,k),rule.wk)}
 function ruleNext(rule){if(!rule.on)return'';const td=TODAY();for(let k=0;k<2000;k++){if(rule.cnt&&k+(rule.off||0)>=rule.cnt)return'';const d=ruleOccDate(rule,k);if(rule.end&&d>rule.end)return'';if(d>td){if(k<rule.done){const x=S.byId.get(rule.id+'_'+k+'_0');if(!x||x.x)continue}return d}}return''}
@@ -1113,7 +1116,7 @@ function pageRulesOld(){
   const rs=S.rules.filter(r=>r.fq!=='I');const ins=S.rules.filter(r=>r.fq==='I');const td=TODAY();
   const fsLabel=fs=>{const a=D.acct.get(fs.a);return(fs.n||fs.s||fs.c||(fs.kind==='tr'?'轉帳':''))+' · '+(a?.name||'')};
   return{back:1,head:`<h1>週期與分期</h1>`,body:`<div class="btns"><button class="btn pri sm" data-act="rule-new">新增週期記錄</button><button class="btn sm" data-act="inst-new">新增分期付款</button></div>
-  <div class="grp"><div class="grph"><span>週期記錄</span><span>${rs.length}</span></div><div class="list">${rs.length?rs.map(r=>`<div class="li"><div class="grow"><div>${esc(r.name||fsLabel(r.fs))}${r.on?'':'<span class="pill">已暫停</span>'}</div><small>${ruleDesc(r)} · ${r.fs.kind==='tr'?'':''}${money(evalAmt(r.fs.amt)||0,D.acct.get(r.fs.a)?.cur)}${r.next?' · 下次 '+r.next.replace(/-/g,'/'):' · 已結束'}</small></div><button class="btn sm" data-act="rule-toggle" data-id="${r.id}">${r.on?'暫停':'啟用'}</button><button class="btn sm danger" data-act="rule-del" data-id="${r.id}">刪除</button></div>`).join(''):'<div class="empty">記帳時選擇「重複」即可建立，例如房租、訂閱、薪資。到期日開啟 App 時會自動入帳。</div>'}</div></div>
+  <div class="grp"><div class="grph"><span>週期記錄</span><span>${rs.length}</span></div><div class="list">${rs.length?rs.map(r=>`<div class="li"><div class="grow"><div>${esc(rLabel(r)||fsLabel(r.fs))}${r.on?'':'<span class="pill">已暫停</span>'}</div><small>${ruleDesc(r)} · ${r.fs.kind==='tr'?'':''}${money(evalAmt(r.fs.amt)||0,D.acct.get(r.fs.a)?.cur)}${r.next?' · 下次 '+r.next.replace(/-/g,'/'):' · 已結束'}</small></div><button class="btn sm" data-act="rule-toggle" data-id="${r.id}">${r.on?'暫停':'啟用'}</button><button class="btn sm danger" data-act="rule-del" data-id="${r.id}">刪除</button></div>`).join(''):'<div class="empty">記帳時選擇「重複」即可建立，例如房租、訂閱、薪資。到期日開啟 App 時會自動入帳。</div>'}</div></div>
   <div class="grp"><div class="grph"><span>分期付款</span><span>${ins.length}</span></div><div class="list">${ins.length?ins.map(r=>{const gs=D.groups.get(r.id)||[];const left=gs.filter(x=>x.dt>td&&x.t==='支出').length;const paid=gs.filter(x=>x.dt<=td&&x.t==='支出').reduce((s,x)=>s-x.m,0);
     return`<div class="li"><div class="grow"><div>${esc(r.name)}</div><small class="num">${money(r.total)} · ${r.n} 期 · 年利率 ${r.rate}% · 已付本金 ${money(paid)} · 剩 ${left} 期</small></div><button class="btn sm danger" data-act="inst-del" data-id="${r.id}">刪除</button></div>`}).join(''):'<div class="empty">分期會一次產生各期本金與利息記錄，未到期的顯示為「未入帳」，不計入餘額。</div>'}</div></div>`};
 }
@@ -1207,7 +1210,7 @@ function renderEditor(){
     return seg+`<div class="grid2">${postSel}<label class="field"><span>訂金尾款追蹤</span><select class="in" id="f-dep" data-act-change="ef-dep"><option value="">關閉</option><option value="1" ${f.dep?'selected':''}>開啟</option></select></label></div>${f.dep?`<div class="grid2"><label class="field"><span>總金額（上面金額＝訂金）</span><input class="in num" id="f-depT" data-f="depT" data-calc inputmode="${CALC_IM}" value="${esc(f.depT||'')}"></label><label class="field"><span>尾款預計日期</span><input class="in" type="date" id="f-depD" data-f="depD" value="${esc(f.depD||'')}"></label></div><div class="hint">存檔後先記訂金；尾款（總金額－訂金）會放進鈴鐺的待入帳清單，付款時點「入帳」即可。</div>`:''}`})():''}
   ${f.kind==='exp'&&!f.splits?`<button class="btn sm" data-act="sp-on" style="justify-self:start">拆成多個分類（分項）</button>`:''}
   ${f._dupMsg?`<div class="note alert" id="ef-dup"><div class="grow"><b>可能重複</b>：同帳戶已有 ${f._dupMsg}。確定不是同一筆，再按一次「儲存」。</div></div>`:''}
-  ${f._edit&&efRule(f)?`<div class="note" style="flex-wrap:wrap"><div class="grow">這是週期記錄「${esc(efRule(f).rule.name||'')}」的第 ${efRule(f).k+1+(efRule(f).rule.off||0)} 期，要改哪些？</div></div><div class="btns fill"><button class="btn pri" data-act="ef-save">只改這一期</button><button class="btn" data-act="ef-save" data-scope="all">這一期和之後都改</button></div>`:`<div class="btns fill"><button class="btn pri" data-act="ef-save">儲存</button>${f._edit?'':`<button class="btn" data-act="ef-save" data-again="1">儲存並再記一筆</button>`}</div>`}
+  ${f._edit&&efRule(f)?`<div class="note" style="flex-wrap:wrap"><div class="grow">這是週期記錄「${esc(ruleName(efRule(f).rule.fs,efRule(f).rule.name))}」的第 ${efRule(f).k+1+(efRule(f).rule.off||0)} 期，要改哪些？</div></div><div class="btns fill"><button class="btn pri" data-act="ef-save">只改這一期</button><button class="btn" data-act="ef-save" data-scope="all">這一期和之後都改</button></div>`:`<div class="btns fill"><button class="btn pri" data-act="ef-save">儲存</button>${f._edit?'':`<button class="btn" data-act="ef-save" data-again="1">儲存並再記一筆</button>`}</div>`}
   <div class="btns">${f._edit?`<button class="btn sm" data-act="ef-copy">複製</button>${f.kind==='exp'?`<button class="btn sm" data-act="ef-refund">退款</button>`:''}`:''}${f._edit?`<button class="btn sm danger" data-act="ef-del" id="ef-del">刪除</button>`:''}</div>
   ${datalists()}`;
 }
@@ -1235,14 +1238,14 @@ async function saveEditor(again){
       if(p.int>0)out.push({id:uid(),a:f.a,t:'利息',c:'利息支出',s:'利息支出',m:-p.int,f:0,d:0,n:'分期利息',sh:f.sh||'',dt,tm:f.tm||'10:00',p:f.p||'',ds,tg:'',w:'',k:'',g:id,o:o+i*2+1})});
     S.rules.push({id,fq:'I',name,total:t,n:k,rate:r,start:f.dt,a:f.a,off,u:Date.now()});await saveKV('rules');S.settings.lastA=f.a;saveKV('settings');await mutate(out);closeSheet();if(S.view==='home'&&!S.stack.length){S.day=f.dt;S.month=f.dt.slice(0,7)}render(true);toast('已建立分期：第 '+(off+1)+'～'+k+' 期，每期約 '+money(plan[0].pr+plan[0].int));return}
   if(md==='rep'&&!f.rep)f.rep='M';
-  if(!f._edit&&md==='rep'&&f.rep){const rule={id:uid(),name:f.n||f.s||'',fs:{...f,ids:[],rep:'',mode:'',post:'',sno:'',wk:'',mdays:null,_edit:false},fq:f.rep,iv:Math.max(1,parseInt(f.iv)||1),start:f.dt,end:'',cnt:parseInt(f.cnt)||0,done:0,next:'',on:1,off:Math.max(0,(parseInt(f.sno)||1)-1),wk:f.wk||'',u:Date.now()};
+  if(!f._edit&&md==='rep'&&f.rep){const rule={id:uid(),name:ruleName(f),fs:{...f,ids:[],rep:'',mode:'',post:'',sno:'',wk:'',mdays:null,_edit:false},fq:f.rep,iv:Math.max(1,parseInt(f.iv)||1),start:f.dt,end:'',cnt:parseInt(f.cnt)||0,done:0,next:'',on:1,off:Math.max(0,(parseInt(f.sno)||1)-1),wk:f.wk||'',u:Date.now()};
     if(f.rep==='M'&&f.mdays&&f.mdays.length){rule.md=[...new Set(f.mdays)].sort((x,y)=>x-y);const sd=+f.dt.slice(8),last=daysIn(+f.dt.slice(0,4),+f.dt.slice(5,7));rule.m0=rule.md.filter(d=>Math.min(d,last)<sd).length}
     S.rules.push(rule);await saveKV('rules');closeSheet();await runRules();toast('已建立週期記錄'+(ruleNext(rule)?'，下次 '+ruleNext(rule).replace(/-/g,'/'):''));if(S.view==='home'&&!S.stack.length){S.day=f.dt<=TODAY()?f.dt:S.day}render(true);return}
   if(!f._edit&&!md&&f.post==='m'){S.settings.pend=[...(S.settings.pend||[]),{id:uid(),fs:{...f,ids:[],post:'',dep:'',mode:''},due:f.dt,label:'待確認'}];await saveKV('settings');closeSheet();render(true);toast('已放入待入帳，請到鈴鐺確認');return}
   if(!f._edit&&!md&&f.dep){const tot=evalAmt(f.depT),dp=evalAmt(f.amt);if(!(tot>dp))return toast('總金額需大於訂金');
     S.settings.pend=[...(S.settings.pend||[]),{id:uid(),fs:{...f,ids:[],post:'',dep:'',depT:'',depD:'',mode:'',amt:String(r2(tot-dp)),n:(f.n||f.s||'')+'（尾款）',dt:f.depD||f.dt},due:f.depD||'',label:'尾款'}];recs.forEach(r=>{if(r.n&&!/訂金/.test(r.n))r.n+='（訂金）'})}
   if(f._edit&&f._scope==='all'){const ro=efRule(f);if(ro){const{rule,k}=ro;
-      rule.fs={...rule.fs,...f,ids:[],rep:'',mode:'',post:'',sno:'',wk:'',dep:'',_edit:false,_scope:'',dt:rule.fs.dt,os:!!rule.fs.os};delete rule.fs._pend;rule.name=f.n||f.s||rule.name;rule.u=Date.now();
+      rule.fs={...rule.fs,...f,ids:[],rep:'',mode:'',post:'',sno:'',wk:'',dep:'',_edit:false,_scope:'',dt:rule.fs.dt,os:!!rule.fs.os};delete rule.fs._pend;rule.name=ruleName(f,rule.name);rule.u=Date.now();
       for(let q=k+1;q<rule.done;q++){const old=S.recs.filter(r=>!r.x&&r.id.startsWith(rule.id+'_'+q+'_'));if(!old.length)continue;const nw=ruleBuild(rule,q);const keep=new Set(nw.map(r=>r.id));nw.forEach(r=>{const o=S.byId.get(r.id);if(o)r.o=o.o});recs.push(...nw);old.forEach(o=>{if(!keep.has(o.id))del.push(o.id)})}
       await saveKV('rules')}}
   if(f._pend){S.settings.pend=(S.settings.pend||[]).filter(x=>x.id!==f._pend)}
@@ -2549,7 +2552,7 @@ function upcoming(days){const td=TODAY(),to=addDays(td,days);const out=[];
   for(const r of S.rules){if(r.fq==='I'){for(const x of(D.groups.get(r.id)||[])){if(x.x||x.dt<=td||x.dt>to)continue;out.push({dt:x.dt,n:r.name+(x.t==='利息'?'（利息）':''),k:'支出',twd:Math.abs(x.m)*rateOf(curOf(x)),tag:'分期',a:D.acct.get(x.a)?.name||''})}continue}
     if(!r.on)continue;
     for(let k=0;k<2000;k++){if(r.cnt&&k+(r.off||0)>=r.cnt)break;const d=ruleOccDate(r,k);if(d>to||(r.end&&d>r.end))break;if(d<=td)continue;
-      let twd,n=r.name||r.fs.n||r.fs.s||ruleKind(r.fs),an=D.acct.get(r.fs.a)?.name||'';
+      let twd,n=rLabel(r)||ruleKind(r.fs),an=D.acct.get(r.fs.a)?.name||'';
       if(k<r.done){const xs=S.recs.filter(x=>!x.x&&x.id.startsWith(r.id+'_'+k+'_')&&x.t!=='轉入');if(!xs.length)continue;twd=xs.reduce((s,x)=>s+Math.abs(val(x))*rateOf(curOf(x)),0);n=xs[0].n||n;an=D.acct.get(xs[0].a)?.name||an}
       else twd=ruleAmtTWD(r.fs).twd;
       out.push({dt:d,n,k:ruleKind(r.fs),twd,tag:'週期',a:an})}}
@@ -2571,7 +2574,7 @@ function pageRules(){
   // 週期
   const kinds=['支出','收入','轉帳'];const mEq=k=>Math.round(rs.filter(r=>r.on&&ruleNext(r)&&ruleKind(r.fs)===k).reduce((s,r)=>s+ruleAmtTWD(r.fs).twd*rulePerMonth(r),0));
   const ruleLi=r=>{const am=ruleAmtTWD(r.fs);const a=D.acct.get(r.fs.a),a2=D.acct.get(r.fs.a2);const k=ruleKind(r.fs);
-    return`<div class="li sch"><div class="grow"><div>${esc(r.name||r.fs.n||r.fs.s||k)}<span class="pill">${k}</span>${r.on?'':'<span class="pill warn">已暫停</span>'}</div>
+    return`<div class="li sch"><div class="grow"><div>${esc(rLabel(r)||k)}<span class="pill">${k}</span>${r.on?'':'<span class="pill warn">已暫停</span>'}</div>
     <small class="num">${ruleDesc(r)} · ${money(am.v,am.cur)} · ${esc(a?.name||'')}${k==='轉帳'&&a2?' → '+esc(a2.name):''}</small>
     <small class="num">${ruleNext(r)?'下次 '+ruleNext(r).replace(/-/g,'/'):(r.on?'已結束':'已暫停')} · 已入帳 ${rulePosted(r)+(r.off||0)} 次${r.cnt?` · 剩 ${Math.max(0,r.cnt-(r.off||0)-rulePosted(r))} 次`:(r.end?'':' · 無限期')}</small></div>
     <button class="btn sm" data-act="rule-toggle" data-id="${r.id}">${r.on?'暫停':'啟用'}</button><button class="btn sm danger" data-act="rule-del" data-id="${r.id}">刪除</button></div>`};
