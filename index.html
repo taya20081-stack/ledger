@@ -421,7 +421,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.10';
+window.APP_VER='v2.0.11';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -499,7 +499,7 @@ const S={recs:[],byId:new Map(),accts:[],cats:null,budgets:{total:0,cats:{},u:0}
   settings:{theme:'light',excl:[],lastBackup:0,sample:0,hideZero:0,showArch:0,u:0},
   view:'home',stack:[],month:TODAY().slice(0,7),day:TODAY(),calCol:false,stat:{kind:'exp',mode:'M',anchor:TODAY(),from:'',to:'',cat:null},
   kvu:{},cloudCfg:null,sellers:{},
-  search:{q:'',type:'',a:'',from:'',to:'',c:'',p:'',sh:'',min:'',max:'',sel:new Set(),selMode:false,limit:300},homeLimit:{},acctLimit:300,ready:false};
+  search:{q:'',type:'',a:'',from:'',to:'',c:'',p:'',min:'',max:'',sel:new Set(),selMode:false,limit:300},homeLimit:{},acctLimit:300,ready:false};
 const D={live:[],bal:new Map(),acct:new Map(),pairs:new Map(),groups:new Map(),ci:new Map(),whos:[],projs:[]};
 
 function saveKV(k){if(SYNC_KEYS.includes(k)){S.kvu[k]=Date.now();DB.putKV('kvu',S.kvu)}const p=DB.putKV(k,S[k]).catch(e=>toast('儲存失敗：'+e));if(SYNC_KEYS.includes(k)&&window.Cloud)Cloud.pushKV(k);return p}
@@ -2004,11 +2004,12 @@ function pageStats(){
   const drillPred=dr?(r=>dimKey(r,dr.dim)===dr.v):null;
   const projScope=(!dr&&dim==='proj')||(dr&&dr.dim==='proj');const allTime=projScope&&st.projAll!==0;
   const inP=allTime?(()=>true):(r=>r.dt>=R.from&&r.dt<=R.to);const kindFn=st.kind==='exp'?spendOf:incomeOf;
-  const pred=drillPred||(dim!=='cat'?(r=>dimKey(r,dim)!==NONE[dim]):null);
+  const shP=st.sh?(r=>st.sh==='__none__'?!r.sh:r.sh===st.sh):null;
+  const pred0=drillPred||(dim!=='cat'?(r=>dimKey(r,dim)!==NONE[dim]):null);const pred=shP?(pred0?(r=>shP(r)&&pred0(r)):shP):pred0;
   // 分組維度：未下鑽時依選擇的維度；下鑽分類→小項目；下鑽專案/商家→大項目
   const gkey=dr?(dr.dim==='cat'?(r=>r.s||'（無小項目）'):(r=>r.c)):(r=>dimKey(r,dim));
   const groups=new Map();let total=0;const recs=[];let none=null;const pinfo=new Map();let spanF='',spanT='';
-  for(const r of D.live){if(r.dt>td||!inP(r)||excluded(r))continue;
+  for(const r of D.live){if(r.dt>td||!inP(r)||excluded(r))continue;if(shP&&!shP(r))continue;
     if(projScope&&!dr&&r.p){const k=r.p;let o=pinfo.get(k);if(!o)pinfo.set(k,o={n:k,exp:0,inc:0,c:0,f:r.dt,l:r.dt});const kk=rateOf(curOf(r));const e=spendOf(r)*kk,i=incomeOf(r)*kk;if(e||i){o.exp+=e;o.inc+=i;o.c++;if(r.dt<o.f)o.f=r.dt;if(r.dt>o.l)o.l=r.dt}}
     const v=kindFn(r)*rateOf(curOf(r));if(!v)continue;if(drillPred&&!drillPred(r))continue;
     if(!dr&&dim!=='cat'&&dimKey(r,dim)===NONE[dim]){if(!none)none={v:0,n:0};none.v+=v;none.n++;continue}
@@ -2049,7 +2050,7 @@ function pageStats(){
   const pieLabel=dr?dr.v:(st.kind==='exp'?'支出':'收入');
   const groupTitle=dr?(dr.dim==='cat'?'小項目':'大項目')+'分布':'依'+dimName;
   return{back:dr?1:0,head:`<h1>${dr?esc(dr.v):'統計'}</h1>`,
-    body:`<div class="stack"><div class="toolbar"><div class="seg"><button class="${st.kind==='exp'?'on':''}" data-act="stat-kind" data-k="exp">支出</button><button class="${st.kind==='inc'?'on':''}" data-act="stat-kind" data-k="inc">收入</button></div>${allTime?'':`<div class="seg">${MODES.map(([k,l])=>`<button class="${mode===k?'on':''}" data-act="stat-mode" data-k="${k}">${l}</button>`).join('')}</div>`}</div>
+    body:`<div class="stack"><div class="toolbar"><div class="seg"><button class="${st.kind==='exp'?'on':''}" data-act="stat-kind" data-k="exp">支出</button><button class="${st.kind==='inc'?'on':''}" data-act="stat-kind" data-k="inc">收入</button></div><select class="in" id="st-sh" data-stsh="1" style="width:auto;max-width:46%;flex:0 1 auto" aria-label="商家"><option value="">全部商家</option><option value="__none__" ${st.sh==='__none__'?'selected':''}>（未填商家）</option>${shopList().map(([n,c])=>`<option value="${esc(n)}" ${st.sh===n?'selected':''}>${esc(n)}（${c}）</option>`).join('')}</select>${allTime?'':`<div class="seg">${MODES.map(([k,l])=>`<button class="${mode===k?'on':''}" data-act="stat-mode" data-k="${k}">${l}</button>`).join('')}</div>`}</div>
     ${projScope?`<div class="toolbar"><span class="lbl">專案範圍</span><div class="seg"><button class="${allTime?'on':''}" data-act="stat-pall" data-k="1">全部期間</button><button class="${allTime?'':'on'}" data-act="stat-pall" data-k="0">依上方期間</button></div></div>`:''}
     ${allTime?'':`<div class="toolbar">${nav}</div>${quick}`}
     ${dr?`<div class="note"><div class="grow">${{cat:'分類',proj:'專案',shop:'商家'}[dr.dim]}：<b>${esc(dr.v)}</b></div><button class="btn sm" data-act="back">返回全部</button></div>`:`<div class="toolbar"><span class="lbl">分組</span><div class="seg">${DIMS.map(([k,l])=>`<button class="${dim===k?'on':''}" data-act="stat-dim" data-k="${k}">${l}</button>`).join('')}</div></div>`}</div>
@@ -2075,7 +2076,7 @@ Object.assign(ACT,{
   'stat-goto':el=>{S.stat.mode=el.dataset.m;S.stat.anchor=el.dataset.a;render();window.scrollTo(0,0)},
   'stat-quick':el=>{S.stat.to=TODAY();S.stat.from=addDays(TODAY(),+el.dataset.n);render(true)}
 });
-document.addEventListener('change',e=>{const t=e.target;if(t.dataset.stset){const k=t.dataset.stset;if(!t.value)return;S.stat[k]=t.value;render(true)}});
+document.addEventListener('change',e=>{const t=e.target;if(t.dataset.stsh){S.stat.sh=t.value;S.stat.drill=null;render(true);return}if(t.dataset.stset){const k=t.dataset.stset;if(!t.value)return;S.stat[k]=t.value;render(true)}});
 
 /* ---------- 搜尋 ---------- */
 function searchRecs(){
@@ -2097,7 +2098,7 @@ function searchResHTML(res){
   res=res||searchRecs();const q=S.search;const lim=q.limit;let exp=0,inc=0;
   for(const r of res){const k=rateOf(curOf(r));exp+=spendOf(r)*k;inc+=incomeOf(r)*k}
   return`<div class="toolbar"><span class="hint">${res.length.toLocaleString()} 筆 · 支出 <span class="num neg">${fmt(Math.round(exp))}</span> · 收入 <span class="num pos">${fmt(Math.round(inc))}</span></span><div class="btns"><button class="btn sm" data-act="replace-open" data-all="1" ${res.length?'':'disabled'}>批次取代</button><button class="btn sm" data-act="export-search">匯出 CSV</button>${S.lastUndo?`<button class="btn sm" data-act="undo-batch">復原上次批次修改（${S.lastUndo.length} 筆）</button>`:''}</div></div>
-  ${res.length?shopRank(res):''}${res.length?`<div id="sres">${dayGroups(res,'search',lim)}</div>${res.length>lim?`<button class="more-btn" data-act="search-more">顯示更多</button>`:''}`:`<div class="empty">輸入關鍵字或選擇條件開始搜尋</div>`}`;
+  ${res.length?`<div id="sres">${dayGroups(res,'search',lim)}</div>${res.length>lim?`<button class="more-btn" data-act="search-more">顯示更多</button>`:''}`:`<div class="empty">輸入關鍵字或選擇條件開始搜尋</div>`}`;
 }
 function pageSearch(){
   const q=S.search;const res=searchRecs();
@@ -2113,7 +2114,6 @@ function pageSearch(){
   <select class="in" id="s-a" data-sf="a"><option value="">全部帳戶</option>${S.accts.map(a=>`<option value="${a.id}" ${q.a===a.id?'selected':''}>${esc(a.name)}</option>`).join('')}</select>
   <select class="in" id="s-c" data-sf="c"><option value="">全部大項目</option>${[...new Set(mains)].map(c=>`<option ${q.c===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
   <select class="in" id="s-p" data-sf="p"><option value="">全部專案</option>${D.projs.map(p=>`<option ${q.p===p?'selected':''}>${esc(p)}</option>`).join('')}</select>
-  <select class="in" id="s-sh" data-sf="sh" style="grid-column:1/-1"><option value="">全部商家</option><option value="__none__" ${q.sh==='__none__'?'selected':''}>（未填商家）</option>${shopList().map(([n,c])=>`<option value="${esc(n)}" ${q.sh===n?'selected':''}>${esc(n)}（${c}）</option>`).join('')}</select>
   <input class="in num" id="s-min" inputmode="decimal" placeholder="金額下限" value="${esc(q.min||'')}" data-sf="min"><input class="in num" id="s-max" inputmode="decimal" placeholder="金額上限" value="${esc(q.max||'')}" data-sf="max"></div>
 </div>
   <div id="sresWrap">${searchResHTML(res)}</div>${sel}`};
