@@ -421,7 +421,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.26';
+window.APP_VER='v2.0.27';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -576,6 +576,11 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 function wkAdj(d,wk){if(!wk)return d;let g=0;while(isOffDay(d)&&g++<15)d=addDays(d,wk==='prev'?-1:1);return d}
 const RULE_AHEAD=62;   // 週期記錄預先產生到未來幾天（未到期的顯示「未入帳」，不計入餘額）
 /* 週期名稱：名稱 > 分項名稱 > 分項小類（分項記錄頂層的 c/s 只是預設值，不能拿來當名稱） > 小類 */
+/* 專案改名／合併：記錄、週期與範本（含分項）、完成／開啟狀態一起搬 */
+async function renProj(old,nv){const merge=D.live.some(r=>r.p===nv);const rs=D.live.filter(r=>r.p===old).map(r=>({...r,p:nv}));if(rs.length)await mutate(rs);
+  const fix=f=>{let h=false;if(f&&f.p===old){f.p=nv;h=true}if(f&&Array.isArray(f.splits))f.splits.forEach(x=>{if(x.p===old){x.p=nv;h=true}});return h};
+  let nr=0;for(const r of S.rules){if(fix(r.fs)){r.u=Date.now();nr++}}if(nr)await saveKV('rules');let nt=0;for(const t of S.tpls||[]){if(fix(t.fs)){t.u=Date.now();nt++}}if(nt)await saveKV('tpls');
+  for(const k of['projDone','projOpen']){const m={...(S.settings[k]||{})};if(old in m){if(!(nv in m))m[nv]=m[old];delete m[old];S.settings[k]=m}}await saveKV('settings');return{recs:rs.length,rules:nr,merge}}
 function ruleName(f,fb){if(!f)return fb||'';if(f.n&&String(f.n).trim())return String(f.n).trim();const sp=Array.isArray(f.splits)&&f.splits.length?f.splits:null;if(sp){const x=sp.find(y=>y.n&&String(y.n).trim())||sp[0];return String(x.n||'').trim()||x.s||x.c||fb||''}return f.s||fb||''}
 function rLabel(r){if(!r)return'';if(r.fq==='I')return r.name||'';const f=r.fs||{};return(Array.isArray(f.splits)&&f.splits.length&&!(f.n&&String(f.n).trim()))?ruleName(f,r.name):(r.name||ruleName(f))}
 function ruleOf(r){const m=/^(.+)_(\d+)_\d+$/.exec(r&&r.id||'');if(!m)return null;const rule=S.rules.find(x=>x.id===m[1]&&x.fq!=='I');return rule?{rule,k:+m[2]}:null}
@@ -1358,7 +1363,7 @@ const ACT={
   'save-budget':async()=>{const roll=!!$('#bg-roll')?.checked;const B={total:evalAmt($('#bg-total').value)||0,cats:{},u:Date.now(),roll,since:roll?(S.budgets.roll&&S.budgets.since?S.budgets.since:TODAY().slice(0,7)):''};document.querySelectorAll('[data-bc]').forEach(i=>{const v=evalAmt(i.value);if(v>0)B.cats[i.dataset.bc]=v});S.budgets=B;await saveKV('budgets');render(true);toast('已儲存預算')},
   'proj-done':async el=>{const k=el.dataset.id;const m={...(S.settings.projDone||{})};const o={...(S.settings.projOpen||{})};if(el.dataset.on){m[k]=TODAY();delete o[k]}else{delete m[k];o[k]=1}S.settings.projDone=m;S.settings.projOpen=o;await saveKV('settings');render(true);toast(el.dataset.on?'已標記為完成':'已重新開啟')},
   'proj-done-list':()=>{S.projDoneOpen=!S.projDoneOpen;render(true)},
-  'proj-rename':async el=>{const old=el.dataset.id;const v=await askText('重新命名專案',old,'新名稱');if(!v||!v.trim()||v.trim()===old)return;const rs=D.live.filter(r=>r.p===old).map(r=>({...r,p:v.trim()}));await mutate(rs);if((S.settings.projDone||{})[old]){const m={...S.settings.projDone};m[v.trim()]=m[old];delete m[old];S.settings.projDone=m;await saveKV('settings')}S.stack[S.stack.length-1].id=v.trim();render();toast('已更新 '+rs.length+' 筆')},
+  'proj-rename':async el=>{const old=el.dataset.id;const v=await askText('重新命名專案（輸入已有的專案名稱＝合併）',old,'新名稱');if(!v||!v.trim()||v.trim()===old)return;const n=await renProj(old,v.trim());S.stack[S.stack.length-1].id=v.trim();render();toast((n.merge?'已合併到「'+v.trim()+'」：':'已更新 ')+n.recs+' 筆'+(n.rules?'、週期 '+n.rules+' 個':''))},
   'rule-new':()=>{const f=blankForm('exp');f.rep='M';f.mode='rep';openEditor(f)},
   'rule-toggle':async el=>{const r=S.rules.find(x=>x.id===el.dataset.id);r.on=r.on?0:1;r.u=Date.now();const td=TODAY();
     if(!r.on){const ids=[];let first=-1;for(let q=0;q<r.done;q++){if(ruleOccDate(r,q)>td){if(first<0)first=q;S.recs.forEach(x=>{if(!x.x&&x.id.startsWith(r.id+'_'+q+'_'))ids.push(x.id)})}}if(first>=0)r.done=first;await saveKV('rules');if(ids.length)await mutate([],ids)}
@@ -1671,6 +1676,7 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
       const ch=D.live.filter(r=>r.sh&&pats.some(re=>re.test(r.sh))).map(r=>({...r,sh:''}));const names=[...new Set(D.live.filter(r=>r.sh&&pats.some(re=>re.test(r.sh))).map(r=>r.sh))];
       if(ch.length){S.lastUndo=ch.map(r=>({...S.byId.get(r.id)}));await mutate(ch);scheduleRender();toast('Claude 清除了 '+names.length+' 家商家名稱（'+ch.length+' 筆）：'+names.join('、')+'；可在搜尋頁復原')}else toast('沒有符合的商家：'+String(x.n||''));
       dels.push(d.ref);continue}
+    if(x.kind==='renproj'){const o=String(x.o||'').trim(),nv=String(x.nv||'').trim();if(o&&nv&&o!==nv){const n=await renProj(o,nv);toast('專案「'+o+'」→「'+nv+'」：'+n.recs+' 筆'+(n.rules?'、週期 '+n.rules+' 個':''))}dels.push(d.ref);continue}
     if(x.kind==='gold'){const q=parseFloat(x.q);if(q>=0){S.settings.gold={...(S.settings.gold||{}),q,u:GOLD_U[x.u]?x.u:'錢'};await saveKV('settings');toast('黃金：'+q+' '+S.settings.gold.u)}dels.push(d.ref);continue}
     if(x.kind==='osshop'){const L=new Set(S.settings.osShops||[]);const rm=x.rm==='1';String(x.n||'').split(/[,、，]/).map(t=>t.trim()).filter(Boolean).forEach(t=>rm?L.delete(t):L.add(t));S.settings.osShops=[...L];await saveKV('settings');toast('海外店家：'+(rm?'移除 ':'加入 ')+String(x.n||''));dels.push(d.ref);continue}
     if(x.kind==='updrule'){upds.push({n:String(x.n||'').trim(),wk:x.wk});dels.push(d.ref);continue}
