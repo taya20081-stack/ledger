@@ -421,7 +421,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.17';
+window.APP_VER='v2.0.18';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -2710,14 +2710,23 @@ function pageApplePay(){const uid=window.Cloud&&Cloud.user?Cloud.user.uid:'';con
   ${cards.length?`<div class="grp"><div class="grph"><span>卡片對應帳戶</span><span>${cards.length}</span></div><div class="card stack">${cards.map(([c,o])=>`<label class="field"><span>${esc(c)} · ${o.n} 次 · 最後 ${esc((o.last||'').slice(5).replace('-','/'))}</span><select class="in" data-apmap="${esc(c)}">${opts((S.settings.apMap||{})[c])}</select></label>`).join('')}</div></div>`:''}
   <div class="grp"><div class="grph"><span>一次性設定（iPhone 捷徑）</span></div><div class="card stack">
   ${!uid?'<div class="note alert"><div class="grow">請先到「雲端同步」登入，才會顯示你的寫入網址。</div></div>':''}
+  <div class="lbl">iOS 27 以後（自動化已併入捷徑本身，沒有獨立的「自動化」分頁）</div>
   <ol class="steps">
-   <li>打開「捷徑」App →「自動化」→ 右上「＋」→ 選「<b>交易</b>」，勾選要自動記帳的卡片，選「<b>立即執行</b>」→「下一步」→「新增空白自動化」。</li>
+   <li>打開「捷徑」App，按右上「＋」新增一個捷徑，名稱取「Apple Pay 記帳」。</li>
+   <li>在最上方的觸發條件（「何時執行／When」，或搜尋框輸入「錢包」）選「<b>錢包：當我點一下卡片</b>」（英文為 When I tap a Wallet pass or payment card）。</li>
+   <li>按觸發條件旁的「⌄」展開：卡片選要記帳的卡（或任何卡片），類別、商家保持「任何」；把「<b>自動化</b>」開關打開、「<b>通知</b>」開關關閉（＝不必確認就執行）。</li>
+   <li>接著加入下面第 2～6 步的動作（與 iOS 17～26 相同）。</li>
+   <li>完成後回「資料庫」→「自動化」，確認這個自動化的開關是開的。</li></ol>
+  <div class="lbl mt">動作（各版本相同）</div>
+  <ol class="steps">
+   <li>iOS 17～26：「捷徑」App →「自動化」→ 右上「＋」→ 選「<b>錢包</b>」（iOS 17～25 叫「交易」），勾選卡片，選「<b>立即執行</b>」→「下一步」→「新增空白自動化」。iOS 27 跳過這步。</li>
    <li>加入動作「<b>格式化日期</b>」：日期選「目前日期」，格式選「自訂」，填 <code>yyyy-MM-dd'T'HH:mm</code></li>
    <li>加入動作「<b>取得 URL 內容</b>」：網址貼上下方〔登入網址〕，展開後方法選 <b>POST</b>，要求本文選 <b>JSON</b>，新增 3 個欄位：<br><code>email</code>（文字）＝記帳助理帳號的 Email<br><code>password</code>（文字）＝記帳助理的密碼<br><code>returnSecureToken</code>（布林值）＝是</li>
    <li>加入動作「<b>取得辭典值</b>」：取得「值」，鍵填 <code>idToken</code>，辭典選上一步的「URL 的內容」。</li>
    <li>加入動作「<b>文字</b>」：貼上下方〔本文範本〕，再把〔商家〕〔金額〕〔卡片〕換成「捷徑輸入」的對應變數，〔格式化日期〕換成第 2 步的結果。</li>
    <li>再加入「<b>取得 URL 內容</b>」：網址貼上〔寫入網址〕，方法 <b>POST</b>；標頭新增 <code>Authorization</code>＝<code>Bearer </code>（後面空一格）＋「辭典值」，再新增 <code>Content-Type</code>＝<code>application/json</code>；要求本文選「<b>檔案</b>」，選第 5 步的「文字」。</li>
    <li>完成。用 Apple Pay 刷一次，打開 App 就會看到這筆記錄。</li></ol>
+  <div class="hint">注意：只有實體店用 iPhone／Apple Watch 感應付款會觸發；網購、App 內購不會。若常常沒觸發，到「設定 → 通知 → 錢包」關閉「摘要」或「排程摘要」，交易通知延遲時自動化容易逾時。</div>
   ${cp('登入網址',signUrl)}${cp('寫入網址',fsUrl)}${cp('本文範本',body)}
   <div class="hint">記帳助理帳號只能「新增收件匣」，讀不到你的帳本；密碼只存在你的 iPhone 捷徑裡。</div></div></div>`}}
 
