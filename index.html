@@ -421,7 +421,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.18';
+window.APP_VER='v2.0.19';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -2857,7 +2857,7 @@ function budCarry(ym,cat){const B=S.budgets;if(!B.roll||!B.since||ym<=B.since)re
 PAGES.applepay=pageApplePay;PAGES.recon=pageRecon;PAGES.invest=pageInvest;PAGES.goals=pageGoals;
 {const _more=PAGES.more;PAGES.more=function(){const r=_more();const it=(p,t,s)=>`<button class="li" data-act="push" data-p="${p}"><div class="grow"><div>${t}</div><small>${s}</small></div><span class="chev">${IC.chev}</span></button>`;
   const H=S.settings.hold||[],G=S.settings.goals||[];
-  r.body=r.body.replace(/()(<button class="li" data-act="push" data-p="search")/,`$1${it('goals','存錢目標',G.length?G.length+' 個目標':'設定目標金額與期限')}${it('invest','股票市值',H.length?H.length+' 檔 · '+money(holdTotal()):'輸入持股，自動帶收盤價')}${it('applepay','Apple Pay 自動記帳','刷卡當下自動記一筆')}$2`);return r}}
+  r.body=r.body.replace(/()(<button class="li" data-act="push" data-p="search")/,`$1${it('goals','存錢目標',G.length?G.length+' 個目標':'設定目標金額與期限')}${it('invest','股票市值',H.length?H.length+' 檔 · '+money(holdTotal())+' · 更新：'+(H.map(h=>h.pxd||'').sort().pop()||'—'):'輸入持股，自動帶收盤價')}${it('applepay','Apple Pay 自動記帳','刷卡當下自動記一筆')}$2`);return r}}
 {const _accts=PAGES.accts;PAGES.accts=function(){const r=_accts();const mv=holdTotal();if(!mv)return r;
   r.body=r.body.replace(/(<div class="lbl">淨資產（TWD）<\/div><div class="huge num">)([^<]*)(<\/div>)/,(m,a,b,c)=>a+fmt(Math.round(parseFloat(String(b).replace(/[^\d.\-]/g,''))+mv))+c)
     .replace(/(<div class="lbl">資產<\/div><div class="num" style="font-size:17px">)([^<]*)(<\/div>)/,(m,a,b,c)=>a+fmt(Math.round(parseFloat(String(b).replace(/[^\d.\-]/g,''))+mv))+c)
