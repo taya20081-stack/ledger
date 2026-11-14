@@ -421,7 +421,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.21';
+window.APP_VER='v2.0.22';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -2815,12 +2815,12 @@ function holdName(h){const c=String(h.code||'');if(h.name&&h.name!==c)return h.n
 const GOLD_U={'錢':3.75,'兩':37.5,'克':1};
 function goldG(){const g=S.settings.gold;return g&&+g.q>0?+g.q*(GOLD_U[g.u]||3.75):0}
 function goldMV(){const g=S.settings.gold;return g&&g.px?Math.round(goldG()*g.px):0}
-function goldApply(){const g=S.settings.gold;const q=PX&&PX.p&&PX.p.GOLD;if(!g||!q||!(+q[1]>0))return false;if(g.pxd&&(q[3]||'')<g.pxd)return false;g.px=+q[1];g.pxd=q[3]||PX.d;return true}
+function goldApply(){const g=S.settings.gold;const q=PX&&PX.p&&PX.p.GOLD;if(!g||!q||!(+q[1]>0))return false;if(g.pxd&&(q[3]||'')<g.pxd)return false;g.px=+q[1];g.pxd=q[3]||PX.d;g.src=/國際/.test(q[0]||'')?'國際金價換算':'臺銀黃金存摺買進價';return true}
 function pageGold(){const g=S.settings.gold||{q:'',u:'錢'};const gr=goldG();
   return{back:1,head:`<h1>黃金</h1><button class="ibtn" data-act="px-refresh" aria-label="更新金價">${IC.sync||'↻'}</button>`,body:`
   <div class="sum"><div class="lbl">黃金市值（TWD）${g.pxd?' · '+g.pxd.slice(5).replace('-','/')+' 牌價':''}</div><div class="huge num">${g.px&&gr?fmt(goldMV()):'—'}</div>
    ${g.px?`<div class="kv mt"><div><div class="lbl">每公克</div><div class="v num">${fmt(g.px)}</div></div><div><div class="lbl">每錢</div><div class="v num">${fmt(Math.round(g.px*3.75))}</div></div><div><div class="lbl">持有</div><div class="v num">${gr?(+gr.toFixed(2))+' 克':'—'}</div></div></div>`:''}
-   <div class="hint mt">市值＝持有克數 × 臺灣銀行黃金存摺「本行買進」價（每公克），每個營業日自動更新；1 錢＝3.75 克、1 兩＝37.5 克。不計入「帳戶」頁的淨資產。</div></div>
+   <div class="hint mt">市值＝持有克數 × 每公克金價${g.src?'（目前來源：'+g.src+'）':''}，每個營業日自動更新。優先用臺灣銀行黃金存摺「本行買進」價，抓不到時改用國際金價 × 美元匯率換算（約比臺銀買進價高 0.5%）；1 錢＝3.75 克、1 兩＝37.5 克。不計入「帳戶」頁的淨資產。</div></div>
   <div class="card stack"><div class="lbl">持有數量</div><div class="grid2"><label class="field"><span>數量</span><input class="in num" id="gd-q" inputmode="decimal" value="${esc(g.q||'')}" placeholder="3"></label><label class="field"><span>單位</span><select class="in" id="gd-u">${Object.keys(GOLD_U).map(u=>`<option${(g.u||'錢')===u?' selected':''}>${u}</option>`).join('')}</select></label></div>
    <button class="btn pri" data-act="gd-save">儲存</button></div>`}}
 const PF_OPEN=new Set();   // 股票市值頁：展開中的組合（預設全部收合）
