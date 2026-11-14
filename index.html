@@ -421,7 +421,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.23';
+window.APP_VER='v2.0.24';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -2823,6 +2823,23 @@ function pageGold(){const g=S.settings.gold||{q:'',u:'錢'};const gr=goldG();
    <div class="hint mt">市值＝持有克數 × 每公克金價${g.src?'（目前來源：'+g.src+'）':''}，每個營業日自動更新。優先用臺灣銀行黃金存摺「本行買進」價，抓不到時改用國際金價 × 美元匯率換算（約比臺銀買進價高 0.5%）；1 錢＝3.75 克、1 兩＝37.5 克。不計入「帳戶」頁的淨資產。</div></div>
   <div class="card stack"><div class="lbl">持有數量</div><div class="grid2"><label class="field"><span>數量</span><input class="in num" id="gd-q" inputmode="decimal" value="${esc(g.q||'')}" placeholder="3"></label><label class="field"><span>單位</span><select class="in" id="gd-u">${Object.keys(GOLD_U).map(u=>`<option${(g.u||'錢')===u?' selected':''}>${u}</option>`).join('')}</select></label></div>
    <button class="btn pri" data-act="gd-save">儲存</button></div>`}}
+/* ---------- 市值總覽：股票＋黃金＋外匯（外匯＝非台幣帳戶的正餘額，依臺銀現金買入匯率換算） ---------- */
+function fxList(){return S.accts.filter(a=>!a.arch&&(a.cur||'TWD')!=='TWD'&&a.grp!=='信用卡'&&acctBal(a)>0).map(a=>({a,b:acctBal(a),v:Math.round(acctBal(a)*rateOf(a.cur))}))}
+function mktParts(){const H=S.settings.hold||[];const g=S.settings.gold;const fx=fxList();
+  return[{k:'股票',p:'invest',v:holdTotal(),d:H.map(h=>h.pxd||'').sort().pop()||'',sub:H.length?H.length+' 檔':'尚未加入持股'},
+    {k:'黃金',p:'gold',v:goldMV(),d:(g&&g.pxd)||'',sub:goldG()?(+g.q)+' '+(g.u||'錢'):'尚未輸入數量'},
+    {k:'外匯',p:'',v:fx.reduce((t,x)=>t+x.v,0),d:S.rates.at||'',sub:fx.length?fx.length+' 個外幣帳戶':'沒有外幣餘額'}]}
+function mktTotal(){return mktParts().reduce((t,x)=>t+x.v,0)}
+function mktDate(){return mktParts().map(x=>x.d).filter(Boolean).sort().pop()||'—'}
+function pageMarket(){const P=mktParts();const tot=P.reduce((t,x)=>t+x.v,0);const fx=fxList();
+  const row=x=>x.p?`<button class="li" data-act="push" data-p="${x.p}"><div class="grow"><div>${x.k}</div><small>${esc(x.sub)}${x.d?' · 更新：'+x.d:''}</small></div><div class="r num">${x.v?money(x.v):'—'}</div><span class="chev">${IC.chev}</span></button>`
+    :`<div class="li"><div class="grow"><div>${x.k}</div><small>${esc(x.sub)}${x.d?' · 匯率更新：'+esc(x.d):''}</small></div><div class="r num">${x.v?money(x.v):'—'}</div></div>`;
+  return{back:1,head:`<h1>投資市值</h1><button class="ibtn" data-act="px-refresh" aria-label="更新價格">${IC.sync||'↻'}</button>`,body:`
+  <div class="sum"><div class="lbl">投資市值（TWD） · 更新：${esc(mktDate())}</div><div class="huge num">${fmt(tot)}</div>
+   <div class="kv mt">${P.map(x=>`<div><div class="lbl">${x.k}</div><div class="v num">${fmt(x.v)}</div></div>`).join('')}</div>
+   <div class="hint mt">股票：前一交易日收盤價；黃金：每公克金價 × 克數；外匯：外幣帳戶餘額 × 臺銀現金買入匯率。股票、黃金不計入「帳戶」頁淨資產；外匯本來就是帳戶餘額，已含在淨資產內。</div></div>
+  <div class="grp"><div class="list">${P.map(row).join('')}</div></div>
+  ${fx.length?`<div class="grp"><div class="grph"><span>外匯明細</span><span class="num">${money(P[2].v)}</span></div><div class="list">${fx.map(x=>`<button class="li" data-act="push" data-p="acct" data-id="${x.a.id}"><div class="grow"><div>${esc(x.a.name)}</div><small class="num">${money(x.b,x.a.cur)} × ${S.rates.r[x.a.cur]||'?'}</small></div><div class="r num">${money(x.v)}</div><span class="chev">${IC.chev}</span></button>`).join('')}</div></div>`:''}`}}
 const PF_OPEN=new Set();   // 股票市值頁：展開中的組合（預設全部收合）
 function pageInvest(){const H=S.settings.hold||[];const mvOf=h=>(+h.px||0)*(+h.sh||0)*rateOf(h.cu||'TWD');const tot=H.reduce((t,h)=>t+mvOf(h),0);
   const pd=H.filter(h=>h.pxd&&!h.pxManual&&(h.cu||'TWD')==='TWD').map(h=>h.pxd).sort().pop();
@@ -2868,12 +2885,12 @@ function budCarry(ym,cat){const B=S.budgets;if(!B.roll||!B.since||ym<=B.since)re
   for(let k=B.since;k<ym;k=shiftYM(k,1)){const u=monUse(k);carry+=base-(cat?(u.by.get(cat)||0):u.tot)}return Math.round(carry)}
 
 /* ---------- 掛到既有頁面 ---------- */
-PAGES.applepay=pageApplePay;PAGES.gold=pageGold;PAGES.recon=pageRecon;PAGES.invest=pageInvest;PAGES.goals=pageGoals;
+PAGES.applepay=pageApplePay;PAGES.gold=pageGold;PAGES.market=pageMarket;PAGES.recon=pageRecon;PAGES.invest=pageInvest;PAGES.goals=pageGoals;
 {const _more=PAGES.more;PAGES.more=function(){const r=_more();const it=(p,t,s)=>`<button class="li" data-act="push" data-p="${p}"><div class="grow"><div>${t}</div><small>${s}</small></div><span class="chev">${IC.chev}</span></button>`;
   const H=S.settings.hold||[],G=S.settings.goals||[];
-  r.body=r.body.replace(/()(<button class="li" data-act="push" data-p="search")/,`$1${it('goals','存錢目標',G.length?G.length+' 個目標':'設定目標金額與期限')}${it('invest','股票市值',H.length?H.length+' 檔 · '+money(holdTotal())+' · 更新：'+(H.map(h=>h.pxd||'').sort().pop()||'—'):'輸入持股，自動帶收盤價')}${it('gold','黃金市值',goldG()?(+S.settings.gold.q)+' '+(S.settings.gold.u||'錢')+(S.settings.gold.px?' · '+money(goldMV())+' · 更新：'+(S.settings.gold.pxd||'—'):' · 等待金價'):'輸入持有數量，自動帶臺銀牌價')}${it('applepay','Apple Pay 自動記帳','刷卡當下自動記一筆')}$2`);return r}}
-{const _accts=PAGES.accts;PAGES.accts=function(){const r=_accts();const mv=holdTotal();if(!mv)return r;
-  r.body=r.body.replace(/(<\/div><\/div><\/div>)(\s*<div class="toolbar mt">)/,`$1<button class="li" data-act="push" data-p="invest" style="margin-top:10px"><div class="grow"><div>股票市值</div><small>未計入上方淨資產</small></div><div class="r num">${money(mv)}</div><span class="chev">${IC.chev}</span></button>$2`);return r}}
+  r.body=r.body.replace(/()(<button class="li" data-act="push" data-p="search")/,`$1${it('goals','存錢目標',G.length?G.length+' 個目標':'設定目標金額與期限')}${it('market','投資市值','股票・黃金・外匯 · '+money(mktTotal())+' · 更新：'+mktDate())}${it('applepay','Apple Pay 自動記帳','刷卡當下自動記一筆')}$2`);return r}}
+{const _accts=PAGES.accts;PAGES.accts=function(){const r=_accts();if(!mktTotal())return r;
+  r.body=r.body.replace(/()(<div class="toolbar mt">)/,`$1<button class="li" data-act="push" data-p="market" style="margin:12px 0 0;border-radius:14px;background:var(--card,#fff)"><div class="grow"><div>投資市值</div><small>股票・黃金・外匯；股票與黃金未計入上方淨資產</small></div><div class="r num">${money(mktTotal())}</div><span class="chev">${IC.chev}</span></button>$2`);return r}}
 {const _acct=PAGES.acct;PAGES.acct=function(id){const r=_acct(id);r.body=r.body.replace(/(<button class="btn sm" data-act="adjust" data-id="[^"]*">調整餘額<\/button>)/,`$1<button class="btn sm" data-act="push" data-p="recon" data-id="${id}">對帳</button>`);return r}}
 {const _rules=PAGES.rules;PAGES.rules=function(){const r=_rules();const h=subHTML();if(h)r.body=r.body.replace(/(<div class="grp"><div class="grph"><span>週期)/,h+'$1');if(h&&!r.body.includes('可能的訂閱'))r.body+=h;return r}}
 {const _bud=PAGES.budget;PAGES.budget=function(){const r=_bud();const B=S.budgets;
