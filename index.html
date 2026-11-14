@@ -421,7 +421,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.19';
+window.APP_VER='v2.0.20';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -2818,7 +2818,7 @@ function pageInvest(){const H=S.settings.hold||[];const mvOf=h=>(+h.px||0)*(+h.s
   return{back:1,head:`<h1>股票市值</h1><button class="ibtn" data-act="px-refresh" aria-label="更新股價">${IC.sync||'↻'}</button>`,body:`
   <div class="sum"><div class="lbl">持股市值（TWD）${pd?' · 台股 '+pd.slice(5).replace('-','/')+' 收盤':''}</div><div class="huge num">${fmt(Math.round(tot))}</div>
    ${pfList().length>1?`<div class="kv mt">${pfList().map(pf=>`<div><div class="lbl">${esc(pf)}</div><div class="v num">${fmt(Math.round(H.filter(h=>(h.pf||'我的')===pf).reduce((s,h)=>s+mvOf(h),0)))}</div></div>`).join('')}</div>`:''}
-   <div class="hint mt">市值＝股數 × 前一交易日收盤價，外幣以臺銀現金買入匯率換算，會計入「帳戶」頁的淨資產。點持股可改股數。</div></div>
+   <div class="hint mt">市值＝股數 × 前一交易日收盤價，外幣以臺銀現金買入匯率換算，不計入「帳戶」頁的淨資產。點持股可改股數。</div></div>
   ${pfs||'<div class="empty">尚未加入持股</div>'}
   <div class="card stack"><div class="lbl">新增持股</div><div class="grid3"><label class="field"><span>組合</span><input class="in" id="hd-pf" list="hd-pfl" value="${esc(pfList()[0]||'我的')}"><datalist id="hd-pfl">${pfList().map(p=>`<option value="${esc(p)}">`).join('')}</datalist></label><label class="field"><span>代號</span><input class="in" id="hd-code" placeholder="2884、NVDA" autocomplete="off"></label><label class="field"><span>股數</span><input class="in num" id="hd-sh" inputmode="decimal" placeholder="1000"></label></div>
    <button class="btn pri" data-act="hd-add">加入</button></div>
@@ -2859,9 +2859,7 @@ PAGES.applepay=pageApplePay;PAGES.recon=pageRecon;PAGES.invest=pageInvest;PAGES.
   const H=S.settings.hold||[],G=S.settings.goals||[];
   r.body=r.body.replace(/()(<button class="li" data-act="push" data-p="search")/,`$1${it('goals','存錢目標',G.length?G.length+' 個目標':'設定目標金額與期限')}${it('invest','股票市值',H.length?H.length+' 檔 · '+money(holdTotal())+' · 更新：'+(H.map(h=>h.pxd||'').sort().pop()||'—'):'輸入持股，自動帶收盤價')}${it('applepay','Apple Pay 自動記帳','刷卡當下自動記一筆')}$2`);return r}}
 {const _accts=PAGES.accts;PAGES.accts=function(){const r=_accts();const mv=holdTotal();if(!mv)return r;
-  r.body=r.body.replace(/(<div class="lbl">淨資產（TWD）<\/div><div class="huge num">)([^<]*)(<\/div>)/,(m,a,b,c)=>a+fmt(Math.round(parseFloat(String(b).replace(/[^\d.\-]/g,''))+mv))+c)
-    .replace(/(<div class="lbl">資產<\/div><div class="num" style="font-size:17px">)([^<]*)(<\/div>)/,(m,a,b,c)=>a+fmt(Math.round(parseFloat(String(b).replace(/[^\d.\-]/g,''))+mv))+c)
-    .replace(/(<\/div><\/div><\/div>)(\s*<div class="toolbar mt">)/,`$1<button class="li" data-act="push" data-p="invest" style="margin-top:10px"><div class="grow"><div>股票市值</div><small>已計入上方淨資產</small></div><div class="r num">${money(mv)}</div><span class="chev">${IC.chev}</span></button>$2`);return r}}
+  r.body=r.body.replace(/(<\/div><\/div><\/div>)(\s*<div class="toolbar mt">)/,`$1<button class="li" data-act="push" data-p="invest" style="margin-top:10px"><div class="grow"><div>股票市值</div><small>未計入上方淨資產</small></div><div class="r num">${money(mv)}</div><span class="chev">${IC.chev}</span></button>$2`);return r}}
 {const _acct=PAGES.acct;PAGES.acct=function(id){const r=_acct(id);r.body=r.body.replace(/(<button class="btn sm" data-act="adjust" data-id="[^"]*">調整餘額<\/button>)/,`$1<button class="btn sm" data-act="push" data-p="recon" data-id="${id}">對帳</button>`);return r}}
 {const _rules=PAGES.rules;PAGES.rules=function(){const r=_rules();const h=subHTML();if(h)r.body=r.body.replace(/(<div class="grp"><div class="grph"><span>週期)/,h+'$1');if(h&&!r.body.includes('可能的訂閱'))r.body+=h;return r}}
 {const _bud=PAGES.budget;PAGES.budget=function(){const r=_bud();const B=S.budgets;
