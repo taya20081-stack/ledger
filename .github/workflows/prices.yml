@@ -165,7 +165,8 @@ jobs:
           try:   # 來源 1：臺灣銀行黃金牌價網頁
               t = re.sub(r'<[^>]+>', ' ', get('https://rate.bot.com.tw/gold?Lang=zh-TW'))
               t = re.sub(r'\s+', ' ', t)
-              m = re.search(r'本行買進\s*([\d,]{4,7})', t)
+              m = re.search(r'本行買進[^\d]{0,20}?([\d]{1,2},\d{3}|\d{4,5})(?!\d)', t)
+              i = t.find('本行買進'); print('臺銀片段', t[max(0, i-60):i+60] if i >= 0 else t[:200])
               if m: v = float(m.group(1).replace(',', ''))
               m = re.search(r'(\d{4})/(\d{2})/(\d{2})\s+\d{2}:\d{2}', t)
               if m: d = '%s-%s-%s' % m.groups()
