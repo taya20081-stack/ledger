@@ -421,7 +421,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.27';
+window.APP_VER='v2.0.28';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1661,7 +1661,7 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
   if(!Cloud.decided){await new Promise(r=>{const t=setInterval(()=>{if(Cloud.decided){clearInterval(t);r()}},300)})}
   const add=[],dels=[],newRules=[],delNames=[],upds=[],insts=[],eds=[];
-  let apN=0,apDup=0,apUnk=0,pxN=0;
+  let apN=0,apDup=0,apUnk=0,pxN=0;const mvq=[];
   for(const d of docs){const x=d.data()||{};const id='ib_'+d.id;
     if(x.src==='ap'){if(!S.byId.has(id)){const o=apRecord(x,id);if(o.r){add.push(o.r);apN++;if(!o.sure)apUnk++}else if(o.skip==='dup')apDup++}dels.push(d.ref);continue}
     if(x.kind==='px'){try{const q=JSON.parse(x.p||'{}');const cur=S.settings.pxx||{d:'',p:{}};if((x.d||'')>=(cur.d||'')){S.settings.pxx={d:x.d||'',p:{...cur.p,...q}};pxApply(S.settings.pxx.p);pxN++}}catch(e){}dels.push(d.ref);continue}
@@ -1676,6 +1676,7 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
       const ch=D.live.filter(r=>r.sh&&pats.some(re=>re.test(r.sh))).map(r=>({...r,sh:''}));const names=[...new Set(D.live.filter(r=>r.sh&&pats.some(re=>re.test(r.sh))).map(r=>r.sh))];
       if(ch.length){S.lastUndo=ch.map(r=>({...S.byId.get(r.id)}));await mutate(ch);scheduleRender();toast('Claude 清除了 '+names.length+' 家商家名稱（'+ch.length+' 筆）：'+names.join('、')+'；可在搜尋頁復原')}else toast('沒有符合的商家：'+String(x.n||''));
       dels.push(d.ref);continue}
+    if(x.kind==='mvproj'){mvq.push(x);dels.push(d.ref);continue}
     if(x.kind==='renproj'){const o=String(x.o||'').trim(),nv=String(x.nv||'').trim();if(o&&nv&&o!==nv){const n=await renProj(o,nv);toast('專案「'+o+'」→「'+nv+'」：'+n.recs+' 筆'+(n.rules?'、週期 '+n.rules+' 個':''))}dels.push(d.ref);continue}
     if(x.kind==='gold'){const q=parseFloat(x.q);if(q>=0){S.settings.gold={...(S.settings.gold||{}),q,u:GOLD_U[x.u]?x.u:'錢'};await saveKV('settings');toast('黃金：'+q+' '+S.settings.gold.u)}dels.push(d.ref);continue}
     if(x.kind==='osshop'){const L=new Set(S.settings.osShops||[]);const rm=x.rm==='1';String(x.n||'').split(/[,、，]/).map(t=>t.trim()).filter(Boolean).forEach(t=>rm?L.delete(t):L.add(t));S.settings.osShops=[...L];await saveKV('settings');toast('海外店家：'+(rm?'移除 ':'加入 ')+String(x.n||''));dels.push(d.ref);continue}
@@ -1701,6 +1702,9 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
           else add.push(r);
           if(kind==='exp'&&(x.os===true||x.os==='1'||x.os===1||isOsShop(x.sh))&&x.os!=='0'){const fr=osFeeRec(add.filter(q=>q.id===id||q.id.startsWith(id+'_')));if(fr){fr.id=id+'_os';fr.tg='claude';add.push(fr)}}}}}}
     dels.push(d.ref)}
+  /* 部分搬移專案（依日期區間）：放在整個專案改名之後處理，避免同一批收件匣先後順序錯亂 */
+  for(const x of mvq){const o=String(x.o||'').trim(),nv=String(x.nv||'').trim(),d1=x.d1||'0000',d2=x.d2||'9999';if(!o||!nv)continue;
+    const rs=D.live.filter(r=>r.p===o&&r.dt>=d1&&r.dt<=d2).map(r=>({...r,p:nv}));if(rs.length){await mutate(rs);toast('已把「'+o+'」中 '+d1+'～'+d2+' 的 '+rs.length+' 筆移到「'+nv+'」')}}
   if(newRules.length){S.rules.push(...newRules);await saveKV('rules');await runRules();scheduleRender();toast('Claude 幫你建了 '+newRules.length+' 個週期：'+newRules.slice(0,3).map(q=>q.name+'（'+ruleDesc(q)+'）').join('、'))}
   if(delNames.length){const td=TODAY();const gone=S.rules.filter(q=>q.fq!=='I'&&String(q.id).startsWith('ib_')&&delNames.includes(q.name));
     if(gone.length){const ids=S.recs.filter(r=>!r.x&&r.dt>td&&/_\d+_\d+$/.test(r.id)&&gone.some(q=>r.id.startsWith(q.id+'_'))).map(r=>r.id);
