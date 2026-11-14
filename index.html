@@ -421,7 +421,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.12';
+window.APP_VER='v2.0.13';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -603,6 +603,13 @@ function amortize(total,n,ratePct){
   return out;
 }
 
+/* 子類別改名：分類清單、記錄、週期規則一起更新 */
+async function renameSub(k,cn,old,nv){const c=S.cats[k].find(q=>q.n===cn);if(!c)return 0;const j=c.subs.indexOf(old);if(j<0)return 0;
+  if(c.subs.includes(nv))c.subs.splice(j,1);else c.subs[j]=nv;S.cats.u=Date.now();await saveKV('cats');
+  const ic=(S.settings.icons||{})[cn+'|'+old];if(ic){const m={...S.settings.icons};delete m[cn+'|'+old];m[cn+'|'+nv]=ic;S.settings.icons=m;await saveKV('settings')}
+  const t=k==='exp'?'支出':'收入';const rs=D.live.filter(r=>r.t===t&&r.c===cn&&r.s===old).map(r=>({...r,s:nv}));if(rs.length)await mutate(rs);
+  let rc=0;for(const r of S.rules){const f=r.fs;if(!f)continue;let hit=false;if(f.c===cn&&f.s===old){f.s=nv;hit=true}if(Array.isArray(f.splits))f.splits.forEach(x=>{if(x.c===cn&&x.s===old){x.s=nv;hit=true}});if(hit){r.u=Date.now();rc++}}
+  if(rc)await saveKV('rules');return rs.length}
 /* ================= record building ================= */
 function blankForm(kind='exp'){
   const lastA=S.settings.lastA&&D.acct.has(S.settings.lastA)?S.settings.lastA:(S.accts.find(a=>!a.arch)?.id||'');
@@ -1376,7 +1383,7 @@ const ACT={
   'se-save':async el=>{const k=S.catTab||'exp';const c=S.cats[k][+el.dataset.i];const j=+el.dataset.j;const old=c.subs[j];const t=k==='exp'?'支出':'收入';const nv=$('#se-n').value.trim();const ic=$('#se-ic').value.trim();
     if(!nv)return toast('請輸入名稱');if(nv!==old&&c.subs.includes(nv))return toast('已有同名子類別');
     const m={...(S.settings.icons||{})};delete m[c.n+'|'+old];const def=(CAT_ICON[c.n]||{subs:{}}).subs[nv]||'';if(ic&&ic!==def)m[c.n+'|'+nv]=ic;S.settings.icons=m;await saveKV('settings');
-    if(nv!==old){c.subs[j]=nv;S.cats.u=Date.now();await saveKV('cats');const rs=D.live.filter(r=>r.t===t&&r.c===c.n&&r.s===old).map(r=>({...r,s:nv}));await mutate(rs)}
+    if(nv!==old)await renameSub(k,c.n,old,nv)
     closeSheet();render(true);toast('已儲存')},
   'cat-del':async el=>{const k=S.catTab||'exp';S.cats[k].splice(+el.dataset.i,1);S.cats.u=Date.now();await saveKV('cats');recompute();render(true)},
   'rates-save':async()=>{document.querySelectorAll('[data-rate]').forEach(i=>{const v=parseFloat(i.value);if(v>0)S.rates.r[i.dataset.rate]=v});S.rates.src='手動輸入';S.rates.at=TODAY();S.rates.u=Date.now();await saveKV('rates');render(true);toast('已儲存匯率')},
@@ -1656,6 +1663,7 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
         const recs=[];for(let i=sno;i<=k;i++){recs.push({id:uid(),a:acct.id,t:'支出',c:x.c||'個人支出',s:x.s||'',m:-amt,f:0,d:0,n:nm,sh:String(x.sh||'').slice(0,60),dt:addMonths(x.dt,i-sno,day),tm,p:String(x.p||'').slice(0,60),ds:nm+'・第 '+i+'/'+k+' 期',tg:'claude',w:'',k:'',g:id,o:o+i})}
         insts.push({rule:{id,fq:'I',name:nm,total:Math.abs(+x.tot)||amt*k,n:k,rate:parseFloat(x.rate)||0,start:x.dt,a:acct.id,off:sno-1,u:o},recs})}
       dels.push(d.ref);continue}
+    if(x.kind==='rensub'){const k=x.k==='inc'?'inc':'exp';const n=await renameSub(k,String(x.c||''),String(x.s||''),String(x.ns||'').trim());toast(n||S.cats[k].some(q=>q.n===x.c&&q.subs.includes(String(x.ns||'').trim()))?'Claude 已把「'+x.c+'・'+x.s+'」改名為「'+x.ns+'」（'+n+' 筆記錄）':'找不到子類別：'+x.c+'・'+x.s);dels.push(d.ref);continue}
     if(x.kind==='clrshop'){const pats=String(x.n||'').split(/[,、，]/).map(t=>t.trim()).filter(Boolean).map(t=>new RegExp('^'+t.replace(/[.+?^${}()|[\]\\]/g,'\\$&').replace(/\*/g,'.*')+'$','i'));
       const ch=D.live.filter(r=>r.sh&&pats.some(re=>re.test(r.sh))).map(r=>({...r,sh:''}));const names=[...new Set(D.live.filter(r=>r.sh&&pats.some(re=>re.test(r.sh))).map(r=>r.sh))];
       if(ch.length){S.lastUndo=ch.map(r=>({...S.byId.get(r.id)}));await mutate(ch);scheduleRender();toast('Claude 清除了 '+names.length+' 家商家名稱（'+ch.length+' 筆）：'+names.join('、')+'；可在搜尋頁復原')}else toast('沒有符合的商家：'+String(x.n||''));
