@@ -421,7 +421,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.9';
+window.APP_VER='v2.0.10';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -499,7 +499,7 @@ const S={recs:[],byId:new Map(),accts:[],cats:null,budgets:{total:0,cats:{},u:0}
   settings:{theme:'light',excl:[],lastBackup:0,sample:0,hideZero:0,showArch:0,u:0},
   view:'home',stack:[],month:TODAY().slice(0,7),day:TODAY(),calCol:false,stat:{kind:'exp',mode:'M',anchor:TODAY(),from:'',to:'',cat:null},
   kvu:{},cloudCfg:null,sellers:{},
-  search:{q:'',type:'',a:'',from:'',to:'',c:'',p:'',min:'',max:'',sel:new Set(),selMode:false,limit:300},homeLimit:{},acctLimit:300,ready:false};
+  search:{q:'',type:'',a:'',from:'',to:'',c:'',p:'',sh:'',min:'',max:'',sel:new Set(),selMode:false,limit:300},homeLimit:{},acctLimit:300,ready:false};
 const D={live:[],bal:new Map(),acct:new Map(),pairs:new Map(),groups:new Map(),ci:new Map(),whos:[],projs:[]};
 
 function saveKV(k){if(SYNC_KEYS.includes(k)){S.kvu[k]=Date.now();DB.putKV('kvu',S.kvu)}const p=DB.putKV(k,S[k]).catch(e=>toast('儲存失敗：'+e));if(SYNC_KEYS.includes(k)&&window.Cloud)Cloud.pushKV(k);return p}
@@ -1046,8 +1046,8 @@ function pageMore(){
   const it=(p,t,s)=>`<button class="li" data-act="push" data-p="${p}"><div class="grow"><div>${t}</div><small>${s}</small></div><span class="chev">${IC.chev}</span></button>`;
   const debtN=debtSummary().filter(x=>Math.abs(x.v)>0.004&&!debtStopped(x)).length;
   const bk=S.settings.lastBackup?new Date(S.settings.lastBackup).toLocaleString('zh-TW',{hour12:false}):'從未備份';
-  return{head:`<h1>更多</h1>`,body:`${!window.__ARTIFACT__?`<div class="grp" style="margin-top:0"><div class="list">${it('cloud','雲端同步','<span id="cloud-label">'+esc(Cloud.label())+'</span>')}${it('backup','備份與同步','上次備份：'+bk)}</div></div>`:`<div class="grp" style="margin-top:0"><div class="list">${it('backup','備份與同步','上次備份：'+bk)}</div></div>`}<div class="grp"><div class="list">${it('budget','預算',S.budgets.total?'每月 '+money(S.budgets.total):'尚未設定')}${it('projects','專案',D.projs.length+' 個專案')}${it('debts','應收應付',debtN+' 筆未結清')}${it('rules','週期與分期',S.rules.filter(r=>r.fq!=='I'&&r.on).length+' 個週期 · '+S.rules.filter(r=>r.fq==='I').length+' 個分期')}${it('search','搜尋與批次編輯','名稱、商家、描述、專案、金額')}</div></div>
-  <div class="grp"><div class="list">${it('cats','分類管理',S.cats.exp.length+' 個支出主類別 · '+S.cats.inc.length+' 個收入主類別')}${it('rates','匯率','更新：'+(S.rates.at||'—'))}${it('settings','設定','主題、統計排除分類、清除資料')}</div></div>
+  return{head:`<h1>更多</h1>`,body:`${!window.__ARTIFACT__?`<div class="grp" style="margin-top:0"><div class="list">${it('cloud','雲端同步','<span id="cloud-label">'+esc(Cloud.label())+'</span>')}${it('backup','備份與同步','上次備份：'+bk)}</div></div>`:`<div class="grp" style="margin-top:0"><div class="list">${it('backup','備份與同步','上次備份：'+bk)}</div></div>`}<div class="grp"><div class="list">${it('cats','分類管理',S.cats.exp.length+' 個支出主類別 · '+S.cats.inc.length+' 個收入主類別')}${it('budget','預算',S.budgets.total?'每月 '+money(S.budgets.total):'尚未設定')}${it('projects','專案',D.projs.length+' 個專案')}${it('debts','應收應付',debtN+' 筆未結清')}${it('rules','週期與分期',S.rules.filter(r=>r.fq!=='I'&&r.on).length+' 個週期 · '+S.rules.filter(r=>r.fq==='I').length+' 個分期')}${it('search','搜尋與批次編輯','名稱、商家、描述、專案、金額')}</div></div>
+  <div class="grp"><div class="list">${it('rates','匯率','更新：'+(S.rates.at||'—'))}${it('settings','設定','主題、統計排除分類、清除資料')}</div></div>
   <div class="hint mt">共 ${D.live.length.toLocaleString()} 筆記錄 · ${S.accts.length} 個帳戶${DB.mem?' · <b class="neg">此環境無法永久儲存</b>':''}</div><div class="appver">存摺記帳 ${window.APP_VER||''}</div>`};
 }
 function pageBudget(){
@@ -2080,17 +2080,24 @@ document.addEventListener('change',e=>{const t=e.target;if(t.dataset.stset){cons
 /* ---------- 搜尋 ---------- */
 function searchRecs(){
   const q=S.search;const terms=q.q.trim().toLowerCase().split(/\s+/).filter(Boolean);const mn=evalAmt(q.min),mx=evalAmt(q.max);
-  const any=terms.length||q.type||q.a||q.from||q.to||q.c||q.p||isFinite(mn)||isFinite(mx);if(!any)return[];
+  const any=terms.length||q.type||q.a||q.from||q.to||q.c||q.p||q.sh||isFinite(mn)||isFinite(mx);if(!any)return[];
   return D.live.filter(r=>{if(q.type&&r.t!==q.type)return false;if(q.a&&r.a!==q.a)return false;if(q.from&&r.dt<q.from)return false;if(q.to&&r.dt>q.to)return false;
-    if(q.c&&r.c!==q.c)return false;if(q.p&&r.p!==q.p)return false;const am=Math.abs(raw(r));if(isFinite(mn)&&am<mn)return false;if(isFinite(mx)&&am>mx)return false;
+    if(q.c&&r.c!==q.c)return false;if(q.p&&r.p!==q.p)return false;if(q.sh&&(q.sh==='__none__'?!!r.sh:r.sh!==q.sh))return false;const am=Math.abs(raw(r));if(isFinite(mn)&&am<mn)return false;if(isFinite(mx)&&am>mx)return false;
     if(!terms.length)return true;
     const hay=((r.n||'')+' '+(r.gn||'')+' '+(r.sh||'')+' '+(r.c||'')+' '+(r.s||'')+' '+(r.p||'')+' '+(r.w||'')+' '+(D.acct.get(r.a)?.name||'')+' '+Math.abs(r.m)).toLowerCase();return terms.every(t=>hay.includes(t))});
 }
+function shopList(){const m=new Map();for(const r of D.live)if(r.sh)m.set(r.sh,(m.get(r.sh)||0)+1);return[...m.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'zh-Hant'))}
+function shopRank(res){const q=S.search;const m=new Map();let tot=0;
+  for(const r of res){const v=spendOf(r)*rateOf(curOf(r));if(!(v>0))continue;const k=r.sh||'';const o=m.get(k)||{v:0,n:0};o.v+=v;o.n++;m.set(k,o);tot+=v}
+  if(!tot)return'';const arr=[...m.entries()].sort((a,b)=>b[1].v-a[1].v);
+  if(q.sh){const o=arr[0]?.[1];if(!o)return'';return`<div class="card"><div class="kv"><div><div class="lbl">${esc(q.sh==='__none__'?'未填商家':q.sh)}・支出</div><div class="v num" style="font-size:22px">${money(Math.round(o.v))}</div></div><div><div class="lbl">筆數</div><div class="v num">${o.n}</div></div><div><div class="lbl">平均每筆</div><div class="v num">${money(Math.round(o.v/o.n))}</div></div></div></div>`}
+  if(arr.length<2&&!arr[0]?.[0])return'';const top=arr.slice(0,10),mx=top[0][1].v;
+  return`<div class="card"><h3 style="margin:0 0 8px">商家支出排名<small>${arr.filter(x=>x[0]).length} 家</small></h3>${top.map(([n,o])=>`<button class="row" style="display:grid;grid-template-columns:1fr auto;gap:4px 10px;width:100%;text-align:left" data-act="search-shop" data-sh="${esc(n||'__none__')}"><span>${esc(n||'（未填商家）')} <small class="hint">${o.n} 筆・${(o.v/tot*100).toFixed(1)}%</small></span><span class="num">${money(Math.round(o.v))}</span><span class="bar" style="grid-column:1/-1"><i style="width:${(o.v/mx*100).toFixed(1)}%"></i></span></button>`).join('')}${arr.length>10?`<div class="hint">另有 ${arr.length-10} 家，可用上方「全部商家」選單查看</div>`:''}</div>`}
 function searchResHTML(res){
   res=res||searchRecs();const q=S.search;const lim=q.limit;let exp=0,inc=0;
   for(const r of res){const k=rateOf(curOf(r));exp+=spendOf(r)*k;inc+=incomeOf(r)*k}
   return`<div class="toolbar"><span class="hint">${res.length.toLocaleString()} 筆 · 支出 <span class="num neg">${fmt(Math.round(exp))}</span> · 收入 <span class="num pos">${fmt(Math.round(inc))}</span></span><div class="btns"><button class="btn sm" data-act="replace-open" data-all="1" ${res.length?'':'disabled'}>批次取代</button><button class="btn sm" data-act="export-search">匯出 CSV</button>${S.lastUndo?`<button class="btn sm" data-act="undo-batch">復原上次批次修改（${S.lastUndo.length} 筆）</button>`:''}</div></div>
-  ${res.length?`<div id="sres">${dayGroups(res,'search',lim)}</div>${res.length>lim?`<button class="more-btn" data-act="search-more">顯示更多</button>`:''}`:`<div class="empty">輸入關鍵字或選擇條件開始搜尋</div>`}`;
+  ${res.length?shopRank(res):''}${res.length?`<div id="sres">${dayGroups(res,'search',lim)}</div>${res.length>lim?`<button class="more-btn" data-act="search-more">顯示更多</button>`:''}`:`<div class="empty">輸入關鍵字或選擇條件開始搜尋</div>`}`;
 }
 function pageSearch(){
   const q=S.search;const res=searchRecs();
@@ -2106,6 +2113,7 @@ function pageSearch(){
   <select class="in" id="s-a" data-sf="a"><option value="">全部帳戶</option>${S.accts.map(a=>`<option value="${a.id}" ${q.a===a.id?'selected':''}>${esc(a.name)}</option>`).join('')}</select>
   <select class="in" id="s-c" data-sf="c"><option value="">全部大項目</option>${[...new Set(mains)].map(c=>`<option ${q.c===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
   <select class="in" id="s-p" data-sf="p"><option value="">全部專案</option>${D.projs.map(p=>`<option ${q.p===p?'selected':''}>${esc(p)}</option>`).join('')}</select>
+  <select class="in" id="s-sh" data-sf="sh" style="grid-column:1/-1"><option value="">全部商家</option><option value="__none__" ${q.sh==='__none__'?'selected':''}>（未填商家）</option>${shopList().map(([n,c])=>`<option value="${esc(n)}" ${q.sh===n?'selected':''}>${esc(n)}（${c}）</option>`).join('')}</select>
   <input class="in num" id="s-min" inputmode="decimal" placeholder="金額下限" value="${esc(q.min||'')}" data-sf="min"><input class="in num" id="s-max" inputmode="decimal" placeholder="金額上限" value="${esc(q.max||'')}" data-sf="max"></div>
 </div>
   <div id="sresWrap">${searchResHTML(res)}</div>${sel}`};
@@ -2142,6 +2150,7 @@ const rpUpd=()=>{const el=$('#rp-prev');if(el&&RP)el.innerHTML=rpPrevHTML();else
 document.addEventListener('input',e=>{const t=e.target;if(!RP||!t.dataset.rp)return;RP[t.dataset.rp]=t.value;if(e.isComposing)return;clearTimeout(RP._t);RP._t=setTimeout(rpUpd,t.tagName==='SELECT'?0:200)});
 document.addEventListener('compositionend',e=>{const t=e.target;if(!RP||!t.dataset.rp)return;RP[t.dataset.rp]=t.value;clearTimeout(RP._t);RP._t=setTimeout(rpUpd,60)});
 Object.assign(ACT,{
+  'search-shop':el=>{S.search.sh=el.dataset.sh;S.search.limit=300;render(true)},
   'search-range':el=>{S.search.from=el.dataset.f;S.search.to=el.dataset.t;S.search.limit=300;render(true)},
   'replace-open':el=>{const onSearch=(S.stack[S.stack.length-1]||{}).p==='search';RP={f:'sh',scope:(el.dataset.all||!S.search.sel.size)&&onSearch?'all':'sel',find:'',to:'',onSearch};openSheet('批次取代','',{onClose:()=>{RP=null}});renderReplace()},
   'rp-field':el=>{RP.f=el.dataset.k;RP.find='';RP.to='';renderReplace()},
