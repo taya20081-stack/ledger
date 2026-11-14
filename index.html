@@ -421,7 +421,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.11';
+window.APP_VER='v2.0.12';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1655,6 +1655,10 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
       if(!S.rules.some(q=>q.id===id)&&amt>0&&k>1&&acct&&/^\d{4}-\d{2}-\d{2}$/.test(x.dt||'')){const sno=Math.max(1,Math.min(k,parseInt(x.sno)||1));const nm=String(x.n||'分期付款').slice(0,80);const tm=/^\d{2}:\d{2}$/.test(x.tm||'')?x.tm:'00:00';const day=+x.dt.slice(8),o=Date.now();
         const recs=[];for(let i=sno;i<=k;i++){recs.push({id:uid(),a:acct.id,t:'支出',c:x.c||'個人支出',s:x.s||'',m:-amt,f:0,d:0,n:nm,sh:String(x.sh||'').slice(0,60),dt:addMonths(x.dt,i-sno,day),tm,p:String(x.p||'').slice(0,60),ds:nm+'・第 '+i+'/'+k+' 期',tg:'claude',w:'',k:'',g:id,o:o+i})}
         insts.push({rule:{id,fq:'I',name:nm,total:Math.abs(+x.tot)||amt*k,n:k,rate:parseFloat(x.rate)||0,start:x.dt,a:acct.id,off:sno-1,u:o},recs})}
+      dels.push(d.ref);continue}
+    if(x.kind==='clrshop'){const pats=String(x.n||'').split(/[,、，]/).map(t=>t.trim()).filter(Boolean).map(t=>new RegExp('^'+t.replace(/[.+?^${}()|[\]\\]/g,'\\$&').replace(/\*/g,'.*')+'$','i'));
+      const ch=D.live.filter(r=>r.sh&&pats.some(re=>re.test(r.sh))).map(r=>({...r,sh:''}));const names=[...new Set(D.live.filter(r=>r.sh&&pats.some(re=>re.test(r.sh))).map(r=>r.sh))];
+      if(ch.length){S.lastUndo=ch.map(r=>({...S.byId.get(r.id)}));await mutate(ch);scheduleRender();toast('Claude 清除了 '+names.length+' 家商家名稱（'+ch.length+' 筆）：'+names.join('、')+'；可在搜尋頁復原')}else toast('沒有符合的商家：'+String(x.n||''));
       dels.push(d.ref);continue}
     if(x.kind==='osshop'){const L=new Set(S.settings.osShops||[]);const rm=x.rm==='1';String(x.n||'').split(/[,、，]/).map(t=>t.trim()).filter(Boolean).forEach(t=>rm?L.delete(t):L.add(t));S.settings.osShops=[...L];await saveKV('settings');toast('海外店家：'+(rm?'移除 ':'加入 ')+String(x.n||''));dels.push(d.ref);continue}
     if(x.kind==='updrule'){upds.push({n:String(x.n||'').trim(),wk:x.wk});dels.push(d.ref);continue}
