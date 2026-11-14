@@ -421,7 +421,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.14';
+window.APP_VER='v2.0.15';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1054,7 +1054,7 @@ function pageMore(){
   const debtN=debtSummary().filter(x=>Math.abs(x.v)>0.004&&!debtStopped(x)).length;
   const bk=S.settings.lastBackup?new Date(S.settings.lastBackup).toLocaleString('zh-TW',{hour12:false}):'從未備份';
   return{head:`<h1>更多</h1>`,body:`${!window.__ARTIFACT__?`<div class="grp" style="margin-top:0"><div class="list">${it('cloud','雲端同步','<span id="cloud-label">'+esc(Cloud.label())+'</span>')}${it('backup','備份與同步','上次備份：'+bk)}</div></div>`:`<div class="grp" style="margin-top:0"><div class="list">${it('backup','備份與同步','上次備份：'+bk)}</div></div>`}<div class="grp"><div class="list">${it('cats','分類管理',S.cats.exp.length+' 個支出主類別 · '+S.cats.inc.length+' 個收入主類別')}${it('budget','預算',S.budgets.total?'每月 '+money(S.budgets.total):'尚未設定')}</div></div><div class="grp"><div class="list">${it('projects','專案',D.projs.length+' 個專案')}${it('debts','應收應付',debtN+' 筆未結清')}${it('rules','週期與分期',S.rules.filter(r=>r.fq!=='I'&&r.on).length+' 個週期 · '+S.rules.filter(r=>r.fq==='I').length+' 個分期')}${it('search','搜尋與批次編輯','名稱、商家、描述、專案、金額')}</div></div>
-  <div class="grp"><div class="list">${it('rates','匯率','更新：'+(S.rates.at||'—'))}${it('settings','設定','主題、統計排除分類、清除資料')}</div></div>
+  <div class="grp"><div class="list">${it('rates','匯率','更新：'+(S.rates.at||'—'))}${it('settings','設定','推播提醒、主題、統計排除分類、清除資料')}</div></div>
   <div class="hint mt">共 ${D.live.length.toLocaleString()} 筆記錄 · ${S.accts.length} 個帳戶${DB.mem?' · <b class="neg">此環境無法永久儲存</b>':''}</div><div class="appver">存摺記帳 ${window.APP_VER||''}</div>`};
 }
 function pageBudget(){
@@ -2927,7 +2927,9 @@ function pageNotify(){const c=ntfCfg();const subs=S.settings.pushSubs||[];const 
   <div class="hint">提醒由 GitHub 每小時檢查一次發送，可能晚幾分鐘到幾十分鐘。打開 App 時會自動更新排程。</div></div>`}}
 PAGES.notify=pageNotify;
 {const _more2=PAGES.more;PAGES.more=function(){const r=_more2();const n=(S.settings.pushSubs||[]).length;
-  r.body=r.body.replace(/(<button class="li" data-act="push" data-p="applepay")/,`<button class="li" data-act="push" data-p="notify"><div class="grow"><div>推播提醒</div><small>${n?'已開啟 · '+n+' 台裝置':'繳款日、扣款前一天提醒'}</small></div><span class="chev">${IC.chev}</span></button>$1`);return r}}
+  return r}}
+{const _set=PAGES.settings;PAGES.settings=function(){const r=_set();const n=(S.settings.pushSubs||[]).length;
+  r.body=`<div class="grp" style="margin-top:0"><div class="list"><button class="li" data-act="push" data-p="notify"><div class="grow"><div>推播提醒</div><small>${n?'已開啟 · '+n+' 台裝置':'繳款日、扣款前一天提醒'}</small></div><span class="chev">${IC.chev}</span></button></div></div>`+r.body.replace('<div class="card stack" style="margin-top:0">','<div class="card stack">');return r}}
 Object.assign(ACT,{'ntf-on':()=>ntfEnable(),'ntf-off':()=>ntfDisable(),'ntf-sync':async()=>{await ntfSync(true);toast('已更新提醒排程')}});
 document.addEventListener('change',async e=>{const t=e.target;if(t.matches&&t.matches('[data-ntf]')){S.settings.ntf={...ntfCfg(),[t.dataset.ntf]:t.checked?1:0};await saveKV('settings');ntfSync(true);render(true)}});
 
