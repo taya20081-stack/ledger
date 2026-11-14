@@ -421,7 +421,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.24';
+window.APP_VER='v2.0.25';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -2828,7 +2828,7 @@ function fxList(){return S.accts.filter(a=>!a.arch&&(a.cur||'TWD')!=='TWD'&&a.gr
 function mktParts(){const H=S.settings.hold||[];const g=S.settings.gold;const fx=fxList();
   return[{k:'股票',p:'invest',v:holdTotal(),d:H.map(h=>h.pxd||'').sort().pop()||'',sub:H.length?H.length+' 檔':'尚未加入持股'},
     {k:'黃金',p:'gold',v:goldMV(),d:(g&&g.pxd)||'',sub:goldG()?(+g.q)+' '+(g.u||'錢'):'尚未輸入數量'},
-    {k:'外匯',p:'',v:fx.reduce((t,x)=>t+x.v,0),d:S.rates.at||'',sub:fx.length?fx.length+' 個外幣帳戶':'沒有外幣餘額'}]}
+    {k:'外匯',p:'fx',v:fx.reduce((t,x)=>t+x.v,0),d:S.rates.at||'',sub:fx.length?new Set(fx.map(x=>x.a.cur)).size+' 種幣別':'沒有外幣餘額'}]}
 function mktTotal(){return mktParts().reduce((t,x)=>t+x.v,0)}
 function mktDate(){return mktParts().map(x=>x.d).filter(Boolean).sort().pop()||'—'}
 function pageMarket(){const P=mktParts();const tot=P.reduce((t,x)=>t+x.v,0);const fx=fxList();
@@ -2839,7 +2839,14 @@ function pageMarket(){const P=mktParts();const tot=P.reduce((t,x)=>t+x.v,0);cons
    <div class="kv mt">${P.map(x=>`<div><div class="lbl">${x.k}</div><div class="v num">${fmt(x.v)}</div></div>`).join('')}</div>
    <div class="hint mt">股票：前一交易日收盤價；黃金：每公克金價 × 克數；外匯：外幣帳戶餘額 × 臺銀現金買入匯率。股票、黃金不計入「帳戶」頁淨資產；外匯本來就是帳戶餘額，已含在淨資產內。</div></div>
   <div class="grp"><div class="list">${P.map(row).join('')}</div></div>
-  ${fx.length?`<div class="grp"><div class="grph"><span>外匯明細</span><span class="num">${money(P[2].v)}</span></div><div class="list">${fx.map(x=>`<button class="li" data-act="push" data-p="acct" data-id="${x.a.id}"><div class="grow"><div>${esc(x.a.name)}</div><small class="num">${money(x.b,x.a.cur)} × ${S.rates.r[x.a.cur]||'?'}</small></div><div class="r num">${money(x.v)}</div><span class="chev">${IC.chev}</span></button>`).join('')}</div></div>`:''}`}}
+`}}
+function pageFx(){const fx=fxList();const tot=fx.reduce((t,x)=>t+x.v,0);const by=new Map();for(const x of fx){const o=by.get(x.a.cur)||{cur:x.a.cur,b:0,v:0,L:[]};o.b+=x.b;o.v+=x.v;o.L.push(x);by.set(x.a.cur,o)}
+  const C=[...by.values()].sort((a,b)=>b.v-a.v);
+  return{back:1,head:`<h1>外匯</h1><button class="ibtn" data-act="px-refresh" aria-label="更新">${IC.sync||'↻'}</button>`,body:`
+  <div class="sum"><div class="lbl">外匯市值（TWD） · 匯率更新：${esc(S.rates.at||'—')}</div><div class="huge num">${fmt(tot)}</div>
+   ${C.length?`<div class="kv mt">${C.map(c=>`<div><div class="lbl">${c.cur}</div><div class="v num">${fmt(c.v)}</div></div>`).join('')}</div>`:''}
+   <div class="hint mt">外幣帳戶正餘額 × 臺灣銀行現金買入匯率（不含信用卡），已含在「帳戶」頁淨資產內。</div></div>
+  ${C.map(c=>`<div class="grp"><div class="grph"><span>${c.cur} · ${money(c.b,c.cur)} × ${S.rates.r[c.cur]||'?'}</span><span class="num">${money(c.v)}</span></div><div class="list">${c.L.map(x=>`<button class="li" data-act="push" data-p="acct" data-id="${x.a.id}"><div class="grow"><div>${esc(x.a.name)}</div><small class="num">${money(x.b,x.a.cur)}</small></div><div class="r num">${money(x.v)}</div><span class="chev">${IC.chev}</span></button>`).join('')}</div></div>`).join('')||'<div class="empty">沒有外幣餘額</div>'}`}}
 const PF_OPEN=new Set();   // 股票市值頁：展開中的組合（預設全部收合）
 function pageInvest(){const H=S.settings.hold||[];const mvOf=h=>(+h.px||0)*(+h.sh||0)*rateOf(h.cu||'TWD');const tot=H.reduce((t,h)=>t+mvOf(h),0);
   const pd=H.filter(h=>h.pxd&&!h.pxManual&&(h.cu||'TWD')==='TWD').map(h=>h.pxd).sort().pop();
@@ -2885,7 +2892,7 @@ function budCarry(ym,cat){const B=S.budgets;if(!B.roll||!B.since||ym<=B.since)re
   for(let k=B.since;k<ym;k=shiftYM(k,1)){const u=monUse(k);carry+=base-(cat?(u.by.get(cat)||0):u.tot)}return Math.round(carry)}
 
 /* ---------- 掛到既有頁面 ---------- */
-PAGES.applepay=pageApplePay;PAGES.gold=pageGold;PAGES.market=pageMarket;PAGES.recon=pageRecon;PAGES.invest=pageInvest;PAGES.goals=pageGoals;
+PAGES.applepay=pageApplePay;PAGES.gold=pageGold;PAGES.market=pageMarket;PAGES.fx=pageFx;PAGES.recon=pageRecon;PAGES.invest=pageInvest;PAGES.goals=pageGoals;
 {const _more=PAGES.more;PAGES.more=function(){const r=_more();const it=(p,t,s)=>`<button class="li" data-act="push" data-p="${p}"><div class="grow"><div>${t}</div><small>${s}</small></div><span class="chev">${IC.chev}</span></button>`;
   const H=S.settings.hold||[],G=S.settings.goals||[];
   r.body=r.body.replace(/()(<button class="li" data-act="push" data-p="search")/,`$1${it('goals','存錢目標',G.length?G.length+' 個目標':'設定目標金額與期限')}${it('market','投資市值','股票・黃金・外匯 · '+money(mktTotal())+' · 更新：'+mktDate())}${it('applepay','Apple Pay 自動記帳','刷卡當下自動記一筆')}$2`);return r}}
