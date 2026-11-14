@@ -421,7 +421,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.20';
+window.APP_VER='v2.0.21';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1668,6 +1668,7 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
       const ch=D.live.filter(r=>r.sh&&pats.some(re=>re.test(r.sh))).map(r=>({...r,sh:''}));const names=[...new Set(D.live.filter(r=>r.sh&&pats.some(re=>re.test(r.sh))).map(r=>r.sh))];
       if(ch.length){S.lastUndo=ch.map(r=>({...S.byId.get(r.id)}));await mutate(ch);scheduleRender();toast('Claude 清除了 '+names.length+' 家商家名稱（'+ch.length+' 筆）：'+names.join('、')+'；可在搜尋頁復原')}else toast('沒有符合的商家：'+String(x.n||''));
       dels.push(d.ref);continue}
+    if(x.kind==='gold'){const q=parseFloat(x.q);if(q>=0){S.settings.gold={...(S.settings.gold||{}),q,u:GOLD_U[x.u]?x.u:'錢'};await saveKV('settings');toast('黃金：'+q+' '+S.settings.gold.u)}dels.push(d.ref);continue}
     if(x.kind==='osshop'){const L=new Set(S.settings.osShops||[]);const rm=x.rm==='1';String(x.n||'').split(/[,、，]/).map(t=>t.trim()).filter(Boolean).forEach(t=>rm?L.delete(t):L.add(t));S.settings.osShops=[...L];await saveKV('settings');toast('海外店家：'+(rm?'移除 ':'加入 ')+String(x.n||''));dels.push(d.ref);continue}
     if(x.kind==='updrule'){upds.push({n:String(x.n||'').trim(),wk:x.wk});dels.push(d.ref);continue}
     if(x.kind==='delrule'){String(x.n||'').split(/[,、]/).map(t=>t.trim()).filter(Boolean).forEach(t=>delNames.push(t));dels.push(d.ref);continue}
@@ -2790,9 +2791,9 @@ function subHTML(){const cs=subCands();if(!cs.length)return'';window._subs=cs;
 const PRICE_URL='https://raw.githubusercontent.com/taya20081-stack/ledger/main/prices.json';
 let PX=null;   // {d, p:{code:[name,close,cur?]}}，只在本機快取
 function pxApply(P){let n=0;for(const h of S.settings.hold||[]){if(h.pxManual)continue;const q=P&&P[h.code];if(q&&(!h.pxd||(q[3]||'')>=h.pxd||!q[3])){h.px=+q[1];if(q[3])h.pxd=q[3];if(!h.name||h.name===h.code)h.name=US_NAMES[String(h.code).toUpperCase()]||(q[0]&&q[0]!==h.code?q[0]:h.code);if(q[2])h.cu=q[2];n++}}return n}
-async function loadPrices(force){const H=S.settings.hold||[];if(!H.length&&!force)return false;const td=TODAY();if(!force&&S.settings.pxFor===td&&PX)return false;
+async function loadPrices(force){const H=S.settings.hold||[];if(!H.length&&!goldG()&&!force)return false;const td=TODAY();if(!force&&S.settings.pxFor===td&&PX)return false;
   try{const res=await fetch(PRICE_URL+'?t='+Date.now(),{cache:'no-store'});if(!res.ok)return false;PX=await res.json();let n=0;
-    for(const h of H){if(h.pxManual)continue;const q=PX.p&&PX.p[h.code];if(q){h.px=+q[1];h.pxd=q[3]||PX.d;if(!h.name)h.name=q[0];if(q[2])h.cu=q[2];n++}}n+=pxApply(S.settings.pxx&&S.settings.pxx.p);
+    for(const h of H){if(h.pxManual)continue;const q=PX.p&&PX.p[h.code];if(q){h.px=+q[1];h.pxd=q[3]||PX.d;if(!h.name)h.name=q[0];if(q[2])h.cu=q[2];n++}}n+=pxApply(S.settings.pxx&&S.settings.pxx.p);if(goldApply())n++;
     S.settings.pxFor=td;await saveKV('settings');return n>0}catch(e){return false}}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.ready)loadPrices().then(ok=>{if(ok)render(true)})});
 function holdRecs(h){const code=String(h.code||'').trim(),nm=String(h.name||'').trim();const reC=code?new RegExp('(^|[^0-9A-Za-z])'+code.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?![0-9A-Za-z])','i'):null;
@@ -2809,6 +2810,19 @@ function holdGuess(){const have=new Set((S.settings.hold||[]).map(h=>h.code));co
 function pfList(){const H=S.settings.hold||[];const o=[];for(const h of H){const p=h.pf||'我的';if(!o.includes(p))o.push(p)}return o}
 const US_NAMES={NVDA:'輝達',TSLA:'特斯拉',QQQ:'那斯達克100 ETF',AAPL:'蘋果',MSFT:'微軟',GOOGL:'Alphabet A',GOOG:'Alphabet C',AMZN:'亞馬遜',META:'Meta',AVGO:'博通',AMD:'超微',INTC:'英特爾',TSM:'台積電 ADR',NFLX:'Netflix',ORCL:'甲骨文',CRM:'Salesforce',ADBE:'Adobe',QCOM:'高通',MU:'美光',PLTR:'Palantir',COST:'好市多',WMT:'沃爾瑪',JPM:'摩根大通',V:'Visa',MA:'萬事達卡','BRK-B':'波克夏 B',BRK_B:'波克夏 B',UNH:'聯合健康',XOM:'埃克森美孚',KO:'可口可樂',DIS:'迪士尼',BA:'波音',BABA:'阿里巴巴',SPY:'標普500 ETF (SPY)',VOO:'標普500 ETF (VOO)',IVV:'標普500 ETF (IVV)',VTI:'美國全市場 ETF',VT:'全世界股票 ETF',DIA:'道瓊 ETF',IWM:'羅素2000 ETF',SOXX:'費城半導體 ETF (SOXX)',SMH:'半導體 ETF (SMH)',ARKK:'ARK 創新 ETF',SCHD:'美國高股息 ETF (SCHD)',VYM:'高股息 ETF (VYM)',BND:'美國總體債券 ETF',TLT:'20年期美債 ETF'};
 function holdName(h){const c=String(h.code||'');if(h.name&&h.name!==c)return h.name;return US_NAMES[c]||h.name||c}
+/* ---------- 黃金（價格：臺灣銀行黃金存摺「本行買進」每公克，GitHub Action 每天寫進 prices.json 的 GOLD） ----------
+   S.settings.gold={q:數量,u:'錢'|'兩'|'克',px:每克價,pxd:日期}；數量只存在你自己的雲端，不會出現在 GitHub */
+const GOLD_U={'錢':3.75,'兩':37.5,'克':1};
+function goldG(){const g=S.settings.gold;return g&&+g.q>0?+g.q*(GOLD_U[g.u]||3.75):0}
+function goldMV(){const g=S.settings.gold;return g&&g.px?Math.round(goldG()*g.px):0}
+function goldApply(){const g=S.settings.gold;const q=PX&&PX.p&&PX.p.GOLD;if(!g||!q||!(+q[1]>0))return false;if(g.pxd&&(q[3]||'')<g.pxd)return false;g.px=+q[1];g.pxd=q[3]||PX.d;return true}
+function pageGold(){const g=S.settings.gold||{q:'',u:'錢'};const gr=goldG();
+  return{back:1,head:`<h1>黃金</h1><button class="ibtn" data-act="px-refresh" aria-label="更新金價">${IC.sync||'↻'}</button>`,body:`
+  <div class="sum"><div class="lbl">黃金市值（TWD）${g.pxd?' · '+g.pxd.slice(5).replace('-','/')+' 牌價':''}</div><div class="huge num">${g.px&&gr?fmt(goldMV()):'—'}</div>
+   ${g.px?`<div class="kv mt"><div><div class="lbl">每公克</div><div class="v num">${fmt(g.px)}</div></div><div><div class="lbl">每錢</div><div class="v num">${fmt(Math.round(g.px*3.75))}</div></div><div><div class="lbl">持有</div><div class="v num">${gr?(+gr.toFixed(2))+' 克':'—'}</div></div></div>`:''}
+   <div class="hint mt">市值＝持有克數 × 臺灣銀行黃金存摺「本行買進」價（每公克），每個營業日自動更新；1 錢＝3.75 克、1 兩＝37.5 克。不計入「帳戶」頁的淨資產。</div></div>
+  <div class="card stack"><div class="lbl">持有數量</div><div class="grid2"><label class="field"><span>數量</span><input class="in num" id="gd-q" inputmode="decimal" value="${esc(g.q||'')}" placeholder="3"></label><label class="field"><span>單位</span><select class="in" id="gd-u">${Object.keys(GOLD_U).map(u=>`<option${(g.u||'錢')===u?' selected':''}>${u}</option>`).join('')}</select></label></div>
+   <button class="btn pri" data-act="gd-save">儲存</button></div>`}}
 const PF_OPEN=new Set();   // 股票市值頁：展開中的組合（預設全部收合）
 function pageInvest(){const H=S.settings.hold||[];const mvOf=h=>(+h.px||0)*(+h.sh||0)*rateOf(h.cu||'TWD');const tot=H.reduce((t,h)=>t+mvOf(h),0);
   const pd=H.filter(h=>h.pxd&&!h.pxManual&&(h.cu||'TWD')==='TWD').map(h=>h.pxd).sort().pop();
@@ -2854,10 +2868,10 @@ function budCarry(ym,cat){const B=S.budgets;if(!B.roll||!B.since||ym<=B.since)re
   for(let k=B.since;k<ym;k=shiftYM(k,1)){const u=monUse(k);carry+=base-(cat?(u.by.get(cat)||0):u.tot)}return Math.round(carry)}
 
 /* ---------- 掛到既有頁面 ---------- */
-PAGES.applepay=pageApplePay;PAGES.recon=pageRecon;PAGES.invest=pageInvest;PAGES.goals=pageGoals;
+PAGES.applepay=pageApplePay;PAGES.gold=pageGold;PAGES.recon=pageRecon;PAGES.invest=pageInvest;PAGES.goals=pageGoals;
 {const _more=PAGES.more;PAGES.more=function(){const r=_more();const it=(p,t,s)=>`<button class="li" data-act="push" data-p="${p}"><div class="grow"><div>${t}</div><small>${s}</small></div><span class="chev">${IC.chev}</span></button>`;
   const H=S.settings.hold||[],G=S.settings.goals||[];
-  r.body=r.body.replace(/()(<button class="li" data-act="push" data-p="search")/,`$1${it('goals','存錢目標',G.length?G.length+' 個目標':'設定目標金額與期限')}${it('invest','股票市值',H.length?H.length+' 檔 · '+money(holdTotal())+' · 更新：'+(H.map(h=>h.pxd||'').sort().pop()||'—'):'輸入持股，自動帶收盤價')}${it('applepay','Apple Pay 自動記帳','刷卡當下自動記一筆')}$2`);return r}}
+  r.body=r.body.replace(/()(<button class="li" data-act="push" data-p="search")/,`$1${it('goals','存錢目標',G.length?G.length+' 個目標':'設定目標金額與期限')}${it('invest','股票市值',H.length?H.length+' 檔 · '+money(holdTotal())+' · 更新：'+(H.map(h=>h.pxd||'').sort().pop()||'—'):'輸入持股，自動帶收盤價')}${it('gold','黃金',goldG()?(+S.settings.gold.q)+' '+(S.settings.gold.u||'錢')+(S.settings.gold.px?' · '+money(goldMV())+' · 更新：'+(S.settings.gold.pxd||'—'):' · 等待金價'):'輸入持有數量，自動帶臺銀牌價')}${it('applepay','Apple Pay 自動記帳','刷卡當下自動記一筆')}$2`);return r}}
 {const _accts=PAGES.accts;PAGES.accts=function(){const r=_accts();const mv=holdTotal();if(!mv)return r;
   r.body=r.body.replace(/(<\/div><\/div><\/div>)(\s*<div class="toolbar mt">)/,`$1<button class="li" data-act="push" data-p="invest" style="margin-top:10px"><div class="grow"><div>股票市值</div><small>未計入上方淨資產</small></div><div class="r num">${money(mv)}</div><span class="chev">${IC.chev}</span></button>$2`);return r}}
 {const _acct=PAGES.acct;PAGES.acct=function(id){const r=_acct(id);r.body=r.body.replace(/(<button class="btn sm" data-act="adjust" data-id="[^"]*">調整餘額<\/button>)/,`$1<button class="btn sm" data-act="push" data-p="recon" data-id="${id}">對帳</button>`);return r}}
@@ -2877,7 +2891,8 @@ Object.assign(ACT,{
   'sub-make':el=>{const c=(window._subs||[])[+el.dataset.i];if(!c)return;const r=c.last;const f=blankForm('exp');let dt=addMonths(r.dt,1,c.day);while(dt<=TODAY())dt=addMonths(dt,1,c.day);
     Object.assign(f,{a:r.a,c:r.c,s:r.s,n:r.n||'',sh:r.sh||'',p:r.p||'',amt:String(Math.abs(r.m)),tm:r.tm||'09:00',dt,mode:'rep',rep:'M',iv:1});openEditor(f)},
   'sub-ign':async el=>{const c=(window._subs||[])[+el.dataset.i];if(!c)return;S.settings.subIgn=[...(S.settings.subIgn||[]),c.key];await saveKV('settings');render(true)},
-  'px-refresh':async()=>{toast('更新股價中…');const ok=await loadPrices(true);render(true);toast(ok?'已更新到 '+(PX?.d||'').slice(5).replace('-','/')+' 收盤價':'目前抓不到股價資料（prices.json 尚未建立或網路問題）')},
+  'gd-save':async()=>{const q=evalAmt($('#gd-q').value);const u=$('#gd-u').value;if(!(q>=0))return toast('請輸入數量');S.settings.gold={...(S.settings.gold||{}),q,u};await saveKV('settings');await loadPrices(true);render(true);toast('已儲存黃金 '+q+' '+u)},
+  'px-refresh':async()=>{toast('更新價格中…');const ok=await loadPrices(true);render(true);toast(ok?'已更新到 '+(PX?.d||'').slice(5).replace('-','/')+' 收盤價':'目前抓不到股價資料（prices.json 尚未建立或網路問題）')},
   'hd-add':async()=>{const code=($('#hd-code').value||'').trim();const sh=evalAmt($('#hd-sh').value);if(!code)return toast('請輸入代號');if(!(sh>0))return toast('請輸入股數');
     holdUpsert($('#hd-pf').value,code,sh,0);await saveKV('settings');await loadPrices(true);render(true);toast('已加入')},
   'hd-bulk':async()=>{let n=0;for(const line of($('#hd-bulk').value||'').split(/\n/)){const c=line.split(/[,，\t]/).map(x=>x.trim());if(c.length<3)continue;const sh=evalAmt(c[2].replace(/,/g,''));if(!c[1]||!(sh>0))continue;holdUpsert(c[0],c[1],sh,0,'');n++}
