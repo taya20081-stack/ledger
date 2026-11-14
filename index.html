@@ -413,13 +413,15 @@ body.calc-on #sb{padding-bottom:330px}
 .steps{margin:0;padding-left:20px;display:grid;gap:8px;font-size:14px;line-height:1.55}.steps code{font-size:12px;background:var(--paper2);border-radius:4px;padding:1px 4px;word-break:break-all}
 details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-details-marker{display:none}
 
+.osrow .osline{display:flex;gap:8px;align-items:center;font-size:14px}.osrow input[type=checkbox]{width:18px;height:18px;margin:0}
+
 </style>
 </head>
 <body>
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.7';
+window.APP_VER='v2.0.8';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -606,12 +608,25 @@ function blankForm(kind='exp'){
   const lastA=S.settings.lastA&&D.acct.has(S.settings.lastA)?S.settings.lastA:(S.accts.find(a=>!a.arch)?.id||'');
   const c0=S.cats.exp[0];
   return{kind,a:lastA,a2:'',amt:'',amt2:'',c:kind==='inc'?S.cats.inc[0]?.n:c0?.n,s:kind==='inc'?S.cats.inc[0]?.subs[0]:c0?.subs[0],
-    n:'',sh:'',p:'',w:'',fee:'',disc:'',ds:'',cu:'',xr:'',dt:TODAY(),tm:NOWTM(),act:'lend',st:'紅利回饋',rep:'',iv:1,cnt:'',splits:null,ids:[]};
+    n:'',sh:'',p:'',w:'',fee:'',disc:'',ds:'',cu:'',xr:'',dt:TODAY(),tm:NOWTM(),act:'lend',st:'紅利回饋',rep:'',iv:1,cnt:'',splits:null,ids:[],os:false};
 }
 function buildRecords(fs){
   const out=buildRecords0(fs);const ac=D.acct.get(fs.a)?.cur||'TWD';
   if(fs.kind!=='tr'&&fs.cu&&fs.cu!==ac){const xr=evalAmt(fs.xr)>0?evalAmt(fs.xr):+(rateOf(fs.cu)/rateOf(ac)).toPrecision(6);out.forEach(r=>{if(r.a===fs.a){r.cu=fs.cu;r.xr=xr}})}
+  if(fs.kind==='exp'&&fs.os&&!fs._edit){const fr=osFeeRec(out);if(fr)out.push(fr)}
   return out;
+}
+/* 海外交易：另記一筆 1.5% 手續費（以帳戶幣別計，四捨五入） */
+const OS_RATE=0.015;
+function osShops(){return S.settings.osShops||[]}
+function isOsShop(sh){sh=String(sh||'').trim();return!!sh&&osShops().includes(sh)}
+function osFeeOf(total){return Math.round(Math.abs(total)*OS_RATE)}
+function osFeeRec(recs){
+  const main=recs.filter(r=>r.t==='支出');if(!main.length)return null;
+  const tot=main.reduce((t,r)=>t+Math.abs(val(r)),0);const fee=osFeeOf(tot);if(!(fee>0))return null;
+  const m0=main[0];const pc=S.cats.exp.find(q=>q.n==='個人支出'&&q.subs.includes('手續費'));
+  const cat=pc?{t:'支出',c:'個人支出',s:'手續費'}:{t:'手續費',c:'手續費',s:'手續費'};
+  const r={...m0,...cat,id:uid(),m:-fee,f:0,d:0,g:'',n:'海外交易手續費',o:(m0.o||Date.now())+1,ds:'海外交易 1.5%（'+(m0.gn||m0.n||m0.s||'')+'）'};delete r.gn;delete r.cu;delete r.xr;return r;
 }
 function buildRecords0(fs){
   const amt=evalAmt(fs.amt);const fee=evalAmt(fs.fee)||0;const disc=evalAmt(fs.disc)||0;
@@ -1164,6 +1179,9 @@ function renderEditor(){
   const acctRow=f.kind==='tr'?`<div class="grid2"><label class="field"><span>從</span><select class="in" id="f-a" data-f="a" data-rr="1">${acctOptions(f.a,1)}</select></label><label class="field"><span>到</span><select class="in" id="f-a2" data-f="a2" data-rr="1">${acctOptions(f.a2,1)}</select></label></div>${diffCur?`<label class="field"><span>轉入金額（${acB.cur}）${f._sugg&&!f.amt2?' · 依匯率約 '+fmt(f._sugg,acB.cur):''}</span><input class="in num" id="f-amt2" data-f="amt2" data-calc inputmode="${CALC_IM}" value="${esc(f.amt2||'')}" placeholder="${f._sugg||''}"></label>`:''}`
     :`<label class="field"><span>帳戶</span><select class="in" id="f-a" data-f="a" data-rr="1">${acctOptions(f.a)}</select></label>`;
   const feeRow=['exp','inc','tr'].includes(f.kind)?`<label class="field"><span>手續費${ei&&f.cu&&f.cu!==cur?'（'+f.cu+'）':''}</span><input class="in num" id="f-fee" data-f="fee" data-calc inputmode="${CALC_IM}" value="${esc(f.fee)}" placeholder="0"></label>`:'';
+  if(!f._edit&&f.kind==='exp'&&f._osFor!==(f.sh||'')){f._osFor=f.sh||'';if(isOsShop(f.sh)){f.os=true;f.osShop=true}else f.osShop=false}
+  const osRow=f.kind==='exp'&&!f._edit&&!(f.mode==='inst')?(()=>{const tot=f.splits?f.splits.reduce((t,x)=>t+(evalAmt(x.amt)||0),0):(evalAmt(f.amt)||0);const xr=f.cu&&f.cu!==cur?(evalAmt(f.xr)>0?evalAmt(f.xr):rateOf(f.cu)/rateOf(cur)):1;const fe=osFeeOf(tot*xr);
+    return`<label class="field osrow"><span>海外交易</span><span class="osline"><input type="checkbox" id="f-os" data-f="os" data-rr="1" ${f.os?'checked':''}> 是，另記一筆 1.5% 海外交易手續費<b id="f-osamt">${f.os&&fe>0?'：'+money(fe,cur):''}</b></span>${f.sh?`<span class="osline"><input type="checkbox" id="f-osshop" data-f="osShop" data-rr="1" ${f.osShop?'checked':''}> 「${esc(f.sh)}」是海外店家（之後選這個商家會自動勾選）</span>`:''}</label>`})():'';
   const pIn=f._pIn,shIn=f._shIn;f._pIn=f._shIn=false;
   const projRow=pIn?`<label class="field"><span>專案</span><input class="in" id="f-p" data-f="p" value="${esc(f.p)}" placeholder="輸入專案名稱，會帶出相符的專案" autocomplete="off"><div id="f-p-sugg" class="nsug" hidden></div></label>`
     :`<label class="field"><span>專案</span><select class="in" id="f-p-sel">${projOptions(f.p)}</select></label>`;
@@ -1173,7 +1191,7 @@ function renderEditor(){
   sb.innerHTML=`<div class="toolbar"><div class="seg" role="tablist">${kinds.map(([k,l])=>`<button class="${f.kind===k?'on':''}" data-act="ef-kind" data-k="${k}">${l}</button>`).join('')}</div>${f._edit?'':`<div class="btns"><button class="btn sm" data-act="inv-scan">${IC.qr}掃發票</button><button class="btn sm" data-act="rc-open">掃明細</button></div>`}</div>
   ${f.kind==='sys'?`<label class="field"><span>類型</span><select class="in" id="f-st" data-f="st" data-rr="1">${SYS_T.filter(t=>!SYS_HIDE.has(t)||f.st===t).map(t=>`<option ${t===f.st?'selected':''}>${t}</option>`).join('')}</select></label>`:''}
   ${f.kind==='debt'?`<div class="field"><span>動作</span><div class="chips">${Object.entries(DEBT_ACT).map(([k,v])=>`<button class="chip${f.act===k?' on':''}" data-act="ef-debt" data-k="${k}">${v[3]}<small style="opacity:.7">${v[0]==='應收款項'?'應收':'應付'}</small></button>`).join('')}</div></div><label class="field"><span>對象</span><input class="in" id="f-w" data-f="w" list="dl-who" value="${esc(f.w)}" placeholder="例如：家人、同事姓名"></label>`:''}
-  ${dateRow}${catPicker}${splits}${amtBox}${feeRow}${acctRow}${projRow}${shopRow}${nameRow}
+  ${dateRow}${catPicker}${splits}${amtBox}${feeRow}${acctRow}${projRow}${shopRow}${osRow}${nameRow}
   ${!f._edit&&['exp','inc','tr'].includes(f.kind)?(()=>{const md=f.mode||(f.rep?'rep':'');const canI=f.kind==='exp'&&!f.splits;
     const seg=`<div class="field"><span>記帳方式</span><div class="seg full"><button class="${!md?'on':''}" data-act="ef-mode" data-k="">單次</button><button class="${md==='rep'?'on':''}" data-act="ef-mode" data-k="rep">週期</button>${canI?`<button class="${md==='inst'?'on':''}" data-act="ef-mode" data-k="inst">分期</button>`:''}</div></div>`;
     const postSel=`<label class="field"><span>入帳方式</span><select class="in" id="f-post" data-f="post"><option value="">立即入帳</option><option value="m" ${f.post==='m'?'selected':''}>手動確認後入帳</option></select></label>`;
@@ -1193,8 +1211,10 @@ function datalists(){
 }
 async function saveEditor(again){
   const f=EF;const err=validate(f);if(err)return toast(err);
+  if(!f._edit&&f.kind==='exp'){const sh=(f.sh||'').trim();if(sh&&f._osFor!==sh&&isOsShop(sh))f.os=true;
+    if(sh&&f._osFor===sh){const L=osShops();const has=L.includes(sh);if(f.osShop&&!has)S.settings.osShops=[...L,sh];else if(!f.osShop&&has)S.settings.osShops=L.filter(x=>x!==sh);if(!!f.osShop!==has){if(f.osShop)f.os=true;saveKV('settings')}}}
   const recs=buildRecords(f);if(!recs.length)return toast('沒有可儲存的內容');
-  if(!f._edit&&!(f.mode||f.rep)&&(f.kind==='exp'||f.kind==='inc')&&!f.splits&&recs.length===1){const dp=dupOf(recs[0]);const sig=recs[0].a+'|'+recs[0].m+'|'+recs[0].dt+'|'+recs[0].tm;
+  if(!f._edit&&!(f.mode||f.rep)&&(f.kind==='exp'||f.kind==='inc')&&!f.splits&&recs.filter(r=>r.n!=='海外交易手續費').length===1){const dp=dupOf(recs[0]);const sig=recs[0].a+'|'+recs[0].m+'|'+recs[0].dt+'|'+recs[0].tm;
     if(dp&&f._dupSig!==sig){f._dupSig=sig;f._dupMsg=dupText(dp);renderEditor();setTimeout(()=>{const e=$('#ef-dup');e&&e.scrollIntoView({block:'center'})},50);return toast('可能重複，再按一次儲存仍會記錄')}}
   const del=[];
   if(f._edit){const old=f.ids.map(id=>S.byId.get(id)).filter(Boolean);recs.forEach((r,i)=>{if(old[i]){r.id=old[i].id;r.o=old[i].o;if(old[i].k&&r.k){/*keep pair id*/r.k=old[0].k||r.k}if(old[i].g&&f.kind==='exp'&&!f.splits)r.g=old[i].g}});
@@ -1215,14 +1235,15 @@ async function saveEditor(again){
   if(!f._edit&&!md&&f.dep){const tot=evalAmt(f.depT),dp=evalAmt(f.amt);if(!(tot>dp))return toast('總金額需大於訂金');
     S.settings.pend=[...(S.settings.pend||[]),{id:uid(),fs:{...f,ids:[],post:'',dep:'',depT:'',depD:'',mode:'',amt:String(r2(tot-dp)),n:(f.n||f.s||'')+'（尾款）',dt:f.depD||f.dt},due:f.depD||'',label:'尾款'}];recs.forEach(r=>{if(r.n&&!/訂金/.test(r.n))r.n+='（訂金）'})}
   if(f._edit&&f._scope==='all'){const ro=efRule(f);if(ro){const{rule,k}=ro;
-      rule.fs={...rule.fs,...f,ids:[],rep:'',mode:'',post:'',sno:'',wk:'',dep:'',_edit:false,_scope:'',dt:rule.fs.dt};delete rule.fs._pend;rule.name=f.n||f.s||rule.name;rule.u=Date.now();
+      rule.fs={...rule.fs,...f,ids:[],rep:'',mode:'',post:'',sno:'',wk:'',dep:'',_edit:false,_scope:'',dt:rule.fs.dt,os:!!rule.fs.os};delete rule.fs._pend;rule.name=f.n||f.s||rule.name;rule.u=Date.now();
       for(let q=k+1;q<rule.done;q++){const old=S.recs.filter(r=>!r.x&&r.id.startsWith(rule.id+'_'+q+'_'));if(!old.length)continue;const nw=ruleBuild(rule,q);const keep=new Set(nw.map(r=>r.id));nw.forEach(r=>{const o=S.byId.get(r.id);if(o)r.o=o.o});recs.push(...nw);old.forEach(o=>{if(!keep.has(o.id))del.push(o.id)})}
       await saveKV('rules')}}
   if(f._pend){S.settings.pend=(S.settings.pend||[]).filter(x=>x.id!==f._pend)}
   S.settings.lastA=f.a;saveKV('settings');
   await mutate(recs,del);
   const v=f.kind==='exp'?(f.splits?f.splits.reduce((s,x)=>s+(evalAmt(x.amt)||0),0):evalAmt(f.amt)):evalAmt(f.amt);
-  toast((f._edit?'已更新 ':'已記錄 ')+({exp:'支出',inc:'收入',tr:'轉帳',debt:'借貸',sys:f.st}[f.kind])+' '+money(v,D.acct.get(f.a)?.cur));
+  const osr=recs.find(r=>r.n==='海外交易手續費'&&!r.f&&f.os);
+  toast((f._edit?'已更新 ':'已記錄 ')+({exp:'支出',inc:'收入',tr:'轉帳',debt:'借貸',sys:f.st}[f.kind])+' '+money(v,D.acct.get(f.a)?.cur)+(osr?'＋海外交易手續費 '+money(-osr.m,D.acct.get(f.a)?.cur):''));
   if(again){const n=blankForm(f.kind);Object.assign(n,{a:f.a,a2:f.a2,c:f.c,s:f.s,dt:f.dt,p:f.p});EF=n;renderEditor();setTimeout(()=>$('#f-amt')&&$('#f-amt').focus(),50)}
   else closeSheet();
   if(!f._edit&&S.view==='home'&&!S.stack.length){S.day=f.dt;S.month=f.dt.slice(0,7)}
@@ -1418,6 +1439,7 @@ document.addEventListener('compositionend',e=>{const t=e.target;if(!t.dataset||!
 document.addEventListener('input',e=>{const t=e.target;
   if(t.dataset.f&&EF){EF[t.dataset.f]=t.type==='checkbox'?t.checked:t.value;
     if(t.dataset.f==='amt'){const ev=evalAmt(t.value);const el=$('#f-ev');if(el)el.textContent=/[+\-−*/×÷]/.test(t.value.slice(1))&&isFinite(ev)?'= '+fmt(ev,D.acct.get(EF.a)?.cur||'TWD'):''}
+    if(EF.os&&(t.dataset.f==='amt'||t.dataset.f==='xr')){const el=$('#f-osamt');if(el){const cur=D.acct.get(EF.a)?.cur||'TWD';const xr=EF.cu&&EF.cu!==cur?(evalAmt(EF.xr)>0?evalAmt(EF.xr):rateOf(EF.cu)/rateOf(cur)):1;const fe=osFeeOf((evalAmt(EF.amt)||0)*xr);el.textContent=fe>0?'：'+money(fe,cur):''}}
     if(t.dataset.rr)renderEditor();return}
   if(t.dataset.sp!=null&&EF){const i=+t.dataset.sp;const sp=EF.splits[i];if(t.dataset.spf==='cat'){const[c,s]=t.value.split('\u0001');sp.c=c;sp.s=s}else sp[t.dataset.spf]=t.value;if(t.dataset.spf==='amt'){const lbl=document.querySelector('#sb .field>span');if(lbl)lbl.innerHTML='分項（合計 <span class="num">'+fmt(EF.splits.reduce((s,x)=>s+(evalAmt(x.amt)||0),0))+'</span>）'}return}
   if(t.dataset.sf){S.search[t.dataset.sf]=t.value;S.search.limit=300;if(e.isComposing)return;clearTimeout(sTimer);const txt=t.tagName==='INPUT'&&t.type!=='date';sTimer=setTimeout(()=>searchUpd(txt),txt?250:0)}
@@ -1540,7 +1562,7 @@ const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],fi
   },
   pushKV(k){if(!this.user||!this.decided)return;let v=S[k];if(k==='settings'){v={...v};LOCAL_SETTINGS.forEach(x=>delete v[x])}
     const u=S.kvu[k]||Date.now();this.remoteKV[k]=u;const w=[this.base().collection('kv').doc(k).set({j:JSON.stringify(v),u})];
-    if(k==='cats'||k==='accts'||(k==='settings'&&usCodes()!==_usLast)){_usLast=usCodes();w.push(this.base().collection('kv').doc('botinfo').set(botInfo()))}this.track(w)},
+    if(k==='cats'||k==='accts'||(k==='settings'&&usCodes()+JSON.stringify(osShops())!==_usLast)){_usLast=usCodes()+JSON.stringify(osShops());w.push(this.base().collection('kv').doc('botinfo').set(botInfo()))}this.track(w)},
   track(commits,sizes){if(!commits.length)return;this.writing+=commits.length;commits.forEach((c,i)=>{const k=sizes?sizes[i]||0:0;this.wTot+=k;c.then(()=>{this.wDone+=k;refreshCloudUI()},()=>{})});refreshCloudUI();
     Promise.all(commits).then(()=>{this.lastSync=Date.now()}).catch(e=>{this.err='寫入失敗：'+(e.code||e.message);this.state='error'}).finally(()=>{this.writing-=commits.length;if(!this.writing){this.wTot=this.wDone=0}refreshCloudUI()})},
   label(){
@@ -1646,14 +1668,15 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
         if(/^[DWMY]$/.test(x.rep||'')){
           if(!S.rules.some(q=>q.id===id)){
             let sp=null;try{const aa=typeof x.sp==='string'?JSON.parse(x.sp):x.sp;if(Array.isArray(aa)&&aa.length)sp=aa.map(q=>({c:q.c||c,s:q.s||'',amt:String(Math.abs(+q.amt)||0),n:String(q.n||'').slice(0,80)}))}catch(e){}
-            const rule={id,name:r.n||r.s||'',fs:{kind,a:acct.id,c,s:s||'',amt:String(sp?sp.reduce((t,q)=>t+(+q.amt),0):amt),n:r.n,p:r.p,sh:r.sh,ds:'',w:'',tm,dt,fee:r.f?String(Math.abs(r.f)):'',disc:'',cu:r.cu||'',xr:'',ids:[],splits:sp},fq:x.rep,iv:Math.max(1,parseInt(x.iv)||1),start:dt,end:'',cnt:parseInt(x.cnt)||0,done:0,next:'',on:1,off:Math.max(0,(parseInt(x.sno)||1)-1),wk:(x.wk==='prev'||x.wk==='next')?x.wk:'',u:Date.now()};
+            const rule={id,name:r.n||r.s||'',fs:{kind,a:acct.id,c,s:s||'',amt:String(sp?sp.reduce((t,q)=>t+(+q.amt),0):amt),n:r.n,p:r.p,sh:r.sh,ds:'',w:'',tm,dt,fee:r.f?String(Math.abs(r.f)):'',disc:'',cu:r.cu||'',xr:'',ids:[],splits:sp,os:(x.os===true||x.os==='1'||x.os===1||isOsShop(x.sh))&&x.os!=='0'},fq:x.rep,iv:Math.max(1,parseInt(x.iv)||1),start:dt,end:'',cnt:parseInt(x.cnt)||0,done:0,next:'',on:1,off:Math.max(0,(parseInt(x.sno)||1)-1),wk:(x.wk==='prev'||x.wk==='next')?x.wk:'',u:Date.now()};
             if(x.rep==='M'&&x.md){const md=[...new Set((Array.isArray(x.md)?x.md:String(x.md).split(/[,、\s]+/)).map(Number).filter(q=>q>=1&&q<=32))].sort((a,b)=>a-b);
               if(md.length){rule.md=md;const sd=+dt.slice(8),last=daysIn(+dt.slice(0,4),+dt.slice(5,7));rule.m0=md.filter(q=>Math.min(q,last)<sd).length}}
             newRules.push(rule)}
         }else{let sp=null;try{const aa=typeof x.sp==='string'?JSON.parse(x.sp):x.sp;if(Array.isArray(aa)&&aa.length>1)sp=aa}catch(e){}
           if(sp){const g=uid(),ck=kind==='inc'?'inc':'exp';sp.forEach((q,i)=>{const v=Math.abs(+q.amt)||0;if(!(v>0))return;let qc=q.c||c,qs=q.s||'';const qm=S.cats[ck].find(z=>z.n===qc);if(!qm){qc=c;qs=s||''}else if(!qm.subs.includes(qs))qs=qm.subs[0]||'';
             add.push({...r,id:id+'_'+i,c:qc,s:qs,m:kind==='inc'?v:-v,n:String(q.n||'').slice(0,80),gn:r.n,g,f:i===0?r.f:0})})}
-          else add.push(r)}}}}
+          else add.push(r);
+          if(kind==='exp'&&(x.os===true||x.os==='1'||x.os===1||isOsShop(x.sh))&&x.os!=='0'){const fr=osFeeRec(add.filter(q=>q.id===id||q.id.startsWith(id+'_')));if(fr){fr.id=id+'_os';fr.tg='claude';add.push(fr)}}}}}}
     dels.push(d.ref)}
   if(newRules.length){S.rules.push(...newRules);await saveKV('rules');await runRules();scheduleRender();toast('Claude 幫你建了 '+newRules.length+' 個週期：'+newRules.slice(0,3).map(q=>q.name+'（'+ruleDesc(q)+'）').join('、'))}
   if(delNames.length){const td=TODAY();const gone=S.rules.filter(q=>q.fq!=='I'&&String(q.id).startsWith('ib_')&&delNames.includes(q.name));
@@ -1692,7 +1715,7 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
 ACT['copy-uid']=el=>{const v=Cloud.user?.uid||'';(navigator.clipboard?.writeText(v)||Promise.reject()).then(()=>toast('已複製 UID'),()=>toast('請長按 UID 文字手動複製'))};
 
 /* 給 Claude 專用帳號讀的精簡清單：只有分類與帳戶名稱，不含金額 */
-function botInfo(){return{cats:JSON.stringify({exp:S.cats.exp.map(c=>({n:c.n,subs:c.subs})),inc:S.cats.inc.map(c=>({n:c.n,subs:c.subs}))}),accts:JSON.stringify(S.accts.filter(a=>!a.arch).map(a=>({id:a.id,name:a.name,cur:a.cur,grp:a.grp}))),lastA:D.acct.get(S.settings.lastA)?.name||'',us:usCodes(),u:Date.now()}}
+function botInfo(){return{cats:JSON.stringify({exp:S.cats.exp.map(c=>({n:c.n,subs:c.subs})),inc:S.cats.inc.map(c=>({n:c.n,subs:c.subs}))}),accts:JSON.stringify(S.accts.filter(a=>!a.arch).map(a=>({id:a.id,name:a.name,cur:a.cur,grp:a.grp}))),lastA:D.acct.get(S.settings.lastA)?.name||'',us:usCodes(),os:JSON.stringify(osShops()),u:Date.now()}}
 function usCodes(){return JSON.stringify([...new Set((S.settings.hold||[]).map(h=>String(h.code||'').toUpperCase()).filter(c=>/^[A-Z][A-Z.\-]{0,9}$/.test(c)))].sort())}
 let _usLast=null;
 
