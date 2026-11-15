@@ -423,7 +423,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.30';
+window.APP_VER='v2.0.31';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -643,7 +643,9 @@ function osFeeRec(recs){
   const tot=main.reduce((t,r)=>t+Math.abs(val(r)),0);const fee=osFeeOf(tot);if(!(fee>0))return null;
   const m0=main[0];const pc=S.cats.exp.find(q=>q.n==='個人支出'&&q.subs.includes('手續費'));
   const cat=pc?{t:'支出',c:'個人支出',s:'手續費'}:{t:'手續費',c:'手續費',s:'手續費'};
-  const r={...m0,...cat,id:uid(),m:-fee,f:0,d:0,g:'',n:'海外交易手續費',o:(m0.o||Date.now())+1,ds:'海外交易 1.5%（'+(m0.gn||m0.n||m0.s||'')+'）'};delete r.gn;delete r.cu;delete r.xr;return r;
+  // 手續費併入同一筆（同一個 g），在首頁顯示成多類別的一個分項
+  let g=main.every(x=>x.g&&x.g===m0.g)?m0.g:'';if(!g){g=uid();const gn=main.length>1?(m0.gn||''):(m0.n||'');main.forEach(x=>{x.g=g;if(gn&&!x.gn)x.gn=gn})}
+  const r={...m0,...cat,id:uid(),m:-fee,f:0,d:0,g,gn:m0.gn||'',n:'海外交易手續費',o:(m0.o||Date.now())+1,ds:'海外交易 1.5%（'+(m0.gn||m0.n||m0.s||'')+'）'};if(!r.gn)delete r.gn;delete r.cu;delete r.xr;return r;
 }
 function buildRecords0(fs){
   if(fs.splits&&fs.splits.length&&fs._si!=null&&fs.splits[fs._si])fs.splits[fs._si].p=fs.p||'';
@@ -873,6 +875,15 @@ function badge(r){
   return`<span class="badge sys">${esc((r.t||'?').slice(0,1))}</span>`;
 }
 // 多類別記錄的「大項名稱」：新版存在 gn；舊版是每個分項都被填成同一個名稱
+/* 舊資料：獨立列項的海外交易手續費 → 併入同一時間、同帳戶的那筆支出 */
+async function fixOsGroups(){const up=[];const byKey=new Map();
+  for(const r of D.live)if(r.t==='支出'&&r.n!=='海外交易手續費'){const k=r.a+'|'+r.dt+'|'+r.tm;(byKey.get(k)||byKey.set(k,[]).get(k)).push(r)}
+  for(const f of D.live){if(f.n!=='海外交易手續費'||f.g||!/^海外交易 1\.5%/.test(f.ds||''))continue;
+    const ms=(byKey.get(f.a+'|'+f.dt+'|'+f.tm)||[]).filter(m=>m.o===f.o-1||(m.g&&(byKey.get(f.a+'|'+f.dt+'|'+f.tm)||[]).some(z=>z.g===m.g&&z.o===f.o-1)));if(!ms.length)continue;
+    const g0=ms.find(m=>m.o===f.o-1);const grp=g0.g?ms.filter(m=>m.g===g0.g):[g0];const g=g0.g||uid();
+    const gn=grp.length>1?(g0.gn||''):(g0.gn||g0.n||'');
+    grp.forEach(m=>{if(m.g!==g||(gn&&!m.gn))up.push({...m,g,...(gn&&!m.gn?{gn}:{})})});up.push({...f,g,...(gn?{gn}:{})})}
+  if(up.length)await mutate(up)}
 function grpName(ch){const g=ch.find(x=>x.gn);if(g)return g.gn;if(ch.length>1&&ch[0].n&&ch.every(x=>x.n===ch[0].n))return ch[0].n;return''}
 function titleOf(r){
   if(r.t==='轉出'||r.t==='轉入')return r.n||(r.s==='信用卡繳款'?'信用卡繳款':'轉帳');
@@ -1483,7 +1494,7 @@ async function boot(){
   await DB.open();
   try{const{recs,kv}=await DB.load();S.recs=recs;for(const k of['accts','cats','budgets','rules','tpls','rates','sellers'])if(kv[k])S[k]=kv[k];if(kv.settings)S.settings={...S.settings,...kv.settings};S.kvu=kv.kvu||{};S.cloudCfg=kv.cloudCfg||null}catch(e){DB.mem=true}
   if(!S.cats)S.cats=defaultCats();S.rates.r={...DEFAULT_RATES,...S.rates.r};
-  S.byId=new Map(S.recs.map(r=>[r.id,r]));ensureCats();applyTheme();recompute();S.ready=true;render();
+  S.byId=new Map(S.recs.map(r=>[r.id,r]));ensureCats();applyTheme();recompute();S.ready=true;render();setTimeout(()=>fixOsGroups().catch(()=>{}),1500);
   try{await runRules();await runAutoload();render(true)}catch(e){}
   botRates().then(ok=>{if(ok)render(true)});
   if(window.Cloud)Cloud.init().then(()=>render(true));
