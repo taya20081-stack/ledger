@@ -176,7 +176,10 @@ details.adv[open] summary{margin-bottom:8px}
 .catbtn .badge{width:40px;height:40px;opacity:.55}
 .catbtn.on{color:var(--ink);font-weight:600}
 .catbtn.on .badge{opacity:1;outline:2px solid var(--ink);outline-offset:2px}
-.sprow{align-items:flex-start;gap:10px}.sptile{width:70px}.sptile .badge{width:52px;height:52px;font-size:24px;opacity:1}.sptile .spn{max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sptile b{font-weight:600;color:var(--pos,#3a9a4a);font-size:12.5px}.sptot{cursor:default}.sptot .badge{outline:0}.spsep{flex:none;width:1px;align-self:stretch;margin:6px 0 22px;background:var(--rule)}.spadd{background:var(--paper2)!important;color:var(--muted);font-size:28px}.spedit{margin-top:8px;padding:10px;border:1px solid var(--rule);border-radius:12px;display:grid;gap:4px}
+.sprow{align-items:flex-start;gap:10px}.sptile{width:70px}.sptile .badge{width:52px;height:52px;font-size:24px;opacity:1}.sptile .spn{max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sptile b{font-weight:600;color:var(--pos,#3a9a4a);font-size:12.5px}.sptot{cursor:default}.sptot .badge{outline:0}.spsep{flex:none;width:1px;align-self:stretch;margin:6px 0 22px;background:var(--rule)}.spadd{background:var(--paper2)!important;color:var(--muted);font-size:28px}.amtbox{position:relative}.amtplus{margin-left:auto;flex:none;width:34px;height:34px;border-radius:50%;border:0;background:var(--paper2);color:var(--ink);font-size:20px;line-height:1;cursor:pointer}
+.qrow{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-top:6px}.qrow::-webkit-scrollbar{display:none}.qrow .chip{flex:none}
+.sphint{display:flex;align-items:center;gap:8px;justify-content:space-between;font-size:12.5px;color:var(--muted);margin-top:4px}
+.spedit{margin-top:8px;padding:10px;border:1px solid var(--rule);border-radius:12px;display:grid;gap:4px}
 
 /* sheet */
 .scrim{position:fixed;inset:0;background:rgba(10,15,25,.45);z-index:40;animation:fade .15s}
@@ -423,7 +426,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.31';
+window.APP_VER='v2.0.32';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -647,8 +650,24 @@ function osFeeRec(recs){
   let g=main.every(x=>x.g&&x.g===m0.g)?m0.g:'';if(!g){g=uid();const gn=main.length>1?(m0.gn||''):(m0.n||'');main.forEach(x=>{x.g=g;if(gn&&!x.gn)x.gn=gn})}
   const r={...m0,...cat,id:uid(),m:-fee,f:0,d:0,g,gn:m0.gn||'',n:'海外交易手續費',o:(m0.o||Date.now())+1,ds:'海外交易 1.5%（'+(m0.gn||m0.n||m0.s||'')+'）'};if(!r.gn)delete r.gn;delete r.cu;delete r.xr;return r;
 }
+/* ===== MOZE 式分項：選中的分項欄位放在 EF 本身（c/s/amt/n/p），切換時存回 splits；_si=-1 代表「多類別」總覽 ===== */
+function spTotal(f){return(f.splits||[]).reduce((t,x,i)=>t+(evalAmt(i===f._si?f.amt:x.amt)||0),0)}
+function spStore(){const f=EF;if(!f||!f.splits)return;if(f._si>=0&&f.splits[f._si])Object.assign(f.splits[f._si],{c:f.c,s:f.s,amt:f.amt,n:f.n||'',p:f.p||''});
+  else if(f._si===-1){f._gname=f.n||'';if((f.p||'')!==(f._gp||''))f.splits.forEach(x=>x.p=f.p||'')}}
+function spLoad(i){const f=EF;f._si=i;if(i>=0){const x=f.splits[i];Object.assign(f,{c:x.c,s:x.s,amt:x.amt||'',n:x.n||'',p:x.p||''})}
+  else{f.n=f._gname||'';const ps=[...new Set(f.splits.map(x=>x.p||''))];f.p=ps.length===1?ps[0]:'';f._gp=f.p}}
+function spMerge(fs){if(!fs||!fs.splits||fs._si==null)return fs;const o={...fs,splits:fs.splits.map(x=>({...x}))};
+  if(fs._si>=0&&o.splits[fs._si])Object.assign(o.splits[fs._si],{c:fs.c,s:fs.s,amt:fs.amt,n:fs.n||'',p:fs.p||''});
+  else if((fs.p||'')!==(fs._gp||''))o.splits.forEach(x=>x.p=fs.p||'');
+  o.n=fs._si>=0?(fs._gname||''):(fs.n||'');o._si=null;o.c=o.splits[0].c;o.s=o.splits[0].s;o.p=o.splits[0].p||'';return o}
+/* 最近用過：同小項目的金額、名稱；常用分類 */
+let _rcK=null,_rcV=null;
+function recentIdx(){const key=D.live;if(_rcK===key&&_rcV)return _rcV;const L=[...D.live].filter(r=>r.t==='支出'||r.t==='收入').sort((a,b)=>(b.dt+b.tm).localeCompare(a.dt+a.tm)).slice(0,3000);
+  const by=new Map(),cnt=new Map();for(const r of L){const k=r.c+'\u0001'+r.s;let e=by.get(k);if(!e)by.set(k,e={a:[],n:[]});const v=Math.abs(r.m);if(e.a.length<8&&v&&!e.a.includes(v))e.a.push(v);const nm=r.n&&r.n!=='海外交易手續費'?r.n:'';if(nm&&e.n.length<10&&!e.n.includes(nm))e.n.push(nm);
+    if(r.t==='支出'&&r.n!=='海外交易手續費')cnt.set(k,(cnt.get(k)||0)+(L.indexOf?1:1))}
+  const top=[...cnt].sort((a,b)=>b[1]-a[1]).slice(0,10).map(([k])=>k.split('\u0001'));_rcK=key;_rcV={by,top};return _rcV}
 function buildRecords0(fs){
-  if(fs.splits&&fs.splits.length&&fs._si!=null&&fs.splits[fs._si])fs.splits[fs._si].p=fs.p||'';
+  fs=spMerge(fs);
   const amt=evalAmt(fs.amt);const fee=evalAmt(fs.fee)||0;const disc=evalAmt(fs.disc)||0;
   const base={dt:fs.dt,tm:fs.tm||'00:00',o:Date.now(),n:(fs.n||'').trim(),sh:'',p:(fs.p||'').trim(),ds:(fs.ds||'').trim(),tg:'',w:(fs.w||'').trim(),f:0,d:0,k:'',g:''};
   const R=o=>({...base,id:uid(),...o});
@@ -672,7 +691,7 @@ function recordToForm(r){
   const f=blankForm();let grp=[r];
   if(r.k&&D.pairs.get(r.k))grp=D.pairs.get(r.k);else if(r.g&&D.groups.get(r.g))grp=D.groups.get(r.g);
   Object.assign(f,{a:r.a,dt:r.dt,tm:r.tm,n:r.n||'',p:r.p||'',ds:r.ds||'',w:r.w||'',sh:r.sh||'',fee:r.f?String(Math.abs(r.f)):'',disc:r.d?String(Math.abs(r.d)):'',cu:r.cu||'',xr:r.xr?String(r.xr):'',ids:grp.map(x=>x.id)});
-  if(r.t==='支出'){f.kind='exp';if(grp.length>1&&r.g){const gname=grpName(grp);f.splits=grp.map(x=>({c:x.c,s:x.s,amt:String(-x.m),n:x.n&&x.n!==gname?x.n:'',p:x.p||''}));f._si=0;f.p=grp[0].p||'';f._gn=gname;f.n=gname;f.fee=grp[0].f?String(-grp[0].f):'';f.disc=grp[0].d?String(grp[0].d):''}else{f.c=r.c;f.s=r.s;f.amt=String(-r.m)}
+  if(r.t==='支出'){f.kind='exp';if(grp.length>1&&r.g){const gname=grpName(grp);f.splits=grp.map(x=>({c:x.c,s:x.s,amt:String(-x.m),n:x.n&&x.n!==gname?x.n:'',p:x.p||''}));f._gname=gname;f._si=0;Object.assign(f,{c:f.splits[0].c,s:f.splits[0].s,amt:f.splits[0].amt,n:f.splits[0].n,p:f.splits[0].p});f.fee=grp[0].f?String(-grp[0].f):'';f.disc=grp[0].d?String(grp[0].d):''}else{f.c=r.c;f.s=r.s;f.amt=String(-r.m)}
     if(r.m>0){f.amt=String(-r.m)}}
   else if(r.t==='收入'){f.kind='inc';f.c=r.c;f.s=r.s;f.amt=String(r.m)}
   else if(r.t==='轉出'||r.t==='轉入'){f.kind='tr';const o=grp.find(x=>x.t==='轉出')||r;const i=grp.find(x=>x.t==='轉入');
@@ -1195,48 +1214,47 @@ function renderEditor(){
   const f=EF;const sb=$('#sb');if(!sb)return;const cur=D.acct.get(f.a)?.cur||'TWD';const amtCur=f.kind!=='tr'&&f.cu?f.cu:cur;
   const kinds=[['exp','支出'],['inc','收入'],['tr','轉帳'],['debt','借貸'],['sys','其他']];
   const ck=f.kind==='inc'?'inc':'exp';const catList=S.cats[ck];const main=catList.find(c=>c.n===f.c);
-  const catPicker=(f.kind==='exp'||f.kind==='inc')&&!f.splits?`<div class="field"><span>大項目</span><div class="catrow">${catList.map(c=>`<button class="catbtn${c.n===f.c?' on':''}" data-act="ef-cat" data-c="${esc(c.n)}"><span class="badge" style="background:var(--c${c.ci})">${esc(c.n.slice(0,1))}</span>${esc(c.n)}</button>`).join('')}</div>${main?`<span class="lbl" style="margin-top:6px">小項目</span><div class="chips">${main.subs.map(s=>`<button class="chip${s===f.s?' on':''}" data-act="ef-sub" data-s="${esc(s)}">${iconOf(main.n,s)?iconOf(main.n,s)+' ':''}${esc(s)}</button>`).join('')}<button class="chip" data-act="ef-sub-new">＋</button></div>`:''}</div>`:'';
-  const splits=f.kind==='exp'&&f.splits?(()=>{if(f._si==null||!f.splits[f._si])f._si=0;const si=f._si,x=f.splits[si];
-    const tot=f.splits.reduce((t,y)=>t+(evalAmt(y.amt)||0),0);const ciOf=c=>(S.cats.exp.find(m=>m.n===c)||{}).ci??10;
-    const tile=(y,k)=>`<button class="catbtn sptile${k===si?' on':''}" data-act="sp-sel" data-i="${k}"><span class="badge" style="background:var(--c${ciOf(y.c)})">${iconOf(y.c,y.s)||esc((y.c||'?').slice(0,1))}</span><span class="spn">${esc(y.s||y.c)}</span><b class="num" id="sp-v-${k}">${fmt(evalAmt(y.amt)||0)}</b></button>`;
-    const sm=S.cats.exp.find(m=>m.n===x.c);
-    return`<div class="field"><span>多類別分項</span><div class="catrow sprow"><div class="catbtn sptile sptot"><span class="badge" style="background:var(--c2)">多</span><span class="spn">多類別</span><b class="num" id="sp-tot">${fmt(tot,cur)}</b></div><i class="spsep"></i>${f.splits.map(tile).join('')}<button class="catbtn sptile" data-act="sp-add"><span class="badge spadd">＋</span><span class="spn">新增</span></button></div>
-    <div class="spedit"><span class="lbl">第 ${si+1} 項・大項目</span><div class="catrow">${S.cats.exp.map(c=>`<button class="catbtn${c.n===x.c?' on':''}" data-act="sp-cat" data-c="${esc(c.n)}"><span class="badge" style="background:var(--c${c.ci})">${esc(c.n.slice(0,1))}</span>${esc(c.n)}</button>`).join('')}</div>${sm?`<span class="lbl" style="margin-top:6px">小項目</span><div class="chips">${sm.subs.map(z=>`<button class="chip${z===x.s?' on':''}" data-act="sp-sub" data-s="${esc(z)}">${iconOf(sm.n,z)?iconOf(sm.n,z)+' ':''}${esc(z)}</button>`).join('')}</div>`:''}
-    <div class="amtbox" style="margin-top:8px"><span class="cur">${cur}</span><input id="sp-a-${si}" data-sp="${si}" data-spf="amt" data-calc inputmode="${CALC_IM}" autocomplete="off" placeholder="此分項金額" value="${esc(x.amt)}" aria-label="分項金額"></div>
-    <input class="in" style="margin-top:6px" placeholder="分項名稱（選填）" value="${esc(x.n||'')}" data-sp="${si}" data-spf="n" id="sp-n-${si}">
-    <div class="hint">下方「專案」欄設定的是這一項的專案；帳戶、日期、時間、商家全部分項共用。</div>
-    <div class="btns"><button class="btn sm" data-act="sp-del" data-i="${si}">刪除這一項</button><button class="btn sm" data-act="sp-off">取消分項</button></div></div></div>`})():'';
+  const showCat=(f.kind==='exp'||f.kind==='inc')&&(!f.splits||(f._si>=0&&(f._spCat||!f.c)));const rIdx=(f.kind==='exp'||f.kind==='inc')?recentIdx():null;
+  const sugRow=showCat&&f.kind==='exp'&&rIdx.top.length?`<div class="field"><span>建議</span><div class="chips">${rIdx.top.map(([c,z])=>`<button class="chip${c===f.c&&z===f.s?' on':''}" data-act="ef-qcat" data-c="${esc(c)}" data-s="${esc(z)}">${iconOf(c,z)?iconOf(c,z)+' ':''}${esc(z||c)}</button>`).join('')}</div></div>`:'';
+  const catPicker=showCat?sugRow+`<div class="field"><span>大項目</span><div class="catrow">${catList.map(c=>`<button class="catbtn${c.n===f.c?' on':''}" data-act="ef-cat" data-c="${esc(c.n)}"><span class="badge" style="background:var(--c${c.ci})">${esc(c.n.slice(0,1))}</span>${esc(c.n)}</button>`).join('')}</div>${main?`<span class="lbl" style="margin-top:6px">小項目</span><div class="chips">${main.subs.map(s=>`<button class="chip${s===f.s?' on':''}" data-act="ef-sub" data-s="${esc(s)}">${iconOf(main.n,s)?iconOf(main.n,s)+' ':''}${esc(s)}</button>`).join('')}<button class="chip" data-act="ef-sub-new">＋</button></div>`:''}</div>`:'';
+  const splits=f.kind==='exp'&&f.splits?(()=>{const si=f._si;const tot=spTotal(f);const ciOf=c=>(S.cats.exp.find(m=>m.n===c)||{}).ci??10;
+    const tile=(y,k)=>{const c=k===si?f.c:y.c,z=k===si?f.s:y.s,a=k===si?f.amt:y.amt;return`<button class="catbtn sptile${k===si?' on':''}" data-act="sp-sel" data-i="${k}"><span class="badge" style="background:var(--c${ciOf(c)})">${iconOf(c,z)||esc((c||'?').slice(0,1))}</span><span class="spn">${esc(z||c||'未選')}</span><b class="num" id="sp-v-${k}">${fmt(evalAmt(a)||0)}</b></button>`};
+    return`<div class="field"><div class="catrow sprow"><button class="catbtn sptile sptot${si===-1?' on':''}" data-act="sp-sel" data-i="-1"><span class="badge" style="background:var(--c2)">多</span><span class="spn">${esc(si===-1?(f.n||'多類別'):(f._gname||'多類別'))}</span><b class="num" id="sp-tot">${fmt(tot,cur)}</b></button><i class="spsep"></i>${f.splits.map(tile).join('')}<button class="catbtn sptile" data-act="sp-add"><span class="badge spadd">＋</span><span class="spn">新增</span></button></div>
+    <div class="sphint">${si===-1?'多類別總覽：名稱是整筆的名稱；專案改這裡會套用到全部分項。<button class="btn sm" data-act="sp-off">取消分項</button>':`第 ${si+1} 項：點一下目前的圖示可以改分類。<button class="btn sm" data-act="sp-del">刪除這一項</button>`}</div></div>`})():'';
   const acA=D.acct.get(f.a),acB=D.acct.get(f.a2);const diffCur=f.kind==='tr'&&acA&&acB&&acA.cur!==acB.cur;
   if(diffCur&&!f.amt2&&evalAmt(f.amt)>0)f._sugg=r2(evalAmt(f.amt)*rateOf(acA.cur)/rateOf(acB.cur));
   const amtLabel=f.kind==='sys'&&f.st==='餘額調整'?'調整金額（可為負數）':(!f._edit&&f.mode==='inst'&&f.kind==='exp'?'分期總金額':'金額');
   const ev=evalAmt(f.amt);const showEv=/[+\-*/×÷]/.test(String(f.amt).slice(1))&&isFinite(ev);
   const ei=f.kind==='exp'||f.kind==='inc';
   const curSel=ei?`<select class="cursel" id="f-cu" data-f="cu" data-rr="1" aria-label="幣別"><option value="">${cur}</option>${CURS.filter(c=>c!==cur).map(c=>`<option ${c===f.cu?'selected':''}>${c}</option>`).join('')}</select>`:`<span class="cur">${amtCur}</span>`;
-  const amtBox=f.splits&&f.kind==='exp'?'':`<div class="field"><span>${ei?(amtLabel==='分期總金額'?'幣別 · 分期總金額':'幣別 · 金額'):amtLabel}</span><div class="amtbox">${curSel}<input id="f-amt" data-f="amt" data-calc inputmode="${CALC_IM}" autocomplete="off" placeholder="0" value="${esc(f.amt)}" aria-label="${amtLabel}"><span class="ev" id="f-ev">${showEv?'= '+fmt(ev,cur):''}</span></div>${ei&&f.cu&&f.cu!==cur?`<label class="field" style="margin-top:6px"><span>匯率：1 ${f.cu} = ? ${cur}</span><input class="in num" id="f-xr" data-f="xr" inputmode="decimal" value="${esc(f.xr)}" placeholder="${+(rateOf(f.cu)/rateOf(cur)).toPrecision(6)}"></label>`:''}</div>`;
+  const canSp=f.kind==='exp'&&!(f.mode==='inst')&&!(f.rep||f.mode==='rep')&&!f.dep;
+  const qa=ei&&!(f.splits&&f._si===-1)&&rIdx?((rIdx.by.get(f.c+'\u0001'+f.s)||{}).a||[]):[];
+  const qaRow=qa.length?`<div class="chips qrow">${qa.map(v=>`<button class="chip" data-act="ef-qamt" data-v="${v}">${fmt(v)}</button>`).join('')}</div>`:'';
+  const amtBox=f.splits&&f._si===-1?`<div class="field"><span>合計</span><div class="amtbox"><span class="cur">${cur}</span><b class="num" style="font-size:26px">${fmt(spTotal(f))}</b></div></div>`:`<div class="field"><span>${ei?(amtLabel==='分期總金額'?'幣別 · 分期總金額':'幣別 · 金額'):amtLabel}</span><div class="amtbox">${curSel}<input id="f-amt" data-f="amt" data-calc inputmode="${CALC_IM}" autocomplete="off" placeholder="0" value="${esc(f.amt)}" aria-label="${amtLabel}"><span class="ev" id="f-ev">${showEv?'= '+fmt(ev,cur):''}</span>${canSp?`<button class="amtplus" data-act="${f.splits?'sp-add':'sp-on'}" title="再加一個分類（多類別）" aria-label="再加一個分類">＋</button>`:''}</div>${qaRow}${ei&&f.cu&&f.cu!==cur?`<label class="field" style="margin-top:6px"><span>匯率：1 ${f.cu} = ? ${cur}</span><input class="in num" id="f-xr" data-f="xr" inputmode="decimal" value="${esc(f.xr)}" placeholder="${+(rateOf(f.cu)/rateOf(cur)).toPrecision(6)}"></label>`:''}</div>`;
   const dateRow=`<div class="grid2"><label class="field"><span>日期</span><input class="in" type="date" id="f-dt" data-f="dt" value="${f.dt}"></label><label class="field"><span>時間</span><input class="in" type="time" id="f-tm" data-f="tm" value="${f.tm}"></label></div>`;
   const acctRow=f.kind==='tr'?`<div class="grid2"><label class="field"><span>從</span><select class="in" id="f-a" data-f="a" data-rr="1">${acctOptions(f.a,1)}</select></label><label class="field"><span>到</span><select class="in" id="f-a2" data-f="a2" data-rr="1">${acctOptions(f.a2,1)}</select></label></div>${diffCur?`<label class="field"><span>轉入金額（${acB.cur}）${f._sugg&&!f.amt2?' · 依匯率約 '+fmt(f._sugg,acB.cur):''}</span><input class="in num" id="f-amt2" data-f="amt2" data-calc inputmode="${CALC_IM}" value="${esc(f.amt2||'')}" placeholder="${f._sugg||''}"></label>`:''}`
     :`<label class="field"><span>帳戶</span><select class="in" id="f-a" data-f="a" data-rr="1">${acctOptions(f.a)}</select></label>`;
   const feeRow=['exp','inc','tr'].includes(f.kind)?`<label class="field"><span>手續費${ei&&f.cu&&f.cu!==cur?'（'+f.cu+'）':''}</span><input class="in num" id="f-fee" data-f="fee" data-calc inputmode="${CALC_IM}" value="${esc(f.fee)}" placeholder="0"></label>`:'';
   if(!f._edit&&f.kind==='exp'&&f._osFor!==(f.sh||'')){f._osFor=f.sh||'';if(isOsShop(f.sh)){f.os=true;f.osShop=true}else f.osShop=false}
-  const osRow=f.kind==='exp'&&!f._edit&&!(f.mode==='inst')?(()=>{const tot=f.splits?f.splits.reduce((t,x)=>t+(evalAmt(x.amt)||0),0):(evalAmt(f.amt)||0);const xr=f.cu&&f.cu!==cur?(evalAmt(f.xr)>0?evalAmt(f.xr):rateOf(f.cu)/rateOf(cur)):1;const fe=osFeeOf(tot*xr);
+  const osRow=f.kind==='exp'&&!f._edit&&!(f.mode==='inst')?(()=>{const tot=f.splits?spTotal(f):(evalAmt(f.amt)||0);const xr=f.cu&&f.cu!==cur?(evalAmt(f.xr)>0?evalAmt(f.xr):rateOf(f.cu)/rateOf(cur)):1;const fe=osFeeOf(tot*xr);
     return`<label class="field osrow"><span>海外交易</span><span class="osline"><input type="checkbox" id="f-os" data-f="os" data-rr="1" ${f.os?'checked':''}> 是，另記一筆 1.5% 海外交易手續費<b id="f-osamt">${f.os&&fe>0?'：'+money(fe,cur):''}</b></span>${f.sh?`<span class="osline"><input type="checkbox" id="f-osshop" data-f="osShop" data-rr="1" ${f.osShop?'checked':''}> 「${esc(f.sh)}」是海外店家（之後選這個商家會自動勾選）</span>`:''}</label>`})():'';
   const pIn=f._pIn,shIn=f._shIn;f._pIn=f._shIn=false;
   const projRow=pIn?`<label class="field"><span>專案</span><input class="in" id="f-p" data-f="p" value="${esc(f.p)}" placeholder="輸入專案名稱，會帶出相符的專案" autocomplete="off"><div id="f-p-sugg" class="nsug" hidden></div></label>`
     :`<label class="field"><span>專案</span><select class="in" id="f-p-sel">${projOptions(f.p)}</select></label>`;
   const shopRow=!ei?'':shIn?`<div class="field"><span>商家</span><input class="in" id="f-sh" data-f="sh" value="${esc(f.sh)}" placeholder="輸入幾個字會帶出以前的商家" autocomplete="off"><div id="f-sh-sugg" class="nsug" hidden></div></div>`
     :`<label class="field"><span>商家</span><select class="in" id="f-sh-sel">${shopOptions(f.sh,f.kind==='inc'?'inc':'exp',f.c)}</select></label>`;
-  const nameRow=`<div class="field nsug-wrap"><span>名稱</span><input class="in" id="f-n" data-f="n" value="${esc(f.n)}" placeholder="${f.kind==='exp'?'輸入幾個字，會帶出以前記過的名稱':'選填'}" autocomplete="off"><div id="f-n-sugg" class="nsug" hidden></div></div>`;
+  const qn=ei&&!(f.splits&&f._si===-1)&&rIdx?((rIdx.by.get(f.c+'\u0001'+f.s)||{}).n||[]):[];
+  const nameRow=`<div class="field nsug-wrap"><span>${f.splits&&f._si===-1?'多類別名稱（整筆）':f.splits?'分項名稱':'名稱'}</span><input class="in" id="f-n" data-f="n" value="${esc(f.n)}" placeholder="${f.kind==='exp'?'輸入幾個字，會帶出以前記過的名稱':'選填'}" autocomplete="off"><div id="f-n-sugg" class="nsug" hidden></div>${qn.length?`<div class="chips qrow">${qn.map(v=>`<button class="chip" data-act="ef-qname" data-v="${esc(v)}">${esc(v)}</button>`).join('')}</div>`:''}</div>`;
   sb.innerHTML=`<div class="toolbar"><div class="seg" role="tablist">${kinds.map(([k,l])=>`<button class="${f.kind===k?'on':''}" data-act="ef-kind" data-k="${k}">${l}</button>`).join('')}</div>${f._edit?'':`<div class="btns"><button class="btn sm" data-act="inv-scan">${IC.qr}掃發票</button><button class="btn sm" data-act="rc-open">掃明細</button></div>`}</div>
   ${f.kind==='sys'?`<label class="field"><span>類型</span><select class="in" id="f-st" data-f="st" data-rr="1">${SYS_T.filter(t=>!SYS_HIDE.has(t)||f.st===t).map(t=>`<option ${t===f.st?'selected':''}>${t}</option>`).join('')}</select></label>`:''}
   ${f.kind==='debt'?`<div class="field"><span>動作</span><div class="chips">${Object.entries(DEBT_ACT).map(([k,v])=>`<button class="chip${f.act===k?' on':''}" data-act="ef-debt" data-k="${k}">${v[3]}<small style="opacity:.7">${v[0]==='應收款項'?'應收':'應付'}</small></button>`).join('')}</div></div><label class="field"><span>對象</span><input class="in" id="f-w" data-f="w" list="dl-who" value="${esc(f.w)}" placeholder="例如：家人、同事姓名"></label>`:''}
-  ${dateRow}${catPicker}${splits}${amtBox}${feeRow}${acctRow}${projRow}${shopRow}${osRow}${nameRow}
+  ${splits}${catPicker}${amtBox}${nameRow}${acctRow}${projRow}${shopRow}${dateRow}${feeRow}${osRow}
   ${!f._edit&&['exp','inc','tr'].includes(f.kind)?(()=>{const md=f.mode||(f.rep?'rep':'');const canI=f.kind==='exp'&&!f.splits;
     const seg=`<div class="field"><span>記帳方式</span><div class="seg full"><button class="${!md?'on':''}" data-act="ef-mode" data-k="">單次</button><button class="${md==='rep'?'on':''}" data-act="ef-mode" data-k="rep">週期</button>${canI?`<button class="${md==='inst'?'on':''}" data-act="ef-mode" data-k="inst">分期</button>`:''}</div></div>`;
     const postSel=`<label class="field"><span>入帳方式</span><select class="in" id="f-post" data-f="post"><option value="">立即入帳</option><option value="m" ${f.post==='m'?'selected':''}>手動確認後入帳</option></select></label>`;
     if(md==='rep')return seg+`<div class="grid3"><label class="field"><span>區間</span><select class="in" id="f-rep" data-f="rep">${[['D','每天'],['W','每週'],['M','每月'],['Y','每年']].map(([k,l])=>`<option value="${k}" ${(f.rep||'M')===k?'selected':''}>${l}</option>`).join('')}</select></label><label class="field"><span>每幾次區間</span><input class="in num" id="f-iv" data-f="iv" inputmode="numeric" value="${esc(f.iv)}"></label><label class="field"><span>次數</span><input class="in num" id="f-cnt" data-f="cnt" inputmode="numeric" value="${esc(f.cnt)}" placeholder="無限期"></label></div>${(f.rep||'M')==='M'?(()=>{const sel=new Set(f.mdays||[]);const sd=+f.dt.slice(8);return`<div class="field"><span>指定日期（可多選；不選＝每月 ${sd} 日）</span><div class="mdg">${[...Array(31)].map((_,i)=>`<button type="button" class="${sel.has(i+1)?'on':''}" data-act="ef-md" data-d="${i+1}">${i+1}</button>`).join('')}<button type="button" class="wide ${sel.has(32)?'on':''}" data-act="ef-md" data-d="32">最後一天</button></div>${sel.size?`<div class="hint">每月 ${mdText([...sel].sort((x,y)=>x-y))}${sel.size>1?'，每個日期各記一筆':''}；29–31 日遇到較短的月份會記在該月最後一天。</div>`:''}</div>`})():''}<div class="grid3"><label class="field"><span>起始期數</span><input class="in num" id="f-sno" data-f="sno" inputmode="numeric" value="${esc(f.sno||'')}" placeholder="首期"></label><label class="field"><span>遇非工作日</span><select class="in" id="f-wk" data-f="wk"><option value="">依原日期</option><option value="prev" ${f.wk==='prev'?'selected':''}>提前到工作日</option><option value="next" ${f.wk==='next'?'selected':''}>延後到工作日</option></select></label><span></span></div><div class="hint">從上面的日期開始，到期自動入帳，不用手動確認；未來 2 個月內的各期會先顯示在月曆上（標示「未入帳」，不計入餘額）。要改或刪某一期時，可以選「只動這一期」或「這一期和之後」。次數留空＝無限期。起始期數：例如這已經是第 51 次就填 51。非工作日依台灣行政機關辦公日曆（週末、國定假日與補假；已內建 2026、2027 年）。</div>`;
     if(md==='inst'&&canI)return seg+`<div class="grid2"><label class="field"><span>分期期數</span><input class="in num" id="f-ik" data-f="ik" inputmode="numeric" value="${esc(f.ik||'3')}"></label><label class="field"><span>年利率 %（無利息填 0）</span><input class="in num" id="f-ir" data-f="ir" inputmode="decimal" value="${esc(f.ir||'0')}"></label></div><label class="field"><span>起始期數（已經繳過幾期就從下一期開始，例如填 5 代表這筆是第 5 期）</span><input class="in num" id="f-sno" data-f="sno" inputmode="numeric" value="${esc(f.sno||'')}" placeholder="首期"></label><div class="hint" id="f-iprev">${instPrev(f)}</div>`;
     return seg+`<div class="grid2">${postSel}<label class="field"><span>訂金尾款追蹤</span><select class="in" id="f-dep" data-act-change="ef-dep"><option value="">關閉</option><option value="1" ${f.dep?'selected':''}>開啟</option></select></label></div>${f.dep?`<div class="grid2"><label class="field"><span>總金額（上面金額＝訂金）</span><input class="in num" id="f-depT" data-f="depT" data-calc inputmode="${CALC_IM}" value="${esc(f.depT||'')}"></label><label class="field"><span>尾款預計日期</span><input class="in" type="date" id="f-depD" data-f="depD" value="${esc(f.depD||'')}"></label></div><div class="hint">存檔後先記訂金；尾款（總金額－訂金）會放進鈴鐺的待入帳清單，付款時點「入帳」即可。</div>`:''}`})():''}
-  ${f.kind==='exp'&&!f.splits?`<button class="btn sm" data-act="sp-on" style="justify-self:start">拆成多個分類（分項）</button>`:''}
   ${f._dupMsg?`<div class="note alert" id="ef-dup"><div class="grow"><b>可能重複</b>：同帳戶已有 ${f._dupMsg}。確定不是同一筆，再按一次「儲存」。</div></div>`:''}
   ${f._edit&&efRule(f)?`<div class="note" style="flex-wrap:wrap"><div class="grow">這是週期記錄「${esc(ruleName(efRule(f).rule.fs,efRule(f).rule.name))}」的第 ${efRule(f).k+1+(efRule(f).rule.off||0)} 期，要改哪些？</div></div><div class="btns fill"><button class="btn pri" data-act="ef-save">只改這一期</button><button class="btn" data-act="ef-save" data-scope="all">這一期和之後都改</button></div>`:`<div class="btns fill"><button class="btn pri" data-act="ef-save">儲存</button>${f._edit?'':`<button class="btn" data-act="ef-save" data-again="1">儲存並再記一筆</button>`}</div>`}
   <div class="btns">${f._edit?`<button class="btn sm" data-act="ef-copy">複製</button>${f.kind==='exp'?`<button class="btn sm" data-act="ef-refund">退款</button>`:''}`:''}${f._edit?`<button class="btn sm danger" data-act="ef-del" id="ef-del">刪除</button>`:''}</div>
@@ -1248,7 +1266,7 @@ function datalists(){
   return`<datalist id="dl-names">${top(names,80)}</datalist><datalist id="dl-shops">${top(shops,50)}</datalist><datalist id="dl-proj">${D.projs.filter(p=>!projDoneAt(p)).slice(0,60).map(p=>`<option value="${esc(p)}">`).join('')}</datalist><datalist id="dl-who">${D.whos.slice(0,60).map(p=>`<option value="${esc(p)}">`).join('')}</datalist>`;
 }
 async function saveEditor(again){
-  const f=EF;const err=validate(f);if(err)return toast(err);
+  const f=EF&&EF.splits?spMerge(EF):EF;const err=validate(f);if(err)return toast(err);
   if(!f._edit&&f.kind==='exp'){const sh=(f.sh||'').trim();if(sh&&f._osFor!==sh&&isOsShop(sh))f.os=true;
     if(sh&&f._osFor===sh){const L=osShops();const has=isOsShop(sh);if(f.osShop&&!has)S.settings.osShops=[...L,sh];else if(!f.osShop&&has)S.settings.osShops=L.filter(x=>x.toLowerCase()!==sh.toLowerCase());if(!!f.osShop!==has){if(f.osShop)f.os=true;saveKV('settings')}}}
   const recs=buildRecords(f);if(!recs.length)return toast('沒有可儲存的內容');
@@ -1344,7 +1362,10 @@ const ACT={
   'search-more':()=>{S.search.limit+=500;render(true)},
   'ef-kind':el=>{const k=el.dataset.k;if(EF.kind===k)return;const keep={a:EF.a,dt:EF.dt,tm:EF.tm,amt:EF.amt,n:EF.n,p:EF.p,ds:EF.ds,ids:EF.ids,_edit:EF._edit};const n=blankForm(k);Object.assign(n,keep);if(k==='tr'){n.a2=S.accts.find(a=>a.id!==n.a&&!a.arch)?.id||''}EF=n;renderEditor()},
   'ef-cat':el=>{EF._catT=1;EF.c=el.dataset.c;const m=S.cats[EF.kind==='inc'?'inc':'exp'].find(c=>c.n===EF.c);EF.s=m?.subs[0]||'';renderEditor()},
-  'ef-sub':el=>{EF._catT=1;EF.s=el.dataset.s;renderEditor()},
+  'ef-sub':el=>{EF._catT=1;EF.s=el.dataset.s;if(EF.splits)EF._spCat=0;renderEditor()},
+  'ef-qcat':el=>{EF._catT=1;EF.c=el.dataset.c;EF.s=el.dataset.s;if(EF.splits)EF._spCat=0;renderEditor()},
+  'ef-qamt':el=>{EF.amt=el.dataset.v;renderEditor()},
+  'ef-qname':el=>{EF.n=el.dataset.v;renderEditor()},
   'ef-sub-new':async()=>{const f=EF;const v=await askText('新增子類別','','子類別名稱');if(v&&v.trim()){const m=S.cats[f.kind==='inc'?'inc':'exp'].find(c=>c.n===f.c);if(m&&!m.subs.includes(v.trim())){m.subs.push(v.trim());S.cats.u=Date.now();saveKV('cats')}f.s=v.trim()}openSheet(f._edit?'編輯記錄':'記一筆','');EF=f;renderEditor()},
   'ef-debt':el=>{EF.act=el.dataset.k;renderEditor()},
   'pend-post':el=>{const x=(S.settings.pend||[]).find(p=>p.id===el.dataset.id);if(!x)return;closeSheet();const f={...blankForm(x.fs.kind||'exp'),...x.fs,_edit:false,_pend:x.id,mode:'',rep:'',post:'',dep:''};if(el.dataset.today)f.dt=TODAY();setTimeout(()=>openEditor(f),250)},
@@ -1363,13 +1384,11 @@ const ACT={
     let ids=EF.ids.slice();
     if(ro&&el.dataset.scope==='all'){const{rule,k}=ro;const d=ruleOccDate(rule,k);for(let q=k+1;q<rule.done;q++)S.recs.forEach(r=>{if(!r.x&&r.id.startsWith(rule.id+'_'+q+'_'))ids.push(r.id)});rule.end=addDays(d,-1);rule.next='';rule.u=Date.now();await saveKV('rules')}
     closeSheet();await mutate([],ids);render(true);toast(ro&&el.dataset.scope==='all'?'已終止這個週期，刪除 '+ids.length+' 筆':'已刪除 '+ids.length+' 筆')},
-  'sp-on':()=>{const amt=evalAmt(EF.amt);EF.splits=[{c:EF.c,s:EF.s,amt:isFinite(amt)&&amt>0?String(amt):'',n:'',p:EF.p||''},{c:EF.c,s:EF.s,amt:'',n:'',p:EF.p||''}];EF._si=1;renderEditor()},
-  'sp-sel':el=>{const i=+el.dataset.i;if(EF._si!=null&&EF.splits[EF._si])EF.splits[EF._si].p=EF.p||'';EF._si=i;EF.p=EF.splits[i].p||'';renderEditor()},
-  'sp-cat':el=>{const x=EF.splits[EF._si||0];x.c=el.dataset.c;const m=S.cats.exp.find(c=>c.n===x.c);x.s=m?.subs[0]||'';renderEditor()},
-  'sp-sub':el=>{EF.splits[EF._si||0].s=el.dataset.s;renderEditor()},
-  'sp-off':()=>{if(EF._si!=null&&EF.splits[EF._si])EF.splits[EF._si].p=EF.p||'';EF.p=EF.splits[0].p||EF.p;EF._si=null;const t=EF.splits.reduce((s,x)=>s+(evalAmt(x.amt)||0),0);EF.c=EF.splits[0].c;EF.s=EF.splits[0].s;EF.amt=t?String(t):'';EF.splits=null;renderEditor()},
-  'sp-add':()=>{if(EF._si!=null&&EF.splits[EF._si])EF.splits[EF._si].p=EF.p||'';const l=EF.splits[EF._si||0];EF.splits.push({c:l.c,s:l.s,amt:'',n:'',p:EF.p||''});EF._si=EF.splits.length-1;renderEditor()},
-  'sp-del':el=>{EF.splits.splice(+el.dataset.i,1);if(!EF.splits.length){EF.splits=null;EF._si=null}else{EF._si=Math.min(EF._si||0,EF.splits.length-1);EF.p=EF.splits[EF._si].p||''}renderEditor()},
+  'sp-on':()=>{EF.splits=[{c:EF.c,s:EF.s,amt:EF.amt,n:EF.n||'',p:EF.p||''}];EF._gname='';EF._si=0;ACT['sp-add']()},
+  'sp-add':()=>{spStore();const l=EF._si>=0?EF.splits[EF._si]:EF.splits[EF.splits.length-1];EF.splits.push({c:l.c,s:l.s,amt:'',n:'',p:l.p||''});spLoad(EF.splits.length-1);EF._spCat=1;renderEditor();setTimeout(()=>{const e=$('#f-amt');e&&e.focus&&e.scrollIntoView({block:'center'})},60)},
+  'sp-sel':el=>{const i=+el.dataset.i;if(i===EF._si&&i>=0){EF._spCat=!EF._spCat;return renderEditor()}spStore();spLoad(i);EF._spCat=0;renderEditor()},
+  'sp-del':()=>{if(EF._si<0)return;EF.splits.splice(EF._si,1);if(EF.splits.length<=1){const x=EF.splits[0];Object.assign(EF,{c:x.c,s:x.s,amt:x.amt,n:EF._gname||x.n||'',p:x.p||''});EF.splits=null;EF._si=null;return renderEditor()}spLoad(Math.max(0,EF._si-1));renderEditor()},
+  'sp-off':()=>{spStore();const t=EF.splits.reduce((a,x)=>a+(evalAmt(x.amt)||0),0);const x=EF.splits[0];Object.assign(EF,{c:x.c,s:x.s,amt:t?String(t):'',n:EF._gname||x.n||'',p:x.p||''});EF.splits=null;EF._si=null;renderEditor()},
   'acct-new':()=>openAcctEditor(null),
   'debt-stop':async el=>{const k=el.dataset.id;const m={...(S.settings.debtStop||{})};
     if(el.dataset.on){if(el.dataset.armed!=='1'){el.dataset.armed='1';el.textContent='再按一次確認終止';return}m[k]=TODAY()}else delete m[k];
@@ -1479,6 +1498,7 @@ function searchUpd(partial){const w=$('#sresWrap');if(partial&&w){w.innerHTML=se
 document.addEventListener('compositionend',e=>{const t=e.target;if(!t.dataset||!t.dataset.sf)return;S.search[t.dataset.sf]=t.value;S.search.limit=300;clearTimeout(sTimer);sTimer=setTimeout(()=>searchUpd(true),60)});
 document.addEventListener('input',e=>{const t=e.target;
   if(t.dataset.f&&EF){EF[t.dataset.f]=t.type==='checkbox'?t.checked:t.value;
+    if(t.dataset.f==='amt'&&EF.splits&&EF._si>=0){const a=$('#sp-v-'+EF._si);if(a)a.textContent=fmt(evalAmt(t.value)||0);const b=$('#sp-tot');if(b)b.textContent=fmt(spTotal(EF))}
     if(t.dataset.f==='amt'){const ev=evalAmt(t.value);const el=$('#f-ev');if(el)el.textContent=/[+\-−*/×÷]/.test(t.value.slice(1))&&isFinite(ev)?'= '+fmt(ev,D.acct.get(EF.a)?.cur||'TWD'):''}
     if(EF.os&&(t.dataset.f==='amt'||t.dataset.f==='xr')){const el=$('#f-osamt');if(el){const cur=D.acct.get(EF.a)?.cur||'TWD';const xr=EF.cu&&EF.cu!==cur?(evalAmt(EF.xr)>0?evalAmt(EF.xr):rateOf(EF.cu)/rateOf(cur)):1;const fe=osFeeOf((evalAmt(EF.amt)||0)*xr);el.textContent=fe>0?'：'+money(fe,cur):''}}
     if(t.dataset.rr)renderEditor();return}
