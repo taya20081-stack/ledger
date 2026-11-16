@@ -567,7 +567,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.68';
+window.APP_VER='v2.0.69';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1419,7 +1419,8 @@ function renderEditor(){
   const nameRow=ei?`<div class="mrow nm nsug-wrap"><input id="f-n" data-f="n" value="${esc(f.n)}" placeholder="${f.splits&&f._si===-1?'多類別名稱':'名稱'}" autocomplete="off"></div><div id="f-n-sugg" class="nsug" hidden></div>${nameChips}`
     :`<div class="field nsug-wrap"><span>名稱</span><input class="in" id="f-n" data-f="n" value="${esc(f.n)}" placeholder="選填" autocomplete="off"><div id="f-n-sugg" class="nsug" hidden></div></div>`;
   const md0=f.mode||(f.rep?'rep':'');
-  const modeBtn=ei&&!f._edit?`<label class="mbtn sel" data-ic="🔁"><select id="f-mode-sel" aria-label="記帳方式"><option value="" ${!md0?'selected':''}>單次</option><option value="rep" ${md0==='rep'?'selected':''}>週期</option>${f.kind==='exp'&&!f.splits?`<option value="inst" ${md0==='inst'?'selected':''}>分期</option>`:''}</select></label>`:`<div class="mbtn dis">${f._edit?'已記錄':'單次'}</div>`;
+  const canConv=!!f._edit&&['exp','inc'].includes(f.kind)&&!efRule(f)&&!(f.ids||[]).some(id=>{const r=S.byId.get(id);return r&&r.g});
+  const modeBtn=ei&&(!f._edit||canConv)?`<label class="mbtn sel" data-ic="🔁"><select id="f-mode-sel" aria-label="記帳方式"><option value="" ${!md0?'selected':''}>單次</option><option value="rep" ${md0==='rep'?'selected':''}>週期</option>${f.kind==='exp'&&!f.splits?`<option value="inst" ${md0==='inst'?'selected':''}>分期</option>`:''}</select></label>`:`<div class="mbtn dis">${f._edit?'已記錄':'單次'}</div>`;
   const scanRow=!f._edit&&ei?`<div class="mgrid"><button class="mbtn" data-act="inv-scan" data-ic="🧾">${IC.qr} 掃發票</button><button class="mbtn" data-act="rc-open" data-ic="📄">掃明細</button></div>`:'';
   const tabsH=(!ei||showCat)?`<div class="mtabs" role="tablist">${tabs.map(([k,l])=>`<button class="${tabOn(k)?'on':''}" data-act="ef-kind" data-k="${k}">${l}</button>`).join('')}</div>`:'';
   sb.innerHTML=`  ${f.kind==='sys'?`<label class="field"><span>類型</span><select class="in" id="f-st" data-f="st" data-rr="1">${SYS_T.filter(t=>!SYS_HIDE.has(t)||f.st===t).map(t=>`<option ${t===f.st?'selected':''}>${t}</option>`).join('')}</select></label>`:''}
@@ -1427,7 +1428,7 @@ function renderEditor(){
   <div id="ef-cat">${tabsH}${showCat?'':strip}${grid}</div>${amtBox}${ei?`<div class="mcard">${nameRow}</div>`:nameRow}
   ${ei?`<div class="mgrid">${acctBtn}${projBtn}${shopBtn}${modeBtn}${dateBtn}${timeBtn}<div class="mbtn inp${evalAmt(f.fee)>0?'':' ph'}"><input id="f-fee" data-f="fee" data-calc inputmode="${CALC_IM}" value="${esc(f.fee)}" placeholder="手續費"></div>${f.kind==='exp'&&!f._edit&&f.mode!=='inst'?`<button class="mbtn${f.os?' on':''}" data-act="ef-os">${f.os?'✓ 海外交易 1.5%':'海外交易'}</button>`:'<div></div>'}${!f._edit&&!(f.mode||f.rep)?`<label class="mbtn sel"><select id="f-post" data-f="post"><option value="">立即入帳</option><option value="m" ${f.post==='m'?'selected':''}>手動確認後入帳</option></select></label><button class="mbtn${f.dep?' on':''}" data-act="ef-deptog">${f.dep?'✓ 訂金尾款':'訂金尾款'}</button>`:''}${f._edit?`<button class="mbtn" data-act="ef-del" id="ef-del" style="color:var(--seal);grid-column:1/-1">刪除</button>`:`<button class="mbtn" data-act="ef-save" data-again="1" style="grid-column:1/-1">儲存並再記一筆</button>`}</div>`:`${acctRow}${projRow}${dateRow}`}
   ${!ei?feeRow+osRow:''}
-  ${!f._edit&&['exp','inc','tr'].includes(f.kind)?(()=>{const md=f.mode||(f.rep?'rep':'');const canI=f.kind==='exp'&&!f.splits;
+  ${(!f._edit||(canConv&&f.mode))&&['exp','inc','tr'].includes(f.kind)?(()=>{const md=f.mode||(f.rep?'rep':'');const canI=f.kind==='exp'&&!f.splits;
     const seg=ei?'':`<div class="field"><span>記帳方式</span><div class="seg full"><button class="${!md?'on':''}" data-act="ef-mode" data-k="">單次</button><button class="${md==='rep'?'on':''}" data-act="ef-mode" data-k="rep">週期</button>${canI?`<button class="${md==='inst'?'on':''}" data-act="ef-mode" data-k="inst">分期</button>`:''}</div></div>`;
     const postSel=`<label class="field"><span>入帳方式</span><select class="in" id="f-post" data-f="post"><option value="">立即入帳</option><option value="m" ${f.post==='m'?'selected':''}>手動確認後入帳</option></select></label>`;
     if(md==='rep')return seg+`<div class="grid3"><label class="field"><span>區間</span><select class="in" id="f-rep" data-f="rep">${[['D','每天'],['W','每週'],['M','每月'],['Y','每年']].map(([k,l])=>`<option value="${k}" ${(f.rep||'M')===k?'selected':''}>${l}</option>`).join('')}</select></label><label class="field"><span>每幾次區間</span><input class="in num" id="f-iv" data-f="iv" inputmode="numeric" value="${esc(f.iv)}"></label><label class="field"><span>次數</span><input class="in num" id="f-cnt" data-f="cnt" inputmode="numeric" value="${esc(f.cnt)}" placeholder="無限期"></label></div>${(f.rep||'M')==='M'?(()=>{const sel=new Set(f.mdays||[]);const sd=+f.dt.slice(8);return`<div class="field"><span>指定日期（可多選；不選＝每月 ${sd} 日）</span><div class="mdg">${[...Array(31)].map((_,i)=>`<button type="button" class="${sel.has(i+1)?'on':''}" data-act="ef-md" data-d="${i+1}">${i+1}</button>`).join('')}<button type="button" class="wide ${sel.has(32)?'on':''}" data-act="ef-md" data-d="32">最後一天</button></div>${sel.size?`<div class="hint">每月 ${mdText([...sel].sort((x,y)=>x-y))}${sel.size>1?'，每個日期各記一筆':''}；29–31 日遇到較短的月份會記在該月最後一天。</div>`:''}</div>`})():''}<div class="grid3"><label class="field"><span>起始期數</span><input class="in num" id="f-sno" data-f="sno" inputmode="numeric" value="${esc(f.sno||'')}" placeholder="首期"></label><label class="field"><span>遇非工作日</span><select class="in" id="f-wk" data-f="wk"><option value="">依原日期</option><option value="prev" ${f.wk==='prev'?'selected':''}>提前到工作日</option><option value="next" ${f.wk==='next'?'selected':''}>延後到工作日</option></select></label><span></span></div><div class="hint">從上面的日期開始，到期自動入帳，不用手動確認；未來 2 個月內的各期會先顯示在月曆上（標示「未入帳」，不計入餘額）。要改或刪某一期時，可以選「只動這一期」或「這一期和之後」。次數留空＝無限期。起始期數：例如這已經是第 51 次就填 51。非工作日依台灣行政機關辦公日曆（週末、國定假日與補假；已內建 2026、2027 年）。</div>`;
@@ -1452,6 +1453,10 @@ async function saveEditor(again){
   const f=EF&&EF.splits?spMerge(EF):EF;const err=validate(f);if(err)return toast(err);
   if(!f._edit&&f.kind==='exp'){const sh=(f.sh||'').trim();if(sh&&f._osFor!==sh&&isOsShop(sh))f.os=true;
     if(sh&&f._osFor===sh){const L=osShops();const has=isOsShop(sh);if(f.osShop&&!has)S.settings.osShops=[...L,sh];else if(!f.osShop&&has)S.settings.osShops=L.filter(x=>x.toLowerCase()!==sh.toLowerCase());if(!!f.osShop!==has){if(f.osShop)f.os=true;saveKV('settings')}}}
+  let convIds=null;
+  if(f._edit&&(f.mode==='rep'||f.mode==='inst')&&['exp','inc'].includes(f.kind)&&!efRule(f)&&!(f.ids||[]).some(id=>{const r=S.byId.get(id);return r&&r.g})){
+    if(f.mode==='inst'){const t=evalAmt(f.amt),k=parseInt(f.ik||'3');if(!(t>0&&k>1&&k<=360))return toast('請輸入正確的分期總金額與期數（至少 2 期）')}
+    convIds=[...f.ids];f._edit=false;f.ids=[]}
   const recs=buildRecords(f);if(!recs.length)return toast('沒有可儲存的內容');
   if(!f._edit&&!(f.mode||f.rep)&&(f.kind==='exp'||f.kind==='inc')&&!f.splits&&recs.filter(r=>r.n!=='海外交易手續費').length===1){const dp=dupOf(recs[0]);const sig=recs[0].a+'|'+recs[0].m+'|'+recs[0].dt+'|'+recs[0].tm;
     if(dp&&f._dupSig!==sig){f._dupSig=sig;f._dupMsg=dupText(dp);renderEditor();setTimeout(()=>{const e=$('#ef-dup');e&&e.scrollIntoView({block:'center'})},50);return toast('可能重複，再按一次儲存仍會記錄')}}
@@ -1465,10 +1470,11 @@ async function saveEditor(again){
     plan.forEach((p,j)=>{const i=j+off;const dt=addMonths(f.dt,j,day);const ds=name+'・第 '+(i+1)+'/'+k+' 期'+(r?'・本息均攤：年利率 '+r+'%':'');
       out.push({id:uid(),a:f.a,t:'支出',c:f.c,s:f.s||'',m:-p.pr,f:0,d:0,n:name,sh:f.sh||'',dt,tm:f.tm||'10:00',p:f.p||'',ds,tg:'',w:'',k:'',g:id,o:o+i*2});
       if(p.int>0)out.push({id:uid(),a:f.a,t:'利息',c:'利息支出',s:'利息支出',m:-p.int,f:0,d:0,n:'分期利息',sh:f.sh||'',dt,tm:f.tm||'10:00',p:f.p||'',ds,tg:'',w:'',k:'',g:id,o:o+i*2+1})});
-    S.rules.push({id,fq:'I',name,total:t,n:k,rate:r,start:f.dt,a:f.a,off,u:Date.now()});await saveKV('rules');S.settings.lastA=f.a;saveKV('settings');await mutate(out);closeSheet();if(S.view==='home'&&!S.stack.length){S.day=f.dt;S.month=f.dt.slice(0,7)}render(true);toast('已建立分期：第 '+(off+1)+'～'+k+' 期，每期約 '+money(plan[0].pr+plan[0].int));return}
+    if(convIds)await mutate([],convIds);S.rules.push({id,fq:'I',name,total:t,n:k,rate:r,start:f.dt,a:f.a,off,u:Date.now()});await saveKV('rules');S.settings.lastA=f.a;saveKV('settings');await mutate(out);closeSheet();if(S.view==='home'&&!S.stack.length){S.day=f.dt;S.month=f.dt.slice(0,7)}render(true);toast('已建立分期：第 '+(off+1)+'～'+k+' 期，每期約 '+money(plan[0].pr+plan[0].int));return}
   if(md==='rep'&&!f.rep)f.rep='M';
   if(!f._edit&&md==='rep'&&f.rep){const rule={id:uid(),name:ruleName(f),fs:{...f,ids:[],rep:'',mode:'',post:'',sno:'',wk:'',mdays:null,_edit:false},fq:f.rep,iv:Math.max(1,parseInt(f.iv)||1),start:f.dt,end:'',cnt:parseInt(f.cnt)||0,done:0,next:'',on:1,off:Math.max(0,(parseInt(f.sno)||1)-1),wk:f.wk||'',u:Date.now()};
     if(f.rep==='M'&&f.mdays&&f.mdays.length){rule.md=[...new Set(f.mdays)].sort((x,y)=>x-y);const sd=+f.dt.slice(8),last=daysIn(+f.dt.slice(0,4),+f.dt.slice(5,7));rule.m0=rule.md.filter(d=>Math.min(d,last)<sd).length}
+    if(convIds)await mutate([],convIds);
     S.rules.push(rule);await saveKV('rules');closeSheet();await runRules();toast('已建立週期記錄'+(ruleNext(rule)?'，下次 '+ruleNext(rule).replace(/-/g,'/'):''));if(S.view==='home'&&!S.stack.length){S.day=f.dt<=TODAY()?f.dt:S.day}render(true);return}
   if(!f._edit&&!md&&f.post==='m'){S.settings.pend=[...(S.settings.pend||[]),{id:uid(),fs:{...f,ids:[],post:'',dep:'',mode:''},due:f.dt,label:'待確認'}];await saveKV('settings');closeSheet();render(true);toast('已放入待入帳，請到鈴鐺確認');return}
   if(!f._edit&&!md&&f.dep){const tot=evalAmt(f.depT),dp=evalAmt(f.amt);if(!(tot>dp))return toast('總金額需大於訂金');
