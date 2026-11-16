@@ -402,6 +402,17 @@ h1{font-weight:700}
 .pbar{height:6px;border-radius:99px;background:var(--paper2);margin:6px 0 4px;overflow:hidden}
 .pbar i{display:block;height:100%;background:var(--accent);border-radius:99px}
 
+/* v2.0.37 列表：金額欄固定 7 位數寬，品名可延伸到金額旁；專案/帳戶標籤移到第二列靠右 */
+.row.hrow,.gkids .row.hrow{grid-template-columns:48px minmax(0,1fr) minmax(98px,auto);column-gap:10px;row-gap:3px}
+.gkids .row.hrow{grid-template-columns:36px minmax(0,1fr) minmax(98px,auto)}
+.row.hrow>.amt{display:contents}
+.row.hrow>.amt>.num{grid-column:3;grid-row:1;justify-self:end;white-space:nowrap}
+.row.hrow>.amt>small{grid-column:3;grid-row:2;justify-self:end;white-space:nowrap}
+.row.hrow>.amt>.pills,.row.hrow>.amt>.apill{grid-column:2/4;grid-row:2;justify-self:end;max-width:100%}
+.row.hrow>.amt>.apill{max-width:none}
+.row.hrow:has(>.amt>.pills)>:first-child,.row.hrow:has(>.amt>.apill)>:first-child{grid-row:1/3;align-self:center}
+.row.hrow>div[style*="min-width:0"]{grid-column:2;grid-row:1;align-self:center}
+.row.hrow .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .trl{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin-top:-4px;grid-column:2/-1;min-width:0}.row.hrow:has(>.trl)>:first-child{grid-row:1/3;align-self:center}.trl .apill{max-width:none;overflow:visible}.trl .arr{color:var(--muted);font-size:13px}
 /* 計算機鍵盤 */
 .calc{position:fixed;left:0;right:0;bottom:0;z-index:300;background:var(--paper2);border-top:1px solid var(--rule);padding:8px 8px calc(8px + env(safe-area-inset-bottom));box-shadow:0 -6px 20px rgba(0,0,0,.08)}
@@ -428,7 +439,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.36';
+window.APP_VER='v2.0.37';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
