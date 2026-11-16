@@ -475,6 +475,23 @@ body.calc-on #sb{padding-bottom:330px}
 .calc-q button{flex:none;border:1px solid var(--rule);background:var(--paper);color:var(--ink);border-radius:99px;padding:6px 14px;font-size:15px}
 .calc-pv{display:none}
 body.calc-on #sb{padding-bottom:370px}
+#tw{position:fixed;inset:0;z-index:400}
+#tw .twbg{position:absolute;inset:0;background:rgba(0,0,0,.25)}
+#tw .twp{position:absolute;left:0;right:0;bottom:0;background:var(--paper);border-radius:18px 18px 0 0;padding:6px 16px calc(14px + env(safe-area-inset-bottom,0px));box-shadow:0 -6px 24px rgba(0,0,0,.15)}
+#tw .twhd{display:flex;align-items:center;justify-content:space-between;height:48px}
+#tw .twhd button{background:none;border:0;font-size:16px;color:var(--muted);padding:8px 4px}
+#tw .twhd .ok{color:var(--accent);font-size:24px;font-weight:700}
+#tw .twbody{position:relative;display:flex;justify-content:center;align-items:center;gap:6px;height:200px}
+#tw .twc{height:200px;width:84px;overflow-y:auto;scroll-snap-type:y mandatory;scrollbar-width:none;position:relative;z-index:2;-webkit-mask-image:linear-gradient(transparent,#000 30%,#000 70%,transparent)}
+#tw .twc::-webkit-scrollbar{display:none}
+#tw .twpad{height:80px}
+#tw .twi{height:40px;line-height:40px;text-align:center;font-size:20px;color:var(--muted);scroll-snap-align:center;font-variant-numeric:tabular-nums}
+#tw .twi.on{color:var(--ink);font-size:26px;font-weight:600}
+#tw .twsep{font-size:26px;font-weight:600;z-index:2}
+#tw .twband{position:absolute;left:0;right:0;top:80px;height:40px;background:var(--paper2);border-radius:10px;z-index:1}
+#tw #tw-in{position:absolute;left:50%;top:76px;transform:translateX(-50%);width:180px;height:48px;z-index:5;text-align:center;font-size:24px;border:2px solid var(--accent);border-radius:12px;background:var(--paper);color:var(--ink);outline:none}
+#tw .twhint{text-align:center;font-size:12px;color:var(--muted);margin-top:6px}
+
 .sheet .mbtn input,.sheet .mbtn select,.sheet .cursel,.sheet .mrow.nm input{font-size:16px}
 .mbtn.tmb input{font-variant-numeric:tabular-nums;caret-color:var(--accent)}
 .sheet.ed .amtwrap,.sheet.ed .mcard{padding:2px 12px;border-radius:12px;margin-bottom:6px}
@@ -546,7 +563,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.63';
+window.APP_VER='v2.0.65';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1374,7 +1391,7 @@ function renderEditor(){
   const amtBox=ei&&f.splits&&f._si===-1?`<div class="mcard"><div class="mrow"><span class="curw">${cur}</span><b class="num mtot">${fmt(spTotal(f))}</b></div></div>`
     :`<div class="amtwrap"><div class="mrow amt"><span class="curw">${curSel}</span><input id="f-amt" data-f="amt" data-calc inputmode="${CALC_IM}" autocomplete="off" placeholder="${ei?'0':amtLabel}" value="${esc(f.amt)}" aria-label="${amtLabel}"><span class="ev" id="f-ev">${showEv?'= '+fmt(ev,cur):''}</span></div>${ei&&f.cu&&f.cu!==cur?`<label class="field" style="margin-top:6px"><span>匯率：1 ${f.cu} = ? ${cur}</span><input class="in num" id="f-xr" data-f="xr" inputmode="decimal" value="${esc(f.xr)}" placeholder="${+(rateOf(f.cu)/rateOf(cur)).toPrecision(6)}"></label>`:''}</div>`;
   const dateBtn=`<label class="mbtn ov" data-ic="📅"><span id="f-dt-x">${dateBtnText(f.dt)}</span><input type="date" id="f-dt" data-f="dt" data-rr="1" value="${f.dt}"></label>`;
-  const timeBtn=`<label class="mbtn ov tmb"><span id="f-tm-x">${esc(f.tm)}</span><input type="time" id="f-tm" value="${esc(f.tm)}" aria-label="時間"></label>`;
+  const timeBtn=`<button type="button" class="mbtn tmb" data-act="tw-open"><span id="f-tm-x">${esc(f.tm)}</span></button>`;
   const dateRow=`<div class="grid2"><label class="field"><span>日期</span><input class="in" type="date" id="f-dt" data-f="dt" value="${f.dt}"></label><label class="field"><span>時間</span><input class="in" type="time" id="f-tm" data-f="tm" value="${f.tm}"></label></div>`;
   const acctRow=f.kind==='tr'?`<div class="grid2"><label class="field"><span>從</span><select class="in" id="f-a" data-f="a" data-rr="1">${acctOptions(f.a,1)}</select></label><label class="field"><span>到</span><select class="in" id="f-a2" data-f="a2" data-rr="1">${acctOptions(f.a2,1)}</select></label></div>${diffCur?`<label class="field"><span>轉入金額（${acB.cur}）${f._sugg&&!f.amt2?' · 依匯率約 '+fmt(f._sugg,acB.cur):''}</span><input class="in num" id="f-amt2" data-f="amt2" data-calc inputmode="${CALC_IM}" value="${esc(f.amt2||'')}" placeholder="${f._sugg||''}"></label>`:''}`
     :`<label class="field"><span>帳戶</span><select class="in" id="f-a" data-f="a" data-rr="1">${acctOptions(f.a)}</select></label>`;
@@ -1512,7 +1529,27 @@ function openInstEditor(){
 function savedFx(){const d=document.createElement('div');d.className='savedfx';d.innerHTML='<span>✓</span>';document.body.appendChild(d);setTimeout(()=>d.remove(),900)}
 function tmNorm(v,old){const d=String(v||'').replace(/\D/g,'');let h,m;if(!d)return old;if(d.length<=2){h=+d;m=0}else if(d.length===3){h=+d[0];m=+d.slice(1)}else{h=+d.slice(0,2);m=+d.slice(2,4)}
   if(!(h>=0&&h<24&&m>=0&&m<60))return old;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')}
-['input','change'].forEach(ev=>document.addEventListener(ev,e=>{if(e.target.id!=='f-tm'||!EF)return;e.stopImmediatePropagation();const v=e.target.value;if(/^\d{2}:\d{2}/.test(v)){EF.tm=v.slice(0,5);const x=$('#f-tm-x');if(x)x.textContent=EF.tm}},true));
+/* ---------- 時間滾輪（自製，按 ✓ 才帶入；點中間數字可直接打字） ---------- */
+function twCol(n,cur){let h='<div class="twpad"></div>';for(let i=0;i<n;i++)h+=`<div class="twi${i===cur?' on':''}" data-v="${i}">${String(i).padStart(2,'0')}</div>`;return h+'<div class="twpad"></div>'}
+const TW_H=40;
+function twOpen(){if(!EF)return;const[h,m]=(EF.tm||'00:00').split(':').map(Number);let w=$('#tw');if(w)w.remove();w=document.createElement('div');w.id='tw';
+  w.innerHTML=`<div class="twbg" data-tw="x"></div><div class="twp"><div class="twhd"><button type="button" data-tw="x">取消</button><b>時間</b><button type="button" class="ok" data-tw="ok">✓</button></div>
+  <div class="twbody"><div class="twband" data-tw="type"></div><div class="twc" id="tw-h">${twCol(24,h)}</div><div class="twsep">:</div><div class="twc" id="tw-m">${twCol(60,m)}</div>
+  <input id="tw-in" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="例 0930" hidden></div><div class="twhint">滑動選擇，或點中間的時間直接輸入 4 位數字</div></div>`;
+  document.body.appendChild(w);const H=$('#tw-h'),M=$('#tw-m');H.scrollTop=h*TW_H;M.scrollTop=m*TW_H;
+  const mark=c=>{const k=Math.round(c.scrollTop/TW_H);c.querySelectorAll('.twi').forEach((x,i)=>x.classList.toggle('on',i===k))};[H,M].forEach(c=>c.addEventListener('scroll',()=>mark(c),{passive:true}));
+  w.addEventListener('click',e=>{const a=e.target.closest('[data-tw]');const it=e.target.closest('.twi');
+    if(it&&it.classList.contains('on')){const inp=$('#tw-in');inp.hidden=false;inp.value='';inp.focus();return}
+    if(it){const c=it.parentElement;c.scrollTo({top:+it.dataset.v*TW_H,behavior:'smooth'});return}
+    if(!a)return;const k=a.dataset.tw;
+    if(k==='x')return twClose();
+    if(k==='type'){const inp=$('#tw-in');inp.hidden=false;inp.value='';inp.focus();return}
+    if(k==='ok'){twApplyTyped();const hh=Math.round(H.scrollTop/TW_H),mm=Math.round(M.scrollTop/TW_H);EF.tm=String(Math.min(23,hh)).padStart(2,'0')+':'+String(Math.min(59,mm)).padStart(2,'0');const x=$('#f-tm-x');if(x)x.textContent=EF.tm;twClose()}});
+  const inp=$('#tw-in');inp.addEventListener('input',()=>{inp.value=inp.value.replace(/\D/g,'').slice(0,4);if(inp.value.length===4)twApplyTyped()});
+  inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();twApplyTyped()}});inp.addEventListener('blur',()=>{twApplyTyped()})}
+function twApplyTyped(){const inp=$('#tw-in');if(!inp||inp.hidden)return;const d=inp.value.replace(/\D/g,'');inp.hidden=true;inp.blur();if(!d)return;let h,m;if(d.length<=2){h=+d;m=0}else if(d.length===3){h=+d[0];m=+d.slice(1)}else{h=+d.slice(0,2);m=+d.slice(2)}
+  if(!(h<24&&m<60))return toast('時間不正確');$('#tw-h').scrollTop=h*TW_H;$('#tw-m').scrollTop=m*TW_H}
+function twClose(){const w=$('#tw');if(w)w.remove();if(window.scrollY)window.scrollTo(0,0)}
 function efFocusAmt(){setTimeout(()=>{const e=$('#f-amt');e&&e.focus&&e.focus()},60)}
 const ACT={
   'close-sheet':()=>closeSheet(),
@@ -1536,6 +1573,7 @@ const ACT={
   'ef-qcat':el=>{EF._pickNew=0;EF._reop=0;EF._catT=1;EF._autoC=0;EF.c=el.dataset.c;EF.s=el.dataset.s;EF._spCat=0;EF._cs='';renderEditor();efFocusAmt()},
   'ef-os':()=>{EF.os=!EF.os;if(EF.sh)EF.osShop=EF.os;EF._osFor=EF.sh||'';renderEditor();if(EF.os){const cur=D.acct.get(EF.a)?.cur||'TWD';const fe=osFeeOf(evalAmt(EF.amt)||0);toast(fe>0?'另記海外交易手續費 '+money(fe,cur):'儲存時另記 1.5% 海外交易手續費')}},
   'ef-deptog':()=>{EF.dep=EF.dep?'':1;renderEditor()},
+  'tw-open':()=>{const a=document.activeElement;if(a&&a.blur)a.blur();twOpen()},
   'ef-cback':()=>{EF._cs='';renderEditor()},
   'ef-pcancel':()=>{if(EF._pickNew){EF._pickNew=0;EF._spCat=0;EF._cs='';return ACT['sp-del']()}if(EF._reop){EF.c=EF._reop.c;EF.s=EF._reop.s;EF._reop=0}EF._spCat=0;EF._cs='';renderEditor()},
   'ef-reopen':()=>{EF._reop={c:EF.c,s:EF.s};EF._spCat=1;EF._cs='';renderEditor()},
@@ -3299,7 +3337,7 @@ function calcKey(k){if(!CK)return;let v=CK.value;const last=v.slice(-1),isOp=c=>
   if(isOp(k)){if(!v&&k!=='−')return;if(isOp(last))v=v.slice(0,-1);return calcSet(v+k)}
   if(k==='.'){const seg=v.split(/[+−\-×÷*/]/).pop();if(seg.includes('.'))return;return calcSet(v+(seg?'.':'0.'))}
   calcSet(v+k)}
-document.addEventListener('focusin',e=>{if(!$('#sheet.ed'))return;const t=e.target;if(!t.matches||!t.matches('#f-n,#f-p,#f-sh,#f-tm,#f-fee'))return;const fix=()=>{if(window.scrollY)window.scrollTo(0,0);const sb=$('#sb');if(sb&&sb.scrollTop&&sb.scrollHeight<=sb.clientHeight+4)sb.scrollTop=0};[30,120,300,600].forEach(ms=>setTimeout(fix,ms))});
+document.addEventListener('focusin',e=>{if(!$('#sheet.ed'))return;const t=e.target;if(!t.matches||!t.matches('#f-n,#f-p,#f-sh,#f-fee'))return;const fix=()=>{if(window.scrollY)window.scrollTo(0,0);const sb=$('#sb');if(sb&&sb.scrollTop&&sb.scrollHeight<=sb.clientHeight+4)sb.scrollTop=0};[30,120,300,600].forEach(ms=>setTimeout(fix,ms))});
 if(window.visualViewport)visualViewport.addEventListener('scroll',()=>{if($('#sheet.ed')&&window.scrollY&&document.activeElement&&document.activeElement.id==='f-n')window.scrollTo(0,0)});
 document.addEventListener('scroll',e=>{const t=e.target;if(t&&t.id==='sb'&&t.scrollLeft)t.scrollLeft=0;else if(t===document&&window.scrollX)window.scrollTo(0,window.scrollY)},true);
 function fixX(){if(window.scrollX)window.scrollTo(0,window.scrollY)}document.addEventListener('focusout',()=>setTimeout(fixX,350));window.addEventListener('resize',()=>setTimeout(fixX,100));if(window.visualViewport)visualViewport.addEventListener('resize',()=>setTimeout(fixX,100));document.addEventListener('visibilitychange',()=>setTimeout(fixX,100));
