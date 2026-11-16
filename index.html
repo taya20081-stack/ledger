@@ -36,7 +36,8 @@
   color-scheme:dark;
 }
 *{box-sizing:border-box}
-html,body{background:var(--bg);color:var(--ink)}
+html,body{background:var(--bg);color:var(--ink);overflow-x:hidden;overscroll-behavior-x:none;max-width:100%}
+html{overflow-x:clip}
 body{font:15px/1.5 var(--sans);-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--bg)}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -543,7 +544,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.58';
+window.APP_VER='v2.0.59';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -3295,7 +3296,8 @@ function calcKey(k){if(!CK)return;let v=CK.value;const last=v.slice(-1),isOp=c=>
   calcSet(v+k)}
 document.addEventListener('focusin',e=>{if(!$('#sheet.ed'))return;const t=e.target;if(!t.matches||!t.matches('#f-n,#f-p,#f-sh'))return;const fix=()=>{if(window.scrollY)window.scrollTo(0,0);const sb=$('#sb');if(sb&&sb.scrollTop&&sb.scrollHeight<=sb.clientHeight+4)sb.scrollTop=0};[30,120,300,600].forEach(ms=>setTimeout(fix,ms))});
 if(window.visualViewport)visualViewport.addEventListener('scroll',()=>{if($('#sheet.ed')&&window.scrollY&&document.activeElement&&document.activeElement.id==='f-n')window.scrollTo(0,0)});
-document.addEventListener('scroll',e=>{const t=e.target;if(t&&t.id==='sb'&&t.scrollLeft)t.scrollLeft=0;else if(t===document&&window.scrollX&&$('#sheet.ed'))window.scrollTo(0,window.scrollY)},true);
+document.addEventListener('scroll',e=>{const t=e.target;if(t&&t.id==='sb'&&t.scrollLeft)t.scrollLeft=0;else if(t===document&&window.scrollX)window.scrollTo(0,window.scrollY)},true);
+function fixX(){if(window.scrollX)window.scrollTo(0,window.scrollY)}document.addEventListener('focusout',()=>setTimeout(fixX,350));window.addEventListener('resize',()=>setTimeout(fixX,100));if(window.visualViewport)visualViewport.addEventListener('resize',()=>setTimeout(fixX,100));document.addEventListener('visibilitychange',()=>setTimeout(fixX,100));
 function calcShow(el){CK=el;{const sb=el.closest('#sb');if(sb)sb.scrollLeft=0;window.scrollTo(0,window.scrollY)}const k=calcEl();k.hidden=false;document.body.classList.add('calc-on');calcPv();
   {const q=$('#calc-q');if(q){let arr=[];if(el.id==='f-amt'&&EF&&EF.c){const e=recentIdx().by.get(EF.c+'\u0001'+EF.s);arr=(e?e.a:[]).slice(0,6)}q.innerHTML=arr.map(v=>`<button type="button" data-cq="${v}">${v}</button>`).join('');q.hidden=!arr.length}}
 
