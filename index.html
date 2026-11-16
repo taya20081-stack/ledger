@@ -358,7 +358,11 @@ input[type=date].in,input[type=time].in{min-width:0;width:100%;display:block;-we
 @keyframes slideL{from{opacity:.3;transform:translateX(28px)}to{opacity:1;transform:none}}
 @keyframes slideR{from{opacity:.3;transform:translateX(-28px)}to{opacity:1;transform:none}}
 .hlist.slide-l{animation:slideL .18s ease-out}.hlist.slide-r{animation:slideR .18s ease-out}
-.shell.home .hlist{min-height:52vh}
+.shell.home{height:100vh;height:100dvh;box-sizing:border-box;display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:none;padding-bottom:calc(74px + env(safe-area-inset-bottom,0px))}
+body:has(.shell.home){overflow:hidden;height:100dvh}
+.shell.home>*{flex:none}
+.shell.home>.hlist{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.shell.home .cd{height:42px}.shell.home .cd>span{width:36px;height:36px;font-size:17px}
 .dask{flex-wrap:wrap;margin-bottom:10px}.dask .btns{width:100%;margin-top:6px}
 button.dtitle{border:0;background:none;padding:0;color:inherit}
 .dpick{cursor:pointer}
@@ -563,7 +567,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.67';
+window.APP_VER='v2.0.68';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -2697,8 +2701,7 @@ function pageHome(){
     <div class="cal-wd">${wdh}</div><div class="cal-grid">${calCells()}</div><button class="cal-handle" data-act="cal-col" aria-label="${S.calCol?'展開月曆':'收合月曆'}"><i></i></button></div>
   <button class="pcard" data-act="home-proj"><span class="hb pj">${proj?'🐷':'📒'}</span><div style="min-width:0"><div class="t">${esc(proj||'全部記錄')}</div><div class="s">${proj?`專案總額 <span class="num ${tot<0?'neg':'pos'}">${money(Math.round(Math.abs(tot)))}</span>`:`本月 支 <span class="num neg">${shortNum(ms.exp)}</span> · 收 <span class="num pos">${shortNum(ms.inc)}</span>`}</div></div>
     <div class="amt num"><span class="neg">${money(Math.round(dexp))}</span><i>•</i><span class="pos">${money(Math.round(dinc))}</span></div></button>
-  ${budgetBlock(ym,true)?`<div class="sum mt">${budgetBlock(ym,true)}</div>`:''}
-  <div class="hlist">${list.length?homeItems(list):`<div class="empty">這天沒有記錄<br><button class="btn pri mt" data-act="add">記一筆</button></div>`}</div>`;
+  <div class="hlist">${budgetBlock(ym,true)?`<div class="sum mt">${budgetBlock(ym,true)}</div>`:''}${list.length?homeItems(list):`<div class="empty">這天沒有記錄<br><button class="btn pri mt" data-act="add">記一筆</button></div>`}</div>`;
   return{head,body,cls:'home'};
 }
 // 合併鍵：同一個群組 g；或同一天、同時間、同帳戶、同商家、同專案的多筆支出／收入（一次買好幾樣）
@@ -2738,7 +2741,7 @@ Object.assign(ACT,{
   'grp-edit':el=>{const r=S.byId.get(el.dataset.id);if(!r)return;closeSheet();openEditor(recordToForm(r),true)},
   'grp-del':async el=>{if(el.dataset.armed!=='1'){el.dataset.armed='1';el.textContent='再按一次確認刪除整筆';return}const ids=grpMembers(el.dataset.g).map(x=>x.id);closeSheet();await mutate([],ids);render(true);toast('已刪除 '+ids.length+' 筆')},
   'cal-today':()=>{if(S.day!==TODAY())setDay(TODAY())},
-  'cal-col':()=>{S.calCol=!S.calCol;if(!S.calCol)S.month=S.day.slice(0,7);render(true)},
+  'cal-col':()=>calSet(!S.calCol),
   'cal-nav':el=>calMove(+el.dataset.d),
   'home-proj':()=>{const cur=S.settings.homeProj||'';const projs=D.projs.filter(p=>p&&(p===cur||!projDoneAt(p)));
     openSheet('首頁顯示',`<div class="list">${['',...projs].map(p=>`<button class="li" data-act="home-proj-set" data-p="${esc(p)}" style="width:100%;text-align:left;border:0;background:none"><div class="grow">${p?esc(p):'全部記錄'}</div>${p===cur?IC.check.replace('<svg','<svg width="18" height="18" style="stroke:var(--accent);fill:none;stroke-width:2"'):''}</button>`).join('')}</div>${cur?`<button class="btn mt" data-act="home-proj-stat" data-p="${esc(cur)}">查看「${esc(cur)}」統計</button>`:''}`)},
@@ -2756,7 +2759,7 @@ let calTX=null,calTY=0;
 document.addEventListener('touchstart',e=>{if(!e.target.closest('#cal'))return;const t=e.touches[0];calTX=t.clientX;calTY=t.clientY},{passive:true});
 document.addEventListener('touchend',e=>{if(calTX==null)return;const t=e.changedTouches[0];const dx=t.clientX-calTX,dy=t.clientY-calTY;calTX=null;
   if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.4)calMove(dx<0?1:-1);
-  else if(Math.abs(dy)>50&&Math.abs(dy)>Math.abs(dx)*1.4&&e.target.closest('.cal-handle,.cal-grid')){const c=dy<0;if(c!==!!S.calCol){S.calCol=c;if(!c)S.month=S.day.slice(0,7);render(true)}}},{passive:true});
+  else if(Math.abs(dy)>50&&Math.abs(dy)>Math.abs(dx)*1.4&&e.target.closest('.cal-handle,.cal-grid')){const c=dy<0;if(c!==!!S.calCol)calSet(c)}},{passive:true});
 
 /* ---------- 子類別排序（拖曳或上下移） ---------- */
 let SRT=null;
@@ -2775,6 +2778,15 @@ document.addEventListener('pointermove',e=>{if(!srtDrag)return;e.preventDefault(
   if(before!==srtDrag.row.nextSibling)box.insertBefore(srtDrag.row,before)},{passive:false});
 ['pointerup','pointercancel'].forEach(t=>document.addEventListener(t,()=>{if(!srtDrag)return;srtDrag.row.classList.remove('drag');srtDrag=null;const box=$('#srt');if(box&&SRT)srtSave([...box.children].map(r=>r.dataset.n))}));
 
+
+/* 首頁：清單在固定區域內捲動（整頁不被抬起）；往下滑時日曆收成「選取日那一週」，在清單頂端往下拉就展開 */
+function calSet(c){S.calCol=c;if(!c)S.month=S.day.slice(0,7);const cal=$('#cal');if(!cal)return render(true);cal.classList.toggle('col',c);
+  const g=cal.querySelector('.cal-grid');if(g)g.innerHTML=calCells();const n=cal.querySelector('.calnav .num');if(n)n.textContent=c?'':S.month.replace('-',' / ');
+  const hb=cal.querySelector('.cal-handle');if(hb)hb.setAttribute('aria-label',c?'展開月曆':'收合月曆')}
+document.addEventListener('scroll',e=>{const el=e.target;if(!el||!el.classList||!el.classList.contains('hlist')||S.view!=='home'||S.stack.length)return;
+  if(!S.calCol&&el.scrollTop>30&&el.scrollHeight-el.clientHeight>300)calSet(true)},true);
+{let y0=null;document.addEventListener('touchstart',e=>{const l=e.target.closest&&e.target.closest('.hlist');y0=l&&S.view==='home'?e.touches[0].clientY:null},{passive:true});
+ document.addEventListener('touchmove',e=>{if(y0==null||!S.calCol)return;const l=$('.hlist');if(l&&l.scrollTop<=0&&e.touches[0].clientY-y0>45){y0=null;calSet(false)}},{passive:true})}
 /* ---------- 在專案卡與明細區左右滑動：前一天／後一天 ---------- */
 let DS=null;   // {x,y,lx,ly,lock}
 document.addEventListener('touchstart',e=>{DS=null;if(S.view!=='home'||S.stack.length||$('#sheet')||e.touches.length>1)return;const t=e.target;
@@ -3320,7 +3332,7 @@ document.addEventListener('change',async e=>{const t=e.target;if(t.matches&&t.ma
 /* ================= 金額計算機鍵盤：+ − × ÷，觸控裝置取代系統數字鍵盤 ================= */
 const CALC_TOUCH=matchMedia('(pointer:coarse)').matches;
 const CALC_IM=CALC_TOUCH?'none':'decimal';
-if(CALC_TOUCH){const conv=root=>{(root.querySelectorAll?root:document).querySelectorAll('input[inputmode="decimal"],input[inputmode="numeric"],input[data-calc]').forEach(i=>{i.setAttribute('data-calc','');i.setAttribute('inputmode','none')})};
+if(CALC_TOUCH){const conv=root=>{(root.querySelectorAll?root:document).querySelectorAll('input[inputmode="decimal"],input[inputmode="numeric"],input[data-calc]').forEach(i=>{if(i.id==='tw-in')return;i.setAttribute('data-calc','');i.setAttribute('inputmode','none')})};
   new MutationObserver(ms=>{for(const m of ms)for(const n of m.addedNodes)if(n.nodeType===1)conv(n)}).observe(document.documentElement,{childList:true,subtree:true});conv(document);document.addEventListener("DOMContentLoaded",()=>conv(document))}
 let CK=null;   // 目前輸入中的欄位
 const CALC_KEYS=[['÷','×','−','+'],['7','8','9','⌫'],['4','5','6','AC'],['1','2','3','='],['.','0','00','完成']];
