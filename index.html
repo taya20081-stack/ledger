@@ -543,7 +543,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.56';
+window.APP_VER='v2.0.57';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -635,6 +635,7 @@ const incomeOf=r=>INC_T.has(r.t)?val(r):0;
 const excluded=r=>S.settings.excl.includes(r.c);
 
 function recompute(){
+  if(S.ready)holdSyncSoon();
   const td=TODAY();
   D.acct=new Map(S.accts.map(a=>[a.id,a]));
   const bal=new Map(S.accts.map(a=>[a.id,a.init||0]));
@@ -1681,7 +1682,7 @@ async function boot(){
   await DB.open();
   try{const{recs,kv}=await DB.load();S.recs=recs;for(const k of['accts','cats','budgets','rules','tpls','rates','sellers'])if(kv[k])S[k]=kv[k];if(kv.settings)S.settings={...S.settings,...kv.settings};S.kvu=kv.kvu||{};S.cloudCfg=kv.cloudCfg||null}catch(e){DB.mem=true}
   if(!S.cats)S.cats=defaultCats();S.rates.r={...DEFAULT_RATES,...S.rates.r};
-  S.byId=new Map(S.recs.map(r=>[r.id,r]));ensureCats();applyTheme();recompute();S.ready=true;render();setTimeout(()=>fixOsGroups().catch(()=>{}),1500);
+  S.byId=new Map(S.recs.map(r=>[r.id,r]));ensureCats();applyTheme();recompute();S.ready=true;render();holdSyncSoon();setTimeout(()=>fixOsGroups().catch(()=>{}),1500);
   try{await runRules();await runAutoload();render(true)}catch(e){}
   botRates().then(ok=>{if(ok)render(true)});
   if(window.Cloud)Cloud.init().then(()=>render(true));
@@ -3064,7 +3065,7 @@ async function loadPrices(force){const H=S.settings.hold||[];if(!H.length&&!gold
   try{const res=await fetch(PRICE_URL+'?t='+Date.now(),{cache:'no-store'});if(!res.ok)return false;PX=await res.json();let n=0;
     for(const h of H){if(h.pxManual)continue;const q=PX.p&&PX.p[h.code];if(q){h.px=+q[1];h.pxd=q[3]||PX.d;if(!h.name)h.name=q[0];if(q[2])h.cu=q[2];n++}}n+=pxApply(S.settings.pxx&&S.settings.pxx.p);if(goldApply())n++;
     S.settings.pxFor=td;await saveKV('settings');return n>0}catch(e){return false}}
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.ready)loadPrices().then(ok=>{if(ok)render(true)})});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.ready){loadPrices().then(ok=>{if(ok)render(true)});holdSyncSoon()}});
 function holdRecs(h){const code=String(h.code||'').trim(),nm=String(h.name||'').trim();const reC=code?new RegExp('(^|[^0-9A-Za-z])'+code.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?![0-9A-Za-z])','i'):null;
   return D.live.filter(r=>(r.c==='投資'||/股票|基金|ETF|申購|股利|配息/.test(r.s||''))&&((reC&&reC.test(r.n||''))||(nm&&nm.length>=2&&(r.n||'').includes(nm))))}
 function holdCalc(h){const fx=rateOf(h.cu||'TWD');const mv=(+h.px||0)*(+h.sh||0)*fx;
@@ -3135,6 +3136,30 @@ function holdEditSheet(i){const h=(S.settings.hold||[])[i];if(!h)return;
   <label class="field"><span>名稱</span><input class="in" id="he-nm" value="${esc(holdName(h))}"></label>
   <label class="field"><span>手動價格（留空＝自動帶收盤價）</span><input class="in num" id="he-px" inputmode="decimal" value="${h.pxManual?esc(h.px):''}" placeholder="${h.px&&!h.pxManual?'目前 '+h.px:''}"></label>
   <div class="btns fill"><button class="btn danger" data-act="hd-del" data-i="${i}">刪除</button><button class="btn pri" data-act="hd-save" data-i="${i}">儲存</button></div>`)}
+/* ---------- 股票買入自動加股數：名稱開頭是代碼（0050元大台灣50、NVDA輝達），依金額 ÷ 收盤價反推股數，存進持股
+   S.settings.hlog={記錄id:{code,pf,sh,amt}}；只處理 HOLD_FROM 之後的記錄（之前的股數你已手動輸入） ---------- */
+const HOLD_FROM='2026-11-17';
+function holdCodeOf(r){if(!r||r.t!=='支出'||r.c!=='投資'||!/股票買入|定期定額/.test(r.s||''))return'';const n=String(r.n||'').trim();
+  let x=/^(\d{4,6}[A-Z]?)(?![0-9])/.exec(n);if(x)return x[1];x=/^([A-Z]{1,5}(?:\.[A-Z])?)(?![A-Za-z])/.exec(n);return x?x[1]:''}
+let _hsT=0,_hsBusy=false;function holdSyncSoon(){clearTimeout(_hsT);_hsT=setTimeout(()=>holdSync().catch(()=>{}),1500)}
+async function holdSync(){if(_hsBusy||!S.ready)return;_hsBusy=true;try{
+  const log=S.settings.hlog||(S.settings.hlog={});const H=S.settings.hold||(S.settings.hold=[]);const msgs=[];let ch=false;
+  const want=new Map();for(const r of D.live){if(r.dt<HOLD_FROM)continue;const c=holdCodeOf(r);if(c)want.set(r.id,{r,c})}
+  const needPx=[...want.entries()].some(([id,w])=>!log[id]||Math.abs((log[id].amt||0)-Math.abs(w.r.m))>0.5);
+  if(needPx&&(!PX||!PX.d||PX.d<TODAY())){try{const res=await fetch(PRICE_URL+'?t='+Date.now(),{cache:'no-store'});if(res.ok)PX=await res.json()}catch(e){}}
+  const find=(c,pf)=>H.find(h=>h.code===c&&(!pf||(h.pf||'我的')===pf));
+  const add=(c,pf,d,cu)=>{let h=find(c,pf)||(pf?null:find(c));if(!h){h=holdUpsert(pf||(H.find(x=>x.code===c)?.pf)||'我的',c,0,0,cu)}h.sh=Math.max(0,Math.round(((+h.sh||0)+d)*1e5)/1e5);return h};
+  // 刪掉的記錄 → 扣回
+  for(const id of Object.keys(log)){if(!want.has(id)){const L=log[id];add(L.code,L.pf,-L.sh);delete log[id];ch=true;msgs.push(L.code+' −'+fmtSh(L.sh)+' 股')}}
+  for(const[id,{r,c}]of want){const amt=Math.abs(r.m);const L=log[id];if(L&&L.code===c&&Math.abs(L.amt-amt)<=0.5)continue;
+    const q=PX&&PX.p&&PX.p[c];if(!q||!(+q[1]>0))continue;const pxd=q[3]||PX.d||'';if(pxd<r.dt)continue;// 等當天收盤價出來再算
+    const scu=q[2]||(/^[A-Z]/.test(c)?'USD':'TWD');const v=amt*rateOf(curOf(r))/rateOf(scu);let sh=v/(+q[1]);sh=scu==='TWD'?Math.round(sh):Math.round(sh*1e4)/1e4;
+    if(L){add(L.code,L.pf,-L.sh)}if(!(sh>0)){delete log[id];ch=true;continue}
+    const h0=find(c);const pf=(h0&&(h0.pf||'我的'))||'我的';const h=add(c,pf,sh,scu);if(!h.name||h.name===h.code)h.name=q[0]||h.name;
+    log[id]={code:c,pf,sh,amt,px:+q[1],d:pxd};ch=true;msgs.push(c+' +'+fmtSh(sh)+' 股（'+(+q[1])+'）')}
+  if(ch){await saveKV('settings');if(msgs.length)toast('持股已更新：'+msgs.slice(0,3).join('、')+(msgs.length>3?' 等 '+msgs.length+' 筆':''));render(true)}
+}finally{_hsBusy=false}}
+function fmtSh(v){return(+v).toLocaleString('zh-TW',{maximumFractionDigits:4})}
 function holdUpsert(pf,code,sh,cost,cu){const H=S.settings.hold||(S.settings.hold=[]);code=String(code).trim().toUpperCase();pf=String(pf||'我的').trim()||'我的';
   let h=H.find(x=>(x.pf||'我的')===pf&&x.code===code);if(!h){h={id:uid(),pf,code,name:'',sh:0};H.push(h)}h.sh=sh;if(cost>0)h.cost=cost;if(cu)h.cu=cu;else if(!h.cu)h.cu=/^[A-Z]{1,5}$/.test(code)?'USD':'TWD';return h}
 
