@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>存摺記帳</title>
 <meta name="description" content="個人記帳 PWA，支援多帳戶、多幣別、預算、分期與統計。">
-<meta name="theme-color" content="#F8F8F8">
+<meta name="theme-color" content="#FFF9E0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="存摺記帳">
@@ -130,7 +130,7 @@ button{cursor:pointer}
 /* accounts */
 .grp{margin-top:18px}
 .grph{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);letter-spacing:.08em;padding:0 4px 6px}
-.pfh{width:100%;background:var(--card,#fff);border:1px solid var(--line,#e5e5e5);border-radius:14px;padding:14px 16px;margin-bottom:8px;font-size:15px;color:inherit;letter-spacing:0;cursor:pointer}
+.pfh{width:100%;background:var(--card,var(--paper));border:1px solid var(--line,#e5e5e5);border-radius:14px;padding:14px 16px;margin-bottom:8px;font-size:15px;color:inherit;letter-spacing:0;cursor:pointer}
 .list{background:var(--paper);border:1px solid var(--rule);border-radius:14px;overflow:hidden}
 .li{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--rule);cursor:pointer;width:100%;background:none;border-left:0;border-right:0;border-top:0;text-align:left}
 .li:last-child{border-bottom:0}
@@ -383,7 +383,7 @@ button.dtitle{border:0;background:none;padding:0;color:inherit}
 
 /* ---------- v1.8 清爽版配色與字體（比照常見記帳 App 的乾淨風格） ---------- */
 :root{--serif:var(--sans);--mono:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue","PingFang TC","Noto Sans TC",sans-serif}
-:root:not([data-app="dark"]){--bg:#F8F8F8;--paper:#FFFFFF;--paper2:#F3F4F5;--ink:#2B2D36;--muted:#8A8D96;--rule:#E6E7EA;--accent:#57C263;--accent-ink:#FFFFFF;--seal:#D8574F;--gain:#6DB23E;--shadow:0 8px 26px rgba(40,44,60,.10)}
+:root:not([data-app="dark"]){--bg:#FFF9E0;--paper:#FFFDF2;--paper2:#FFF3CC;--ink:#2B2D36;--muted:#8A8472;--rule:#EFE4BC;--accent:#57C263;--accent-ink:#FFFFFF;--seal:#D8574F;--gain:#6DB23E;--shadow:0 8px 26px rgba(40,44,60,.10)}
 .num{font-variant-numeric:tabular-nums}
 h1{font-weight:700}
 .cd>span{font-size:19px;font-weight:400}
@@ -439,7 +439,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.38';
+window.APP_VER='v2.0.39';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1499,7 +1499,7 @@ async function loadSample(){
   S.recs=recs;S.byId=new Map(recs.map(r=>[r.id,r]));S.budgets={total:30000,cats:{飲食:9000,娛樂:2000},u:Date.now()};S.settings.sample=1;
   recompute();await DB.putRecs(recs);for(const k of['accts','cats','budgets','settings'])await saveKV(k);render();toast('已載入範例資料')
 }
-function applyTheme(){const t=S.settings.theme==='dark'?'dark':'light';document.documentElement.dataset.app=t;document.documentElement.toggleAttribute('data-swap',S.settings.swapCol!==false);const m=document.querySelector('meta[name=theme-color]');if(m)m.content=t==='dark'?'#0F141B':'#E9EEEB'}
+function applyTheme(){const t=S.settings.theme==='dark'?'dark':'light';document.documentElement.dataset.app=t;document.documentElement.toggleAttribute('data-swap',S.settings.swapCol!==false);const m=document.querySelector('meta[name=theme-color]');if(m)m.content=t==='dark'?'#0F141B':'#FFF9E0'}
 
 /* ================= events ================= */
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const fn=ACT[el.dataset.act];if(fn){e.preventDefault();fn(el,e)}});
@@ -2997,7 +2997,7 @@ PAGES.applepay=pageApplePay;PAGES.gold=pageGold;PAGES.market=pageMarket;PAGES.fx
   const H=S.settings.hold||[],G=S.settings.goals||[];
   r.body=r.body.replace(/()(<button class="li" data-act="push" data-p="search")/,`$1${it('goals','存錢目標',G.length?G.length+' 個目標':'設定目標金額與期限')}${it('market','投資市值','股票・黃金・外匯 · '+money(mktTotal())+' · 更新：'+mktDate())}${it('applepay','Apple Pay 自動記帳','刷卡當下自動記一筆')}$2`);return r}}
 {const _accts=PAGES.accts;PAGES.accts=function(){const r=_accts();if(!mktTotal())return r;
-  r.body=r.body.replace(/()(<div class="toolbar mt">)/,`$1<button class="li" data-act="push" data-p="market" style="margin:12px 0 0;border-radius:14px;background:var(--card,#fff)"><div class="grow"><div>投資市值</div><small>股票・黃金・外匯；股票與黃金未計入上方淨資產</small></div><div class="r num">${money(mktTotal())}</div><span class="chev">${IC.chev}</span></button>$2`);return r}}
+  r.body=r.body.replace(/()(<div class="toolbar mt">)/,`$1<button class="li" data-act="push" data-p="market" style="margin:12px 0 0;border-radius:14px;background:var(--card,var(--paper))"><div class="grow"><div>投資市值</div><small>股票・黃金・外匯；股票與黃金未計入上方淨資產</small></div><div class="r num">${money(mktTotal())}</div><span class="chev">${IC.chev}</span></button>$2`);return r}}
 {const _acct=PAGES.acct;PAGES.acct=function(id){const r=_acct(id);r.body=r.body.replace(/(<button class="btn sm" data-act="adjust" data-id="[^"]*">調整餘額<\/button>)/,`$1<button class="btn sm" data-act="push" data-p="recon" data-id="${id}">對帳</button>`);return r}}
 {const _rules=PAGES.rules;PAGES.rules=function(){const r=_rules();const h=subHTML();if(h)r.body=r.body.replace(/(<div class="grp"><div class="grph"><span>週期)/,h+'$1');if(h&&!r.body.includes('可能的訂閱'))r.body+=h;return r}}
 {const _bud=PAGES.budget;PAGES.budget=function(){const r=_bud();const B=S.budgets;
