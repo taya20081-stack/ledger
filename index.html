@@ -417,7 +417,7 @@ h1{font-weight:700}
 .row.hrow .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .trl{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin-top:-4px;grid-column:2/-1;min-width:0}.row.hrow:has(>.trl)>:first-child{grid-row:1/3;align-self:center}.trl .apill{max-width:none;overflow:visible}.trl .arr{color:var(--muted);font-size:13px}
 /* 計算機鍵盤 */
-.calc{position:fixed;left:0;right:0;bottom:0;z-index:300;background:var(--paper2);border-top:1px solid var(--rule);padding:8px 8px calc(8px + env(safe-area-inset-bottom));box-shadow:0 -6px 20px rgba(0,0,0,.08)}
+.calc{position:fixed;left:0;right:0;bottom:0;z-index:500;background:var(--paper2);border-top:1px solid var(--rule);padding:8px 8px calc(8px + env(safe-area-inset-bottom));box-shadow:0 -6px 20px rgba(0,0,0,.08)}
 .calc-pv{font:600 18px/1.3 var(--num,inherit);text-align:right;padding:4px 10px 8px;color:var(--muted,#777);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
 .calc-g{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;max-width:520px;margin:0 auto}
 .calc-g button{height:50px;border:0;border-radius:12px;background:var(--paper);color:var(--ink);font-size:22px;font-weight:500;box-shadow:0 1px 0 rgba(0,0,0,.12);touch-action:manipulation;-webkit-user-select:none;user-select:none}
@@ -563,7 +563,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.66';
+window.APP_VER='v2.0.67';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1535,7 +1535,7 @@ const TW_H=40;
 function twOpen(){if(!EF)return;const[h,m]=(EF.tm||'00:00').split(':').map(Number);let w=$('#tw');if(w)w.remove();w=document.createElement('div');w.id='tw';
   w.innerHTML=`<div class="twbg" data-tw="x"></div><div class="twp"><div class="twhd"><button type="button" data-tw="x">取消</button><b>時間</b><button type="button" class="ok" data-tw="ok">✓</button></div>
   <div class="twbody"><div class="twband" data-tw="type"></div><div class="twc" id="tw-h">${twCol(24,h)}</div><div class="twsep">:</div><div class="twc" id="tw-m">${twCol(60,m)}</div>
-  <input id="tw-in" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="例 0930" hidden></div><div class="twhint">滑動選擇，或點中間的時間直接輸入 4 位數字</div></div>`;
+  <input id="tw-in" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="例 0930" hidden></div></div>`;
   document.body.appendChild(w);const H=$('#tw-h'),M=$('#tw-m');H.scrollTop=h*TW_H;M.scrollTop=m*TW_H;
   const mark=c=>{const k=Math.round(c.scrollTop/TW_H);c.querySelectorAll('.twi').forEach((x,i)=>x.classList.toggle('on',i===k))};[H,M].forEach(c=>c.addEventListener('scroll',()=>mark(c),{passive:true}));
   w.addEventListener('click',e=>{const a=e.target.closest('[data-tw]');const it=e.target.closest('.twi');
@@ -3320,7 +3320,7 @@ document.addEventListener('change',async e=>{const t=e.target;if(t.matches&&t.ma
 /* ================= 金額計算機鍵盤：+ − × ÷，觸控裝置取代系統數字鍵盤 ================= */
 const CALC_TOUCH=matchMedia('(pointer:coarse)').matches;
 const CALC_IM=CALC_TOUCH?'none':'decimal';
-if(CALC_TOUCH){const conv=root=>{(root.querySelectorAll?root:document).querySelectorAll('input[inputmode="decimal"],input[data-calc]').forEach(i=>{if(i.id==='tw-in')return;i.setAttribute('data-calc','');i.setAttribute('inputmode','none')})};
+if(CALC_TOUCH){const conv=root=>{(root.querySelectorAll?root:document).querySelectorAll('input[inputmode="decimal"],input[inputmode="numeric"],input[data-calc]').forEach(i=>{i.setAttribute('data-calc','');i.setAttribute('inputmode','none')})};
   new MutationObserver(ms=>{for(const m of ms)for(const n of m.addedNodes)if(n.nodeType===1)conv(n)}).observe(document.documentElement,{childList:true,subtree:true});conv(document);document.addEventListener("DOMContentLoaded",()=>conv(document))}
 let CK=null;   // 目前輸入中的欄位
 const CALC_KEYS=[['÷','×','−','+'],['7','8','9','⌫'],['4','5','6','AC'],['1','2','3','='],['.','0','00','完成']];
