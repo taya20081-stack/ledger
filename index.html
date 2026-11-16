@@ -478,7 +478,7 @@ body.calc-on #sb{padding-bottom:370px}
 .sheet.ed,.sheet.ed .sb{overflow-x:clip;max-width:100vw}
 .calc{max-width:100vw;box-sizing:border-box}
 .cstrip .ctile{position:relative}
-.sheet.ed .cstrip{padding:8px 6px 6px}
+.sheet.ed .cstrip{padding:10px 6px 6px}
 .cstrip .cbd.plus{background:#D5D5D8;border:0;color:#8E8E93;font-size:28px;font-weight:300}
 .cstrip .ctile .camt{color:var(--seal);font-weight:500;font-size:13px}
 .sheet.ed[data-k="inc"] .camt{color:var(--gain)}
@@ -535,7 +535,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.52';
+window.APP_VER='v2.0.53';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1344,7 +1344,7 @@ function renderEditor(){
   if(showCat){
     const sug=false;
     if(sug)grid=`<div class="cgrid">${rIdx.top.slice(0,20).map(([c,z])=>ctile(c,z,'ef-qcat',`data-c="${esc(c)}" data-s="${esc(z)}"`,c===f.c&&z===f.s,z||c)).join('')}</div>`;
-    else if(f._cs==='sub'&&main)grid=`<div class="cback"><button class="btn sm" data-act="ef-cback">‹ 大項目</button><b>${esc(main.n)}</b></div>${cpages([...main.subs.map(z=>ctile(main.n,z,'ef-sub',`data-s="${esc(z)}"`,z===f.s,z)),`<button class="ctile" data-act="ef-sub-new"><span class="cbd plus">＋</span><span class="cl">新增</span></button>`])}`;
+    else if(f._cs==='sub'&&main)grid=`${cpages([`<button class="ctile" data-act="ef-cback"><span class="cbd plus">‹</span><span class="cl">${esc(main.n)}</span></button>`,...main.subs.map(z=>ctile(main.n,z,'ef-sub',`data-s="${esc(z)}"`,z===f.s,z)),`<button class="ctile" data-act="ef-sub-new"><span class="cbd plus">＋</span><span class="cl">新增</span></button>`])}`;
     else grid=cpages(catList.map(mainTile));
   }
   const canSp=f.kind==='exp'&&!(f.mode==='inst')&&!(f.rep||f.mode==='rep')&&!f.dep;
@@ -1405,7 +1405,7 @@ function renderEditor(){
   ${f._edit&&efRule(f)?`<div class="note" style="flex-wrap:wrap"><div class="grow">這是週期記錄「${esc(ruleName(efRule(f).rule.fs,efRule(f).rule.name))}」的第 ${efRule(f).k+1+(efRule(f).rule.off||0)} 期，要改哪些？</div></div><div class="btns fill"><button class="btn pri" data-act="ef-save">只改這一期</button><button class="btn" data-act="ef-save" data-scope="all">這一期和之後都改</button></div>`:ei?'':`<div class="btns fill"><button class="btn pri" data-act="ef-save">儲存</button>${f._edit?'':`<button class="btn" data-act="ef-save" data-again="1">儲存並再記一筆</button>`}</div>`}
   <div class="btns">${f._edit?`<button class="btn sm" data-act="ef-copy">複製</button>${f.kind==='exp'?`<button class="btn sm" data-act="ef-refund">退款</button>`:''}`:''}${f._edit&&!ei?`<button class="btn sm danger" data-act="ef-del" id="ef-del">刪除</button>`:''}</div>
   ${datalists()}`;
-  efHead(ei&&showCat&&!!(f._pickNew||f.c));
+  efHead(ei&&showCat&&!!(f._pickNew||f._reop));
 }
 function efHead(canc){const hd=$('#sheet.ed .sh');if(!hd)return;const l=hd.firstElementChild;if(!l)return;
   if(canc){l.dataset.act='ef-pcancel';l.classList.add('txt');l.textContent='取消'}else{l.dataset.act='close-sheet';l.classList.remove('txt');l.innerHTML=IC.x}
@@ -1516,14 +1516,14 @@ const ACT={
     if(EF.kind===k){if(k==='exp'||k==='inc'){EF._tab=tab;EF._cs='';if(!(EF.splits&&EF._si===-1))EF._spCat=1;renderEditor()}return}
     const keep={a:EF.a,dt:EF.dt,tm:EF.tm,amt:EF.amt,n:EF.n,p:EF.p,ds:EF.ds,ids:EF.ids,_edit:EF._edit};const n=blankForm(k);Object.assign(n,keep);if(k==='tr'){n.a2=S.accts.find(a=>a.id!==n.a&&!a.arch)?.id||''}
     if(k==='exp'||k==='inc'){n.c='';n.s='';n._spCat=1;n._tab=tab}EF=n;renderEditor()},
-  'ef-cat':el=>{EF._catT=1;EF._autoC=0;EF.c=el.dataset.c;const m=S.cats[EF.kind==='inc'?'inc':'exp'].find(c=>c.n===EF.c);EF.s='';if(!m||!m.subs.length){EF._pickNew=0;EF._cs='';EF._spCat=0;renderEditor();return efFocusAmt()}EF._cs='sub';renderEditor()},
-  'ef-sub':el=>{EF._pickNew=0;EF._catT=1;EF._autoC=0;EF.s=el.dataset.s;EF._spCat=0;EF._cs='';renderEditor();efFocusAmt()},
-  'ef-qcat':el=>{EF._pickNew=0;EF._catT=1;EF._autoC=0;EF.c=el.dataset.c;EF.s=el.dataset.s;EF._spCat=0;EF._cs='';renderEditor();efFocusAmt()},
+  'ef-cat':el=>{EF._catT=1;EF._autoC=0;EF.c=el.dataset.c;const m=S.cats[EF.kind==='inc'?'inc':'exp'].find(c=>c.n===EF.c);EF.s='';if(!m||!m.subs.length){EF._pickNew=0;EF._reop=0;EF._cs='';EF._spCat=0;renderEditor();return efFocusAmt()}EF._cs='sub';renderEditor()},
+  'ef-sub':el=>{EF._pickNew=0;EF._reop=0;EF._catT=1;EF._autoC=0;EF.s=el.dataset.s;EF._spCat=0;EF._cs='';renderEditor();efFocusAmt()},
+  'ef-qcat':el=>{EF._pickNew=0;EF._reop=0;EF._catT=1;EF._autoC=0;EF.c=el.dataset.c;EF.s=el.dataset.s;EF._spCat=0;EF._cs='';renderEditor();efFocusAmt()},
   'ef-os':()=>{EF.os=!EF.os;if(EF.sh)EF.osShop=EF.os;EF._osFor=EF.sh||'';renderEditor();if(EF.os){const cur=D.acct.get(EF.a)?.cur||'TWD';const fe=osFeeOf(evalAmt(EF.amt)||0);toast(fe>0?'另記海外交易手續費 '+money(fe,cur):'儲存時另記 1.5% 海外交易手續費')}},
   'ef-deptog':()=>{EF.dep=EF.dep?'':1;renderEditor()},
   'ef-cback':()=>{EF._cs='';renderEditor()},
-  'ef-pcancel':()=>{if(EF._pickNew){EF._pickNew=0;EF._spCat=0;EF._cs='';return ACT['sp-del']()}EF._spCat=0;EF._cs='';renderEditor()},
-  'ef-reopen':()=>{EF._spCat=1;EF._cs='';renderEditor()},
+  'ef-pcancel':()=>{if(EF._pickNew){EF._pickNew=0;EF._spCat=0;EF._cs='';return ACT['sp-del']()}if(EF._reop){EF.c=EF._reop.c;EF.s=EF._reop.s;EF._reop=0}EF._spCat=0;EF._cs='';renderEditor()},
+  'ef-reopen':()=>{EF._reop={c:EF.c,s:EF.s};EF._spCat=1;EF._cs='';renderEditor()},
   'ef-sub-new':async()=>{const f=EF;const v=await askText('新增子類別','','子類別名稱');if(v&&v.trim()){const m=S.cats[f.kind==='inc'?'inc':'exp'].find(c=>c.n===f.c);if(m&&!m.subs.includes(v.trim())){m.subs.push(v.trim());S.cats.u=Date.now();saveKV('cats')}f.s=v.trim()}openSheet(f._edit?'編輯記錄':'記一筆','');EF=f;renderEditor()},
   'ef-debt':el=>{EF.act=el.dataset.k;renderEditor()},
   'pend-post':el=>{const x=(S.settings.pend||[]).find(p=>p.id===el.dataset.id);if(!x)return;closeSheet();const f={...blankForm(x.fs.kind||'exp'),...x.fs,_edit:false,_pend:x.id,mode:'',rep:'',post:'',dep:''};if(el.dataset.today)f.dt=TODAY();setTimeout(()=>openEditor(f),250)},
@@ -1544,7 +1544,7 @@ const ACT={
     closeSheet();await mutate([],ids);render(true);toast(ro&&el.dataset.scope==='all'?'已終止這個週期，刪除 '+ids.length+' 筆':'已刪除 '+ids.length+' 筆')},
   'sp-on':()=>{EF.splits=[{c:EF.c,s:EF.s,amt:EF.amt,n:EF.n||'',p:EF.p||'',a:EF.a}];EF._gname='';EF._si=0;ACT['sp-add']()},
   'sp-add':()=>{spStore();const l=EF._si>=0?EF.splits[EF._si]:EF.splits[EF.splits.length-1];EF.splits.push({c:l.c,s:l.s,amt:'',n:'',p:l.p||'',a:l.a||EF.a});spLoad(EF.splits.length-1);EF._spCat=1;EF._pickNew=1;EF._cs='';renderEditor()},
-  'sp-sel':el=>{const i=+el.dataset.i;if(i===EF._si&&i>=0){EF._spCat=!EF._spCat;return renderEditor()}spStore();spLoad(i);EF._spCat=0;renderEditor()},
+  'sp-sel':el=>{const i=+el.dataset.i;if(i===EF._si&&i>=0){EF._spCat=!EF._spCat;EF._reop=EF._spCat?{c:EF.c,s:EF.s}:0;return renderEditor()}spStore();spLoad(i);EF._spCat=0;renderEditor()},
   'sp-del':()=>{if(EF._si<0)return;EF.splits.splice(EF._si,1);if(EF.splits.length<=1){const x=EF.splits[0];Object.assign(EF,{c:x.c,s:x.s,amt:x.amt,n:EF._gname||x.n||'',p:x.p||'',a:x.a||EF.a});EF.splits=null;EF._si=null;return renderEditor()}spLoad(Math.max(0,EF._si-1));renderEditor()},
   'sp-off':()=>{spStore();const t=EF.splits.reduce((a,x)=>a+(evalAmt(x.amt)||0),0);const x=EF.splits[0];Object.assign(EF,{c:x.c,s:x.s,amt:t?String(t):'',n:EF._gname||x.n||'',p:x.p||'',a:x.a||EF.a});EF.splits=null;EF._si=null;renderEditor()},
   'acct-new':()=>openAcctEditor(null),
