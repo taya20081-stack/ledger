@@ -511,7 +511,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.43';
+window.APP_VER='v2.0.44';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -3245,7 +3245,7 @@ boot();
 if('serviceWorker' in navigator && location.protocol!=='file:'){
   window.addEventListener('load',()=>{
     navigator.serviceWorker.register('./sw.js').then(reg=>{
-      const ask=w=>{const t=document.createElement('div');t.className='toast';t.style.cursor='pointer';t.textContent='有新版本，點此更新';t.onclick=()=>w.postMessage('skip');document.body.appendChild(t)};
+      const ask=w=>{const t=document.createElement('div');t.className='toast';t.style.cursor='pointer';t.textContent='有新版本，點此更新';t.onclick=()=>{t.textContent='更新中…';w.postMessage('skip');setTimeout(()=>location.reload(),2500)};document.body.appendChild(t)};
       if(reg.waiting&&navigator.serviceWorker.controller)ask(reg.waiting);
       reg.addEventListener('updatefound',()=>{const w=reg.installing;w.addEventListener('statechange',()=>{if(w.state==='installed'&&navigator.serviceWorker.controller)ask(w)})});
     }).catch(()=>{});
