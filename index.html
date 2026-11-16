@@ -543,7 +543,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.57';
+window.APP_VER='v2.0.58';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -3138,8 +3138,8 @@ function holdEditSheet(i){const h=(S.settings.hold||[])[i];if(!h)return;
   <div class="btns fill"><button class="btn danger" data-act="hd-del" data-i="${i}">刪除</button><button class="btn pri" data-act="hd-save" data-i="${i}">儲存</button></div>`)}
 /* ---------- 股票買入自動加股數：名稱開頭是代碼（0050元大台灣50、NVDA輝達），依金額 ÷ 收盤價反推股數，存進持股
    S.settings.hlog={記錄id:{code,pf,sh,amt}}；只處理 HOLD_FROM 之後的記錄（之前的股數你已手動輸入） ---------- */
-const HOLD_FROM='2026-11-17';
-function holdCodeOf(r){if(!r||r.t!=='支出'||r.c!=='投資'||!/股票買入|定期定額/.test(r.s||''))return'';const n=String(r.n||'').trim();
+const HOLD_FROM='2026-11-16';
+function holdCodeOf(r){if(!r||r.t!=='支出'||r.c!=='投資'||/股利|配息|出售|贖回|手續費|定存|期貨|虛擬|貴金屬/.test(r.s||''))return'';const n=String(r.n||'').trim();
   let x=/^(\d{4,6}[A-Z]?)(?![0-9])/.exec(n);if(x)return x[1];x=/^([A-Z]{1,5}(?:\.[A-Z])?)(?![A-Za-z])/.exec(n);return x?x[1]:''}
 let _hsT=0,_hsBusy=false;function holdSyncSoon(){clearTimeout(_hsT);_hsT=setTimeout(()=>holdSync().catch(()=>{}),1500)}
 async function holdSync(){if(_hsBusy||!S.ready)return;_hsBusy=true;try{
@@ -3156,7 +3156,7 @@ async function holdSync(){if(_hsBusy||!S.ready)return;_hsBusy=true;try{
     const scu=q[2]||(/^[A-Z]/.test(c)?'USD':'TWD');const v=amt*rateOf(curOf(r))/rateOf(scu);let sh=v/(+q[1]);sh=scu==='TWD'?Math.round(sh):Math.round(sh*1e4)/1e4;
     if(L){add(L.code,L.pf,-L.sh)}if(!(sh>0)){delete log[id];ch=true;continue}
     const h0=find(c);const pf=(h0&&(h0.pf||'我的'))||'我的';const h=add(c,pf,sh,scu);if(!h.name||h.name===h.code)h.name=q[0]||h.name;
-    log[id]={code:c,pf,sh,amt,px:+q[1],d:pxd};ch=true;msgs.push(c+' +'+fmtSh(sh)+' 股（'+(+q[1])+'）')}
+    log[id]={code:c,pf,sh,amt,px:+q[1],d:pxd};ch=true;msgs.push(c+' +'+fmtSh(sh)+' 股')}
   if(ch){await saveKV('settings');if(msgs.length)toast('持股已更新：'+msgs.slice(0,3).join('、')+(msgs.length>3?' 等 '+msgs.length+' 筆':''));render(true)}
 }finally{_hsBusy=false}}
 function fmtSh(v){return(+v).toLocaleString('zh-TW',{maximumFractionDigits:4})}
