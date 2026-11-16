@@ -474,6 +474,22 @@ body.calc-on #sb{padding-bottom:330px}
 .calc-q button{flex:none;border:1px solid var(--rule);background:var(--paper);color:var(--ink);border-radius:99px;padding:6px 14px;font-size:15px}
 .calc-pv{display:none}
 body.calc-on #sb{padding-bottom:370px}
+.sheet.ed .sh .camb{margin-left:auto}
+.sheet.camsheet{top:0;bottom:0;max-height:none;height:100%;border-radius:0;background:#000;color:#fff}
+.sheet.camsheet .sh{display:none}
+.sheet.camsheet .sb{padding:0!important;display:flex;flex-direction:column;height:100%;background:#000}
+.camv{position:relative;flex:1;min-height:0;overflow:hidden}
+.camv video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.camv .scanframe{inset:22% 8% 30%}
+.camst{position:absolute;left:0;right:0;top:calc(14px + env(safe-area-inset-top,0px));text-align:center;font-size:14px;text-shadow:0 1px 3px #000}
+.cambar{display:flex;align-items:center;justify-content:space-around;padding:18px 0 6px;background:#000}
+.camside{background:none;border:0;color:#fff;font-size:16px;width:72px}
+.shutter{width:76px;height:76px;border-radius:50%;border:4px solid #fff;background:none;padding:4px}
+.shutter i{display:block;width:100%;height:100%;border-radius:50%;background:#fff}
+.shutter:active i{transform:scale(.9)}
+.camhint{text-align:center;font-size:12px;color:#bbb;padding:4px 16px calc(14px + env(safe-area-inset-bottom,0px));background:#000}
+.camflash{position:fixed;inset:0;background:#fff;z-index:999;pointer-events:none;animation:camfl .3s forwards}
+@keyframes camfl{from{opacity:.9}to{opacity:0}}
 .mbtn[data-ic]::before{display:none}
 .sheet.ed .sh .ibtn{width:44px;height:44px;border-radius:50%;border:1px solid var(--rule);background:var(--paper);display:grid;place-items:center}
 .mrow.nm input{text-align:right}
@@ -495,7 +511,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.42';
+window.APP_VER='v2.0.43';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -939,6 +955,7 @@ function askText(title,init='',label='',type='text'){return new Promise(res=>{op
   const done=v=>{sheetOnClose=null;closeSheet();res(v)};$('#at-ok').onclick=()=>done($('#at-in').value);$('#at-no').onclick=()=>done(null);$('#at-in').onkeydown=e=>{if(e.key==='Enter')done($('#at-in').value)}})}
 
 const IC={
+  cam:'<svg viewBox="0 0 24 24" width="22" height="22" style="stroke:currentColor;fill:none;stroke-width:1.8;stroke-linejoin:round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.6"/></svg>',
   list:'<svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
   wallet:'<svg viewBox="0 0 24 24"><path d="M4 7h15a1 1 0 0 1 1 1v11H5a1 1 0 0 1-1-1z"/><path d="M4 7l11-3v3"/><path d="M15 13h5"/></svg>',
   plus:'<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
@@ -1279,7 +1296,7 @@ function acctOptions(sel,allowEmpty){return(allowEmpty?'<option value="">選擇�
 function catOptions(kind,c,s){return S.cats[kind].map(m=>`<optgroup label="${esc(m.n)}">${(m.subs.length?m.subs:['']).map(x=>`<option value="${esc(m.n+'\u0001'+x)}" ${m.n===c&&x===s?'selected':''}>${esc(m.n)}${x?' / '+esc(x):''}</option>`).join('')}</optgroup>`).join('')}
 function openEditor(fs,isEdit){
   if(!S.accts.length){toast('請先建立帳戶');return}
-  openSheet(isEdit?'編輯記錄':'記一筆','',{});{const sh=$('#sheet');sh.classList.add('ed');const hd=sh.querySelector('.sh');const t=hd.querySelector('h2').textContent;hd.innerHTML=`<button class="ibtn" data-act="close-sheet" aria-label="關閉">${IC.x}</button><h2>${esc(t)}</h2><button class="ibtn okb" data-act="ef-save" aria-label="儲存">✓</button>`}EF=fs;EF._edit=!!isEdit;if(isEdit&&fs.kind==='exp')fs._tab='full';renderEditor();
+  openSheet(isEdit?'編輯記錄':'記一筆','',{});{const sh=$('#sheet');sh.classList.add('ed');const hd=sh.querySelector('.sh');const t=hd.querySelector('h2').textContent;hd.innerHTML=`<button class="ibtn" data-act="close-sheet" aria-label="關閉">${IC.x}</button><h2>${esc(t)}</h2>${isEdit?"":`<button class="ibtn camb" data-act="cam-open" aria-label="相機">${IC.cam}</button>`}<button class="ibtn okb" data-act="ef-save" aria-label="儲存">✓</button>`}EF=fs;EF._edit=!!isEdit;if(isEdit&&fs.kind==='exp')fs._tab='full';renderEditor();
   if(!isEdit)setTimeout(()=>{const el=$('#f-amt');el&&!isMobile()&&EF&&EF.c&&el.focus()},80);
 }
 const WDN=['日','一','二','三','四','五','六'];
@@ -1350,7 +1367,7 @@ function renderEditor(){
   ${f.kind==='sys'?`<label class="field"><span>類型</span><select class="in" id="f-st" data-f="st" data-rr="1">${SYS_T.filter(t=>!SYS_HIDE.has(t)||f.st===t).map(t=>`<option ${t===f.st?'selected':''}>${t}</option>`).join('')}</select></label>`:''}
   ${f.kind==='debt'?`<div class="field"><span>動作</span><div class="chips">${Object.entries(DEBT_ACT).map(([k,v])=>`<button class="chip${f.act===k?' on':''}" data-act="ef-debt" data-k="${k}">${v[3]}<small style="opacity:.7">${v[0]==='應收款項'?'應收':'應付'}</small></button>`).join('')}</div></div><label class="field"><span>對象</span><input class="in" id="f-w" data-f="w" list="dl-who" value="${esc(f.w)}" placeholder="例如：家人、同事姓名"></label>`:''}
   <div id="ef-cat">${strip}${grid}</div>${amtBox}${ei?`<div class="mcard">${nameRow}</div>`:nameRow}
-  ${ei?`<div class="mgrid">${acctBtn}${projBtn}${shopBtn}${modeBtn}${dateBtn}${timeBtn}</div>${scanRow}`:`${acctRow}${projRow}${dateRow}`}
+  ${ei?`<div class="mgrid">${acctBtn}${projBtn}${shopBtn}${modeBtn}${dateBtn}${timeBtn}</div>`:`${acctRow}${projRow}${dateRow}`}
   ${feeRow}${osRow}
   ${!f._edit&&['exp','inc','tr'].includes(f.kind)?(()=>{const md=f.mode||(f.rep?'rep':'');const canI=f.kind==='exp'&&!f.splits;
     const seg=ei?'':`<div class="field"><span>記帳方式</span><div class="seg full"><button class="${!md?'on':''}" data-act="ef-mode" data-k="">單次</button><button class="${md==='rep'?'on':''}" data-act="ef-mode" data-k="rep">週期</button>${canI?`<button class="${md==='inst'?'on':''}" data-act="ef-mode" data-k="inst">分期</button>`:''}</div></div>`;
@@ -1991,9 +2008,13 @@ function acctForShop(shop){if(!shop)return null;const n=normName(shop);const cnt
 /* ---------- 掃描 UI ---------- */
 let scanStream=null,scanTimer=null;
 function stopScan(){if(scanTimer){clearTimeout(scanTimer);scanTimer=null}if(scanStream){scanStream.getTracks().forEach(t=>t.stop());scanStream=null}}
-async function openInvoiceScanner(){
+async function openInvoiceScanner(cam){
   const live=!window.__ARTIFACT__&&navigator.mediaDevices&&navigator.mediaDevices.getUserMedia;
-  openSheet('掃描電子發票',`<div class="hint">對準紙本發票下方<b>左右兩個 QR Code</b>，盡量讓兩個都在畫面內。品項較多的發票，右邊的 QR 也要讀到。</div>
+  if(cam&&!live)return pickReceiptPhoto(true);
+  if(cam){openSheet('相機',`<div class="camv"><video id="scan-v" playsinline muted autoplay></video><div class="scanframe"></div><div class="camst" id="scan-st">啟動相機…</div></div>
+    <div class="cambar"><button class="camside" data-act="rc-lib">相簿</button><button class="shutter" data-act="cam-shot" aria-label="拍照辨識明細"><i></i></button><button class="camside" data-act="cam-close">取消</button></div>
+    <div class="camhint">對準電子發票 QR Code 會自動讀取；紙本或傳統發票請按快門拍照</div>`,{onClose:stopScan});$('#sheet').classList.add('camsheet')}
+  else openSheet('掃描電子發票',`<div class="hint">對準紙本發票下方<b>左右兩個 QR Code</b>，盡量讓兩個都在畫面內。品項較多的發票，右邊的 QR 也要讀到。</div>
     ${live?`<div class="scanbox"><video id="scan-v" playsinline muted autoplay></video><div class="scanframe"></div></div><div class="prog" id="scan-st">啟動相機…</div>`:''}
     <div class="btns fill"><button class="btn${live?'':' pri'}" data-act="inv-photo">拍照或選擇照片</button></div><button class="btn" data-act="rc-open">沒有 QR Code？掃描明細表文字</button>`,{onClose:stopScan});
   if(!live)return;
@@ -2006,7 +2027,7 @@ async function openInvoiceScanner(){
       for(const b of decodeFromCanvas(window.jsQR,ctx,c.width,c.height)){if(isLeftQR(b))left=b;else if(isRightQR(b))right=b}
       const st=$('#scan-st');
       if(left){const inv=parseInvoice(left,right);if(!inv.needRight||Date.now()-t0>12000){stopScan();showInvoiceReview(inv);return}if(st)st.textContent='已讀到左側 QR，請讓右側 QR 也入鏡…'}
-      else if(st)st.textContent=right?'已讀到右側 QR，請讓左側 QR 也入鏡…':'搜尋 QR Code 中…'}
+      else if(st)st.textContent=right?'已讀到右側 QR，請讓左側 QR 也入鏡…':(cam?'對準 QR Code 自動讀取，或按快門拍照':'搜尋 QR Code 中…')}
     scanTimer=setTimeout(tick,180)};
   tick();
 }
@@ -2058,6 +2079,11 @@ document.addEventListener('input',e=>{const t=e.target;if(!INV)return;
     if(f==='on'){l.on=t.checked;renderInvoiceReview()}else if(f==='cs'){[l.c,l.s]=t.value.split('\u0001');l.exact=false;l.conf=1}else if(f==='amt'){l.amt=evalAmt(t.value)||0;const h=document.querySelector('#sb .hint.num');if(h){const sum=r2(INV.lines.filter(x=>x.on).reduce((s,x)=>s+x.amt,0));h.textContent='品項合計 '+fmt(sum)+(INV.total-sum?' · 與總計差 '+fmt(r2(INV.total-sum),'TWD',true):' · 與總計相符')}}else l[f]=t.value}});
 Object.assign(ACT,{
   'inv-scan':()=>{if(!S.accts.length)return toast('請先建立帳戶');openInvoiceScanner()},
+  'cam-open':()=>{if(!S.accts.length)return toast('請先建立帳戶');openInvoiceScanner(true)},
+  'cam-close':()=>{stopScan();closeSheet()},
+  'cam-shot':()=>{const v=$('#scan-v');if(!v||!v.videoWidth)return toast('相機還沒準備好');const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);
+    const fl=document.createElement('div');fl.className='camflash';document.body.appendChild(fl);setTimeout(()=>fl.remove(),300);
+    c.toBlob(b=>{stopScan();if(b)runReceiptOCR(b);else toast('拍照失敗')},'image/jpeg',0.92)},
   'inv-photo':()=>scanFromPhoto(),
   'inv-mode':el=>{INV.mode=el.dataset.k;renderInvoiceReview()},
   'inv-kind':el=>{INV.kind=el.dataset.k;INV.a=(INV.kind==='inc'?acctForIncome():acctForShop(INV.shop))||INV.a;invSuggest();renderInvoiceReview()},
