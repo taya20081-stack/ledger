@@ -2,7 +2,7 @@
 <html lang="zh-Hant-TW">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <title>存摺記帳</title>
 <meta name="description" content="個人記帳 PWA，支援多帳戶、多幣別、預算、分期與統計。">
 <meta name="theme-color" content="#FFF9E0">
@@ -475,6 +475,7 @@ body.calc-on #sb{padding-bottom:330px}
 .calc-q button{flex:none;border:1px solid var(--rule);background:var(--paper);color:var(--ink);border-radius:99px;padding:6px 14px;font-size:15px}
 .calc-pv{display:none}
 body.calc-on #sb{padding-bottom:370px}
+.sheet .mbtn input,.sheet .mbtn select,.sheet .cursel,.sheet .mrow.nm input{font-size:16px}
 .mbtn.tmb input{font-variant-numeric:tabular-nums;caret-color:var(--accent)}
 .sheet.ed .amtwrap,.sheet.ed .mcard{padding:2px 12px;border-radius:12px;margin-bottom:6px}
 .sheet.ed .mrow{min-height:36px;gap:8px}
@@ -545,7 +546,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.60';
+window.APP_VER='v2.0.61';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
