@@ -543,7 +543,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.55';
+window.APP_VER='v2.0.56';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -3106,7 +3106,7 @@ function pageMarket(){const P=mktParts();const tot=P.reduce((t,x)=>t+x.v,0);cons
   return{back:1,head:`<h1>投資市值</h1><button class="ibtn" data-act="px-refresh" aria-label="更新價格">${IC.sync||'↻'}</button>`,body:`
   <div class="sum"><div class="lbl">投資市值（TWD） · 更新：${esc(mktDate())}</div><div class="huge num">${fmt(tot)}</div>
    <div class="kv mt">${P.map(x=>`<div><div class="lbl">${x.k}</div><div class="v num">${fmt(x.v)}</div></div>`).join('')}</div>
-   <div class="hint mt">股票：前一交易日收盤價；黃金：每公克金價 × 克數；外匯：外幣帳戶餘額 × 臺銀現金買入匯率。股票、黃金不計入「帳戶」頁淨資產；外匯本來就是帳戶餘額，已含在淨資產內。</div></div>
+   </div>
   <div class="grp"><div class="list">${P.map(row).join('')}</div></div>
 `}}
 function pageFx(){const fx=fxList();const tot=fx.reduce((t,x)=>t+x.v,0);const by=new Map();for(const x of fx){const o=by.get(x.a.cur)||{cur:x.a.cur,b:0,v:0,L:[]};o.b+=x.b;o.v+=x.v;o.L.push(x);by.set(x.a.cur,o)}
