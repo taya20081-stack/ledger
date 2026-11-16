@@ -474,6 +474,12 @@ body.calc-on #sb{padding-bottom:330px}
 .calc-q button{flex:none;border:1px solid var(--rule);background:var(--paper);color:var(--ink);border-radius:99px;padding:6px 14px;font-size:15px}
 .calc-pv{display:none}
 body.calc-on #sb{padding-bottom:370px}
+.cpager{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;margin:4px -16px 0}
+.cpager::-webkit-scrollbar{display:none}
+.cpager>.cgrid{flex:0 0 100%;scroll-snap-align:start;margin:0;padding:0 16px;box-sizing:border-box;align-content:start}
+.cpager .ctile .cbd{width:48px;height:48px;font-size:23px}
+.cdots{display:flex;justify-content:center;gap:6px;margin:6px 0 10px}
+.cdots i{width:6px;height:6px;border-radius:50%;background:var(--rule)}.cdots i.on{background:var(--accent)}
 .sheet.ed .sh .camb{margin-left:auto}
 .sheet.camsheet{top:0;bottom:0;max-height:none;height:100%;border-radius:0;background:#000;color:#fff}
 .sheet.camsheet .sh{display:none}
@@ -511,7 +517,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.44';
+window.APP_VER='v2.0.45';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1304,6 +1310,8 @@ function dateBtnText(dt){const td=TODAY();const d=new Date(dt+'T00:00:00');const
   return(df===0?'今天':df===-1?'昨天':df===1?'明天':dt.slice(5).replace('-','/'))+' '+w.replace('（','(').replace('）',')')}
 function ctile(c,z,act,attrs,on,label,amtHtml){const col=catCol({t:'支出',c,s:z});const e=iconOf(c,z);
   return`<button class="ctile${on?' on':''}" data-act="${act}" ${attrs||''}><span class="cbd" style="--bc:${col}">${e||esc((z||c||'?').slice(0,1))}</span><span class="cl">${esc(label||z||c||'未選')}</span>${amtHtml||''}</button>`}
+function cpages(tiles){const P=[];for(let i=0;i<tiles.length;i+=10)P.push(tiles.slice(i,i+10));
+  return`<div class="cpager" onscroll="const d=this.nextElementSibling;if(d){const i=Math.round(this.scrollLeft/this.clientWidth);[...d.children].forEach((x,k)=>x.classList.toggle('on',k===i))}">${P.map(p=>`<div class="cgrid">${p.join('')}</div>`).join('')}</div>${P.length>1?`<div class="cdots">${P.map((_,k)=>`<i class="${k?'':'on'}"></i>`).join('')}</div>`:''}`}
 function renderEditor(){
   const f=EF;const sb=$('#sb');if(!sb)return;const cur=D.acct.get(f.a)?.cur||'TWD';const amtCur=f.kind!=='tr'&&f.cu?f.cu:cur;
   const ei=f.kind==='exp'||f.kind==='inc';
@@ -1318,8 +1326,8 @@ function renderEditor(){
   if(showCat){
     const sug=false;
     if(sug)grid=`<div class="cgrid">${rIdx.top.slice(0,20).map(([c,z])=>ctile(c,z,'ef-qcat',`data-c="${esc(c)}" data-s="${esc(z)}"`,c===f.c&&z===f.s,z||c)).join('')}</div>`;
-    else if(f._cs==='sub'&&main)grid=`<div class="cback"><button class="btn sm" data-act="ef-cback">‹ 大項目</button><b>${esc(main.n)}</b></div><div class="cgrid">${main.subs.map(z=>ctile(main.n,z,'ef-sub',`data-s="${esc(z)}"`,z===f.s,z)).join('')}<button class="ctile" data-act="ef-sub-new"><span class="cbd plus">＋</span><span class="cl">新增</span></button></div>`;
-    else grid=`<div class="cgrid">${catList.map(mainTile).join('')}</div>`;
+    else if(f._cs==='sub'&&main)grid=`<div class="cback"><button class="btn sm" data-act="ef-cback">‹ 大項目</button><b>${esc(main.n)}</b></div>${cpages([...main.subs.map(z=>ctile(main.n,z,'ef-sub',`data-s="${esc(z)}"`,z===f.s,z)),`<button class="ctile" data-act="ef-sub-new"><span class="cbd plus">＋</span><span class="cl">新增</span></button>`])}`;
+    else grid=cpages(catList.map(mainTile));
   }
   const canSp=f.kind==='exp'&&!(f.mode==='inst')&&!(f.rep||f.mode==='rep')&&!f.dep;
   let strip='';
