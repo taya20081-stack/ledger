@@ -474,6 +474,11 @@ body.calc-on #sb{padding-bottom:330px}
 .calc-q button{flex:none;border:1px solid var(--rule);background:var(--paper);color:var(--ink);border-radius:99px;padding:6px 14px;font-size:15px}
 .calc-pv{display:none}
 body.calc-on #sb{padding-bottom:370px}
+.mbtn[data-ic]::before{display:none}
+.sheet.ed .sh .ibtn{width:44px;height:44px;border-radius:50%;border:1px solid var(--rule);background:var(--paper);display:grid;place-items:center}
+.mrow.nm input{text-align:right}
+.amtwrap,.mcard{margin-bottom:8px}.mgrid{gap:8px;margin:8px 0}.mbtn{height:46px}
+.cgrid{gap:10px 4px}
 
 
 .mdg{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}.mdg button{height:38px;border:1px solid var(--rule);border-radius:10px;background:var(--paper);color:var(--ink);font-size:15px;font-variant-numeric:tabular-nums}.mdg button.on{background:#7BBF7F;border-color:#7BBF7F;color:#fff;font-weight:600}.mdg .wide{grid-column:span 4}
@@ -490,7 +495,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.41';
+window.APP_VER='v2.0.42';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1285,8 +1290,8 @@ function ctile(c,z,act,attrs,on,label,amtHtml){const col=catCol({t:'支出',c,s:
 function renderEditor(){
   const f=EF;const sb=$('#sb');if(!sb)return;const cur=D.acct.get(f.a)?.cur||'TWD';const amtCur=f.kind!=='tr'&&f.cu?f.cu:cur;
   const ei=f.kind==='exp'||f.kind==='inc';
-  const tabs=[['sug','建議'],['exp','支出'],['inc','收入'],['tr','轉帳'],['debt','借貸'],['sys','其他']];
-  const tabOn=k=>k==='sug'?(f.kind==='exp'&&f._tab!=='full'):k==='exp'?(f.kind==='exp'&&f._tab==='full'):f.kind===k;
+  const tabs=[['exp','支出'],['inc','收入'],['tr','轉帳'],['debt','借貸'],['sys','其他']];
+  const tabOn=k=>f.kind===k;
   const ck=f.kind==='inc'?'inc':'exp';const catList=S.cats[ck];const main=catList.find(c=>c.n===f.c);
   const rIdx=ei?recentIdx():null;
   const showCat=ei&&(f.splits?(f._si>=0&&(f._spCat||!f.c)):(!f.c||f._spCat));
@@ -1294,7 +1299,7 @@ function renderEditor(){
   const mainTile=c=>`<button class="ctile${c.n===f.c?' on':''}" data-act="ef-cat" data-c="${esc(c.n)}"><span class="cbd" style="--bc:${mainCol(c)}">${iconOf(c.n,'')||esc(c.n.slice(0,1))}</span><span class="cl">${esc(c.n)}</span></button>`;
   let grid='';
   if(showCat){
-    const sug=f.kind==='exp'&&f._tab!=='full'&&rIdx.top.length&&f._cs!=='sub';
+    const sug=false;
     if(sug)grid=`<div class="cgrid">${rIdx.top.slice(0,20).map(([c,z])=>ctile(c,z,'ef-qcat',`data-c="${esc(c)}" data-s="${esc(z)}"`,c===f.c&&z===f.s,z||c)).join('')}</div>`;
     else if(f._cs==='sub'&&main)grid=`<div class="cback"><button class="btn sm" data-act="ef-cback">‹ 大項目</button><b>${esc(main.n)}</b></div><div class="cgrid">${main.subs.map(z=>ctile(main.n,z,'ef-sub',`data-s="${esc(z)}"`,z===f.s,z)).join('')}<button class="ctile" data-act="ef-sub-new"><span class="cbd plus">＋</span><span class="cl">新增</span></button></div>`;
     else grid=`<div class="cgrid">${catList.map(mainTile).join('')}</div>`;
@@ -1336,7 +1341,7 @@ function renderEditor(){
     :`<label class="mbtn sel${f.sh?'':' ph'}" data-ic="🏬"><select id="f-sh-sel">${shopOptions(f.sh,f.kind==='inc'?'inc':'exp',f.c).replace('>不指定<','>商家<')}</select></label>`;
   const qn=ei&&!(f.splits&&f._si===-1)&&rIdx?((rIdx.by.get(f.c+'\u0001'+f.s)||{}).n||[]):[];
   const nameChips=qn.length?`<div class="chips qrow">${qn.map(v=>`<button class="chip" data-act="ef-qname" data-v="${esc(v)}">${esc(v)}</button>`).join('')}</div>`:'';
-  const nameRow=ei?`<div class="mrow nm nsug-wrap"><span class="mic">📝</span><input id="f-n" data-f="n" value="${esc(f.n)}" placeholder="${f.splits&&f._si===-1?'多類別名稱':'名稱'}" autocomplete="off"></div><div id="f-n-sugg" class="nsug" hidden></div>${nameChips}`
+  const nameRow=ei?`<div class="mrow nm nsug-wrap"><input id="f-n" data-f="n" value="${esc(f.n)}" placeholder="${f.splits&&f._si===-1?'多類別名稱':'名稱'}" autocomplete="off"></div><div id="f-n-sugg" class="nsug" hidden></div>${nameChips}`
     :`<div class="field nsug-wrap"><span>名稱</span><input class="in" id="f-n" data-f="n" value="${esc(f.n)}" placeholder="選填" autocomplete="off"><div id="f-n-sugg" class="nsug" hidden></div></div>`;
   const md0=f.mode||(f.rep?'rep':'');
   const modeBtn=ei&&!f._edit?`<label class="mbtn sel" data-ic="🔁"><select id="f-mode-sel" aria-label="記帳方式"><option value="" ${!md0?'selected':''}>單次</option><option value="rep" ${md0==='rep'?'selected':''}>週期</option>${f.kind==='exp'&&!f.splits?`<option value="inst" ${md0==='inst'?'selected':''}>分期</option>`:''}</select></label>`:`<div class="mbtn dis">${f._edit?'已記錄':'單次'}</div>`;
@@ -1344,7 +1349,7 @@ function renderEditor(){
   sb.innerHTML=`<div class="mtabs" role="tablist">${tabs.map(([k,l])=>`<button class="${tabOn(k)?'on':''}" data-act="ef-kind" data-k="${k}">${l}</button>`).join('')}</div>
   ${f.kind==='sys'?`<label class="field"><span>類型</span><select class="in" id="f-st" data-f="st" data-rr="1">${SYS_T.filter(t=>!SYS_HIDE.has(t)||f.st===t).map(t=>`<option ${t===f.st?'selected':''}>${t}</option>`).join('')}</select></label>`:''}
   ${f.kind==='debt'?`<div class="field"><span>動作</span><div class="chips">${Object.entries(DEBT_ACT).map(([k,v])=>`<button class="chip${f.act===k?' on':''}" data-act="ef-debt" data-k="${k}">${v[3]}<small style="opacity:.7">${v[0]==='應收款項'?'應收':'應付'}</small></button>`).join('')}</div></div><label class="field"><span>對象</span><input class="in" id="f-w" data-f="w" list="dl-who" value="${esc(f.w)}" placeholder="例如：家人、同事姓名"></label>`:''}
-  ${strip}${grid}${amtBox}${ei?`<div class="mcard">${nameRow}</div>`:nameRow}
+  <div id="ef-cat">${strip}${grid}</div>${amtBox}${ei?`<div class="mcard">${nameRow}</div>`:nameRow}
   ${ei?`<div class="mgrid">${acctBtn}${projBtn}${shopBtn}${modeBtn}${dateBtn}${timeBtn}</div>${scanRow}`:`${acctRow}${projRow}${dateRow}`}
   ${feeRow}${osRow}
   ${!f._edit&&['exp','inc','tr'].includes(f.kind)?(()=>{const md=f.mode||(f.rep?'rep':'');const canI=f.kind==='exp'&&!f.splits;
@@ -1464,9 +1469,9 @@ const ACT={
     if(EF.kind===k){if(k==='exp'||k==='inc'){EF._tab=tab;EF._cs='';if(!(EF.splits&&EF._si===-1))EF._spCat=1;renderEditor()}return}
     const keep={a:EF.a,dt:EF.dt,tm:EF.tm,amt:EF.amt,n:EF.n,p:EF.p,ds:EF.ds,ids:EF.ids,_edit:EF._edit};const n=blankForm(k);Object.assign(n,keep);if(k==='tr'){n.a2=S.accts.find(a=>a.id!==n.a&&!a.arch)?.id||''}
     if(k==='exp'||k==='inc'){n.c='';n.s='';n._spCat=1;n._tab=tab}EF=n;renderEditor()},
-  'ef-cat':el=>{EF._catT=1;EF.c=el.dataset.c;const m=S.cats[EF.kind==='inc'?'inc':'exp'].find(c=>c.n===EF.c);EF.s='';if(!m||!m.subs.length){EF._cs='';EF._spCat=0;renderEditor();return efFocusAmt()}EF._cs='sub';renderEditor()},
-  'ef-sub':el=>{EF._catT=1;EF.s=el.dataset.s;EF._spCat=0;EF._cs='';renderEditor();efFocusAmt()},
-  'ef-qcat':el=>{EF._catT=1;EF.c=el.dataset.c;EF.s=el.dataset.s;EF._spCat=0;EF._cs='';renderEditor();efFocusAmt()},
+  'ef-cat':el=>{EF._catT=1;EF._autoC=0;EF.c=el.dataset.c;const m=S.cats[EF.kind==='inc'?'inc':'exp'].find(c=>c.n===EF.c);EF.s='';if(!m||!m.subs.length){EF._cs='';EF._spCat=0;renderEditor();return efFocusAmt()}EF._cs='sub';renderEditor()},
+  'ef-sub':el=>{EF._catT=1;EF._autoC=0;EF.s=el.dataset.s;EF._spCat=0;EF._cs='';renderEditor();efFocusAmt()},
+  'ef-qcat':el=>{EF._catT=1;EF._autoC=0;EF.c=el.dataset.c;EF.s=el.dataset.s;EF._spCat=0;EF._cs='';renderEditor();efFocusAmt()},
   'ef-cback':()=>{EF._cs='';renderEditor()},
   'ef-reopen':()=>{EF._spCat=1;EF._cs='';renderEditor()},
   'ef-sub-new':async()=>{const f=EF;const v=await askText('新增子類別','','子類別名稱');if(v&&v.trim()){const m=S.cats[f.kind==='inc'?'inc':'exp'].find(c=>c.n===f.c);if(m&&!m.subs.includes(v.trim())){m.subs.push(v.trim());S.cats.u=Date.now();saveKV('cats')}f.s=v.trim()}openSheet(f._edit?'編輯記錄':'記一筆','');EF=f;renderEditor()},
@@ -2376,7 +2381,12 @@ function rankCats(name,shop,kind,k=3){
   if(shop)add(C.byShop.get(normName(shop)),2.5);
   return[...sc.entries()].sort((a,b)=>b[1]-a[1]).slice(0,k).map(([c])=>c.split('\u0001'));
 }
-let NS=[];
+let NS=[],_acT=0;
+function efCatRefresh(){const real=$('#sb');if(!real||!EF)return;real.id='sb-x';const tmp=document.createElement('div');tmp.id='sb';tmp.hidden=true;document.body.appendChild(tmp);
+  try{renderEditor();const n=tmp.querySelector('#ef-cat'),o=real.querySelector('#ef-cat');if(n&&o)o.replaceWith(n)}finally{tmp.remove();real.id='sb'}}
+function autoCat(){if(!EF||!(EF.kind==='exp'||EF.kind==='inc')||(EF.splits&&EF._si===-1))return;if(EF._catT&&!EF._autoC)return;
+  const q=(EF.n||'').trim();if(q.length<1)return;const kind=EF.kind;const r=rankCats(q,EF.sh,kind,1).filter(([c])=>S.cats[kind].some(m=>m.n===c))[0];if(!r)return;
+  const[c,z]=r;if(c===EF.c&&(z||'')===(EF.s||''))return;EF.c=c;EF.s=z||'';EF._autoC=1;EF._spCat=0;EF._cs='';efCatRefresh()}
 function nameSuggest(){
   const box=$('#f-n-sugg');const inp=$('#f-n');if(!box||!inp||!EF)return;
   const kind=EF.kind==='inc'?'inc':EF.kind==='exp'?'exp':null;const q=inp.value.trim();
@@ -2393,7 +2403,8 @@ function nameSuggest(){
     +(cats.length?`<div class="nsc"><span class="lbl">可能的項目</span>${cats.map(([c,s])=>`<button class="chip" data-act="ns-cat" data-c="${esc(c)}" data-s="${esc(s)}">${esc(c)}${s?'・'+esc(s):''}</button>`).join('')}</div>`:'');
   box.hidden=false;
 }
-document.addEventListener('input',e=>{if(e.target.id==='f-n')nameSuggest()});
+document.addEventListener('input',e=>{if(e.target.id==='f-n'){nameSuggest();if(e.isComposing)return;clearTimeout(_acT);_acT=setTimeout(autoCat,250)}});
+document.addEventListener('compositionend',e=>{if(e.target.id==='f-n'){clearTimeout(_acT);_acT=setTimeout(autoCat,250)}});
 document.addEventListener('focusin',e=>{if(e.target.id==='f-n')nameSuggest()});
 document.addEventListener('focusout',e=>{if(e.target.id==='f-n')setTimeout(()=>{const b=$('#f-n-sugg');if(b&&document.activeElement?.id!=='f-n')b.hidden=true},180)});
 document.addEventListener('mousedown',e=>{if(e.target.closest('#f-n-sugg'))e.preventDefault()});
