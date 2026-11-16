@@ -474,7 +474,14 @@ body.calc-on #sb{padding-bottom:330px}
 .calc-q button{flex:none;border:1px solid var(--rule);background:var(--paper);color:var(--ink);border-radius:99px;padding:6px 14px;font-size:15px}
 .calc-pv{display:none}
 body.calc-on #sb{padding-bottom:370px}
-.sheet.ed[data-k="exp"] #ef-cat,.sheet.ed[data-k="inc"] #ef-cat{height:212px;overflow:hidden;box-sizing:border-box}
+.sheet.ed .amtwrap,.sheet.ed .mcard{padding:2px 12px;border-radius:12px;margin-bottom:6px}
+.sheet.ed .mrow{min-height:36px;gap:8px}
+.sheet.ed .mrow.amt input{font-size:22px}
+.sheet.ed .mtot{font-size:22px}
+.sheet.ed .mrow.nm input{font-size:16px}
+.sheet.ed .cursel{padding:3px 8px;font-size:13px}
+.sheet.ed[data-k="exp"] #ef-cat,.sheet.ed[data-k="inc"] #ef-cat{height:206px}
+.sheet.ed[data-k="exp"] #ef-cat,.sheet.ed[data-k="inc"] #ef-cat{height:206px;overflow:hidden;box-sizing:border-box}
 .sheet.ed .sh .ibtn.txt{width:auto;padding:0 14px;border-radius:99px;font-size:15px;color:var(--ink)}
 .sheet.ed,.sheet.ed .sb{overflow-x:clip;max-width:100vw}
 .calc{max-width:100vw;box-sizing:border-box}
@@ -536,7 +543,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.54';
+window.APP_VER='v2.0.55';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -3261,6 +3268,8 @@ function calcKey(k){if(!CK)return;let v=CK.value;const last=v.slice(-1),isOp=c=>
   if(isOp(k)){if(!v&&k!=='−')return;if(isOp(last))v=v.slice(0,-1);return calcSet(v+k)}
   if(k==='.'){const seg=v.split(/[+−\-×÷*/]/).pop();if(seg.includes('.'))return;return calcSet(v+(seg?'.':'0.'))}
   calcSet(v+k)}
+document.addEventListener('focusin',e=>{if(!$('#sheet.ed'))return;const t=e.target;if(!t.matches||!t.matches('#f-n,#f-p,#f-sh'))return;const fix=()=>{if(window.scrollY)window.scrollTo(0,0);const sb=$('#sb');if(sb&&sb.scrollTop&&sb.scrollHeight<=sb.clientHeight+4)sb.scrollTop=0};[30,120,300,600].forEach(ms=>setTimeout(fix,ms))});
+if(window.visualViewport)visualViewport.addEventListener('scroll',()=>{if($('#sheet.ed')&&window.scrollY&&document.activeElement&&document.activeElement.id==='f-n')window.scrollTo(0,0)});
 document.addEventListener('scroll',e=>{const t=e.target;if(t&&t.id==='sb'&&t.scrollLeft)t.scrollLeft=0;else if(t===document&&window.scrollX&&$('#sheet.ed'))window.scrollTo(0,window.scrollY)},true);
 function calcShow(el){CK=el;{const sb=el.closest('#sb');if(sb)sb.scrollLeft=0;window.scrollTo(0,window.scrollY)}const k=calcEl();k.hidden=false;document.body.classList.add('calc-on');calcPv();
   {const q=$('#calc-q');if(q){let arr=[];if(el.id==='f-amt'&&EF&&EF.c){const e=recentIdx().by.get(EF.c+'\u0001'+EF.s);arr=(e?e.a:[]).slice(0,6)}q.innerHTML=arr.map(v=>`<button type="button" data-cq="${v}">${v}</button>`).join('');q.hidden=!arr.length}}
