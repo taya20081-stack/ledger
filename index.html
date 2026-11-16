@@ -546,7 +546,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.61';
+window.APP_VER='v2.0.62';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1374,7 +1374,7 @@ function renderEditor(){
   const amtBox=ei&&f.splits&&f._si===-1?`<div class="mcard"><div class="mrow"><span class="curw">${cur}</span><b class="num mtot">${fmt(spTotal(f))}</b></div></div>`
     :`<div class="amtwrap"><div class="mrow amt"><span class="curw">${curSel}</span><input id="f-amt" data-f="amt" data-calc inputmode="${CALC_IM}" autocomplete="off" placeholder="${ei?'0':amtLabel}" value="${esc(f.amt)}" aria-label="${amtLabel}"><span class="ev" id="f-ev">${showEv?'= '+fmt(ev,cur):''}</span></div>${ei&&f.cu&&f.cu!==cur?`<label class="field" style="margin-top:6px"><span>匯率：1 ${f.cu} = ? ${cur}</span><input class="in num" id="f-xr" data-f="xr" inputmode="decimal" value="${esc(f.xr)}" placeholder="${+(rateOf(f.cu)/rateOf(cur)).toPrecision(6)}"></label>`:''}</div>`;
   const dateBtn=`<label class="mbtn ov" data-ic="📅"><span id="f-dt-x">${dateBtnText(f.dt)}</span><input type="date" id="f-dt" data-f="dt" data-rr="1" value="${f.dt}"></label>`;
-  const timeBtn=`<div class="mbtn inp tmb"><input id="f-tm" data-f="tm" inputmode="numeric" autocomplete="off" enterkeyhint="done" maxlength="5" value="${esc(f.tm)}" aria-label="時間（輸入 4 位數字，如 0930）"></div>`;
+  const timeBtn=`<div class="mbtn inp tmb"><input id="f-tm" inputmode="numeric" autocomplete="off" enterkeyhint="done" maxlength="5" value="${esc(f.tm)}" aria-label="時間（輸入 4 位數字，如 0930）"></div>`;
   const dateRow=`<div class="grid2"><label class="field"><span>日期</span><input class="in" type="date" id="f-dt" data-f="dt" value="${f.dt}"></label><label class="field"><span>時間</span><input class="in" type="time" id="f-tm" data-f="tm" value="${f.tm}"></label></div>`;
   const acctRow=f.kind==='tr'?`<div class="grid2"><label class="field"><span>從</span><select class="in" id="f-a" data-f="a" data-rr="1">${acctOptions(f.a,1)}</select></label><label class="field"><span>到</span><select class="in" id="f-a2" data-f="a2" data-rr="1">${acctOptions(f.a2,1)}</select></label></div>${diffCur?`<label class="field"><span>轉入金額（${acB.cur}）${f._sugg&&!f.amt2?' · 依匯率約 '+fmt(f._sugg,acB.cur):''}</span><input class="in num" id="f-amt2" data-f="amt2" data-calc inputmode="${CALC_IM}" value="${esc(f.amt2||'')}" placeholder="${f._sugg||''}"></label>`:''}`
     :`<label class="field"><span>帳戶</span><select class="in" id="f-a" data-f="a" data-rr="1">${acctOptions(f.a)}</select></label>`;
@@ -1513,7 +1513,7 @@ function savedFx(){const d=document.createElement('div');d.className='savedfx';d
 function tmNorm(v,old){const d=String(v||'').replace(/\D/g,'');let h,m;if(!d)return old;if(d.length<=2){h=+d;m=0}else if(d.length===3){h=+d[0];m=+d.slice(1)}else{h=+d.slice(0,2);m=+d.slice(2,4)}
   if(!(h>=0&&h<24&&m>=0&&m<60))return old;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')}
 document.addEventListener('focusin',e=>{if(e.target.id==='f-tm'&&EF){EF._tm0=EF.tm;const t=e.target;t.placeholder=EF.tm;t.value=''}});
-document.addEventListener('input',e=>{if(e.target.id!=='f-tm'||!EF)return;const t=e.target;const d=t.value.replace(/\D/g,'').slice(0,4);const nv=d.length>2?d.slice(0,2)+':'+d.slice(2):d;if(t.value!==nv)t.value=nv;if(d.length===4){const n=tmNorm(d,null);if(n){EF.tm=n;t.blur()}}},true);
+document.addEventListener('input',e=>{if(e.target.id!=='f-tm'||!EF)return;const t=e.target;const d=t.value.replace(/\D/g,'').slice(0,4);const nv=d.length>2?d.slice(0,2)+':'+d.slice(2):d;if(t.value!==nv)t.value=nv},true);
 document.addEventListener('focusout',e=>{if(e.target.id!=='f-tm'||!EF)return;const n=tmNorm(e.target.value,EF._tm0||EF.tm);EF.tm=n;e.target.value=n;if(window.scrollY)window.scrollTo(0,0)});
 document.addEventListener('keydown',e=>{if(e.target.id==='f-tm'&&e.key==='Enter'){e.preventDefault();e.target.blur()}});
 function efFocusAmt(){setTimeout(()=>{const e=$('#f-amt');e&&e.focus&&e.focus()},60)}
