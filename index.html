@@ -474,6 +474,12 @@ body.calc-on #sb{padding-bottom:330px}
 .calc-q button{flex:none;border:1px solid var(--rule);background:var(--paper);color:var(--ink);border-radius:99px;padding:6px 14px;font-size:15px}
 .calc-pv{display:none}
 body.calc-on #sb{padding-bottom:370px}
+.cstrip .ctile{position:relative}
+.sheet.ed .cstrip{padding:8px 6px 6px}
+.cstrip .cbd.plus{background:#D5D5D8;border:0;color:#8E8E93;font-size:28px;font-weight:300}
+.cstrip .ctile .camt{color:var(--seal);font-weight:500;font-size:13px}
+.sheet.ed[data-k="inc"] .camt{color:var(--gain)}
+.cstrip .cx{position:absolute;top:-4px;right:2px;width:20px;height:20px;border-radius:50%;background:var(--ink);color:var(--paper);font-size:14px;line-height:20px;text-align:center}
 .sheet.ed .sb{padding-top:10px!important}
 .sheet.ed .mtabs{margin-top:-10px;margin-bottom:8px}
 .sheet.ed .mtabs button{padding:9px 2px 8px}
@@ -526,7 +532,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.47';
+window.APP_VER='v2.0.48';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1322,7 +1328,7 @@ function ctile(c,z,act,attrs,on,label,amtHtml){const col=catCol({t:'支出',c,s:
 function cpages(tiles){const P=[];for(let i=0;i<tiles.length;i+=10)P.push(tiles.slice(i,i+10));
   return`<div class="cpager" onscroll="const d=this.nextElementSibling;if(d){const i=Math.round(this.scrollLeft/this.clientWidth);[...d.children].forEach((x,k)=>x.classList.toggle('on',k===i))}">${P.map(p=>`<div class="cgrid">${p.join('')}</div>`).join('')}</div>${P.length>1?`<div class="cdots">${P.map((_,k)=>`<i class="${k?'':'on'}"></i>`).join('')}</div>`:''}`}
 function renderEditor(){
-  const f=EF;const sb=$('#sb');if(!sb)return;const cur=D.acct.get(f.a)?.cur||'TWD';const amtCur=f.kind!=='tr'&&f.cu?f.cu:cur;
+  const f=EF;const sb=$('#sb');if(!sb)return;{const sh=$('#sheet');if(sh)sh.dataset.k=f.kind}const cur=D.acct.get(f.a)?.cur||'TWD';const amtCur=f.kind!=='tr'&&f.cu?f.cu:cur;
   const ei=f.kind==='exp'||f.kind==='inc';
   const tabs=[['exp','支出'],['inc','收入'],['tr','轉帳'],['debt','借貸'],['sys','其他']];
   const tabOn=k=>f.kind===k;
@@ -1341,11 +1347,10 @@ function renderEditor(){
   const canSp=f.kind==='exp'&&!(f.mode==='inst')&&!(f.rep||f.mode==='rep')&&!f.dep;
   let strip='';
   if(f.kind==='exp'&&f.splits){const si=f._si;const tot=spTotal(f);
-    const tile=(y,k)=>{const c=k===si?f.c:y.c,z=k===si?f.s:y.s,a=k===si?f.amt:y.amt;return ctile(c,z,'sp-sel',`data-i="${k}"`,k===si,z||c||'未選',`<b class="num" id="sp-v-${k}">${fmt(evalAmt(a)||0)}</b>`)};
-    strip=`<div class="cstrip"><button class="ctile sptot${si===-1?' on':''}" data-act="sp-sel" data-i="-1"><span class="cbd" style="--bc:#6BD66B">🍴</span><span class="cl">${esc(si===-1?(f.n||'多類別'):(f._gname||'多類別'))}</span><b class="num" id="sp-tot">${fmt(tot,cur)}</b></button>${f.splits.map(tile).join('')}<button class="ctile" data-act="sp-add"><span class="cbd plus">＋</span><span class="cl">&nbsp;</span></button></div>
-    <div class="sphint">${si===-1?'多類別總覽：名稱是整筆的名稱；專案、帳戶改這裡會套用到全部分項。<button class="btn sm" data-act="sp-off">取消分項</button>':`第 ${si+1} 項：點一下目前的圖示可以改分類。<button class="btn sm" data-act="sp-del">刪除這一項</button>`}</div>`;
+    const tile=(y,k)=>{const c=k===si?f.c:y.c,z=k===si?f.s:y.s,a=k===si?f.amt:y.amt;return ctile(c,z,'sp-sel',`data-i="${k}"`,k===si,z||c||'未選',`<b class="num camt" id="sp-v-${k}">$${fmt(evalAmt(a)||0)}</b>${k===si?'<span class="cx" data-act="sp-del" aria-label="刪除這一項">×</span>':''}`)};
+    strip=`<div class="cstrip"><button class="ctile sptot${si===-1?' on':''}" data-act="sp-sel" data-i="-1"><span class="cbd" style="--bc:#6BD66B">🍴</span><span class="cl">${esc(si===-1?(f.n||'多類別'):(f._gname||'多類別'))}</span><b class="num camt" id="sp-tot">$${fmt(tot)}</b></button>${f.splits.map(tile).join('')}<button class="ctile" data-act="sp-add"><span class="cbd plus">＋</span><span class="cl">&nbsp;</span></button></div>`;
   }else if(ei&&f.c){
-    strip=`<div class="cstrip">${ctile(f.c,f.s,'ef-reopen','',true,f.s||f.c,`<b class="num" id="sp-v-s">${fmt(evalAmt(f.amt)||0)}</b>`)}${canSp?`<button class="ctile" data-act="sp-on"><span class="cbd plus">＋</span><span class="cl">&nbsp;</span></button>`:''}</div>`}
+    strip=`<div class="cstrip">${ctile(f.c,f.s,'ef-reopen','',true,f.s||f.c,`<b class="num camt" id="sp-v-s">$${fmt(evalAmt(f.amt)||0)}</b>`)}${canSp?`<button class="ctile" data-act="sp-on"><span class="cbd plus">＋</span><span class="cl">&nbsp;</span></button>`:''}</div>`}
   const acA=D.acct.get(f.a),acB=D.acct.get(f.a2);const diffCur=f.kind==='tr'&&acA&&acB&&acA.cur!==acB.cur;
   if(diffCur&&!f.amt2&&evalAmt(f.amt)>0)f._sugg=r2(evalAmt(f.amt)*rateOf(acA.cur)/rateOf(acB.cur));
   const amtLabel=f.kind==='sys'&&f.st==='餘額調整'?'調整金額（可為負數）':(!f._edit&&f.mode==='inst'&&f.kind==='exp'?'分期總金額':'金額');
@@ -1643,8 +1648,8 @@ function searchUpd(partial){const w=$('#sresWrap');if(partial&&w){w.innerHTML=se
 document.addEventListener('compositionend',e=>{const t=e.target;if(!t.dataset||!t.dataset.sf)return;S.search[t.dataset.sf]=t.value;S.search.limit=300;clearTimeout(sTimer);sTimer=setTimeout(()=>searchUpd(true),60)});
 document.addEventListener('input',e=>{const t=e.target;
   if(t.dataset.f&&EF){EF[t.dataset.f]=t.type==='checkbox'?t.checked:t.value;
-    if(t.dataset.f==='amt'&&EF.splits&&EF._si>=0){const a=$('#sp-v-'+EF._si);if(a)a.textContent=fmt(evalAmt(t.value)||0);const b=$('#sp-tot');if(b)b.textContent=fmt(spTotal(EF))}
-    if(t.dataset.f==='amt'&&!EF.splits){const a=$('#sp-v-s');if(a)a.textContent=fmt(evalAmt(t.value)||0)}
+    if(t.dataset.f==='amt'&&EF.splits&&EF._si>=0){const a=$('#sp-v-'+EF._si);if(a)a.textContent='$'+fmt(evalAmt(t.value)||0);const b=$('#sp-tot');if(b)b.textContent='$'+fmt(spTotal(EF))}
+    if(t.dataset.f==='amt'&&!EF.splits){const a=$('#sp-v-s');if(a)a.textContent='$'+fmt(evalAmt(t.value)||0)}
     if(t.dataset.f==='amt'){const ev=evalAmt(t.value);const el=$('#f-ev');if(el)el.textContent=/[+\-−*/×÷]/.test(t.value.slice(1))&&isFinite(ev)?'= '+fmt(ev,D.acct.get(EF.a)?.cur||'TWD'):''}
     if(EF.os&&(t.dataset.f==='amt'||t.dataset.f==='xr')){const el=$('#f-osamt');if(el){const cur=D.acct.get(EF.a)?.cur||'TWD';const xr=EF.cu&&EF.cu!==cur?(evalAmt(EF.xr)>0?evalAmt(EF.xr):rateOf(EF.cu)/rateOf(cur)):1;const fe=osFeeOf((evalAmt(EF.amt)||0)*xr);el.textContent=fe>0?'：'+money(fe,cur):''}}
     if(t.dataset.rr)renderEditor();return}
