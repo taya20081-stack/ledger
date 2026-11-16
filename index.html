@@ -426,7 +426,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.33';
+window.APP_VER='v2.0.34';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1706,7 +1706,7 @@ let inboxBusy=Promise.resolve();
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&typeof Cloud!=='undefined'&&Cloud.user)Cloud.pollInbox()});
 function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
   if(!Cloud.decided){await new Promise(r=>{const t=setInterval(()=>{if(Cloud.decided){clearInterval(t);r()}},300)})}
-  const add=[],dels=[],newRules=[],delNames=[],upds=[],insts=[],eds=[];
+  const add=[],dels=[],newRules=[],delNames=[],upds=[],insts=[],eds=[],rups=[];
   let apN=0,apDup=0,apUnk=0,pxN=0;const mvq=[];
   for(const d of docs){const x=d.data()||{};const id='ib_'+d.id;
     if(x.src==='ap'){if(!S.byId.has(id)){const o=apRecord(x,id);if(o.r){add.push(o.r);apN++;if(!o.sure)apUnk++}else if(o.skip==='dup')apDup++}dels.push(d.ref);continue}
@@ -1726,6 +1726,7 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
     if(x.kind==='renproj'){const o=String(x.o||'').trim(),nv=String(x.nv||'').trim();if(o&&nv&&o!==nv){const n=await renProj(o,nv);toast('專案「'+o+'」→「'+nv+'」：'+n.recs+' 筆'+(n.rules?'、週期 '+n.rules+' 個':''))}dels.push(d.ref);continue}
     if(x.kind==='gold'){const q=parseFloat(x.q);if(q>=0){S.settings.gold={...(S.settings.gold||{}),q,u:GOLD_U[x.u]?x.u:'錢'};await saveKV('settings');toast('黃金：'+q+' '+S.settings.gold.u)}dels.push(d.ref);continue}
     if(x.kind==='osshop'){const L=new Set(S.settings.osShops||[]);const rm=x.rm==='1';String(x.n||'').split(/[,、，]/).map(t=>t.trim()).filter(Boolean).forEach(t=>rm?L.delete(t):L.add(t));S.settings.osShops=[...L];await saveKV('settings');toast('海外店家：'+(rm?'移除 ':'加入 ')+String(x.n||''));dels.push(d.ref);continue}
+    if(x.kind==='updrule'&&(x.nn!=null||x.p!=null)){rups.push(x);dels.push(d.ref);continue}
     if(x.kind==='updrule'){upds.push({n:String(x.n||'').trim(),wk:x.wk});dels.push(d.ref);continue}
     if(x.kind==='delrule'){String(x.n||'').split(/[,、]/).map(t=>t.trim()).filter(Boolean).forEach(t=>delNames.push(t));dels.push(d.ref);continue}
     if(!S.byId.has(id)){const amt=Math.abs(+x.amt);if(isFinite(amt)&&amt>0){
@@ -1759,6 +1760,16 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
   if(add.length){Cloud.inboxN=(Cloud.inboxN||0)+add.length;await mutate(add);scheduleRender();const cl=add.filter(r=>r.tg!=='ap');
     toast([cl.length?'Claude 幫你記了 '+cl.length+' 筆：'+cl.slice(0,3).map(r=>(r.n||r.s)+' '+fmt(Math.abs(r.m))).join('、'):'',apN?'Apple Pay 自動記了 '+apN+' 筆'+(apUnk?'（'+apUnk+' 筆卡片未設定對應帳戶）':''):''].filter(Boolean).join('；')+(apDup?'；略過重複 '+apDup+' 筆':''))}
   else if(apDup)toast('Apple Pay：略過 '+apDup+' 筆已記過的交易')
+  if(rups.length){const up=[],okN=[],bad=[];let ch=false;
+    for(const x of rups){const nm=String(x.n||'').trim();
+      const hit=S.rules.filter(q=>q.fq!=='I'&&q.fs&&(q.name===nm||(q.fs.n||'')===nm||(!q.fs.n&&q.fs.s===nm))&&(x.oamt==null||Math.abs(Math.abs(evalAmt(q.fs.amt)||0)-Math.abs(+x.oamt))<0.5));
+      if(hit.length!==1){bad.push((nm||'?')+'（找到 '+hit.length+' 筆週期）');continue}
+      const rule=hit[0];if(x.nn!=null&&String(x.nn).trim())rule.fs.n=String(x.nn).trim().slice(0,80);if(x.p!=null)rule.fs.p=String(x.p).slice(0,60);
+      try{rule.name=ruleName(rule.fs)}catch(e){}rule.u=Date.now();ch=true;
+      S.recs.forEach(r=>{if(!r.x&&r.id.startsWith(rule.id+'_')&&/_\d+_\d+$/.test(r.id)){const o={...r};if(x.nn!=null&&String(x.nn).trim())o.n=String(x.nn).trim().slice(0,80);if(x.p!=null)o.p=String(x.p).slice(0,60);o.u=Date.now();up.push(o)}});
+      okN.push(nm+(x.nn?' → '+x.nn:''))}
+    if(ch)await saveKV('rules');if(up.length)await mutate(up,[]);if(ch||up.length)scheduleRender();
+    toast([okN.length?'Claude 幫你修改了週期：'+okN.slice(0,3).join('、')+'（含 '+up.length+' 筆記錄）':'',bad.length?'沒有修改：'+bad.slice(0,3).join('、'):''].filter(Boolean).join('；'))}
   if(upds.length){const td=TODAY();let ch=false;const dd=[];
     for(const u of upds){for(const rule of S.rules.filter(q=>q.fq!=='I'&&String(q.id).startsWith('ib_')&&q.name===u.n)){
       if(u.wk!==undefined)rule.wk=(u.wk==='prev'||u.wk==='next')?u.wk:'';
