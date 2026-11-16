@@ -390,6 +390,8 @@ h1{font-weight:700}
 .cd.on>span{border-width:3px}
 .cal-wd span{font-size:13.5px}
 .apill{color:#3E9FB8;border-color:#8CCBDA}
+.pills{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;max-width:100%}.ppill{display:inline-block;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:500 11.5px/1.2 var(--sans);color:#E08A3C;border:1px solid #F0B98A;border-radius:99px;padding:3px 10px}
+:root[data-app="dark"] .ppill{color:#F0A868;border-color:#8A5A32}
 :root[data-app="dark"] .apill{color:#7CCBDD;border-color:#3F7F8E}
 .pcard{border:0;box-shadow:0 2px 10px rgba(40,44,60,.05)}
 .row.hrow{border-bottom:0}
@@ -426,7 +428,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.34';
+window.APP_VER='v2.0.35';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -2421,6 +2423,8 @@ function hbadge(r){const e=catEmoji(r);const col=catCol(r);
 function ruleTag(r){const m=/^(.+)_(\d+)_\d+$/.exec(r.id);if(m){const ru=S.rules.find(x=>x.id===m[1]);if(ru&&ru.fq!=='I')return`週期 #${+m[2]+1+(ru.off||0)} / ${ru.cnt?ru.cnt:'無限期'}`}
   if(r.g){const ru=S.rules.find(x=>x.id===r.g&&x.fq==='I');if(ru&&r.t!=='利息'){const gs=(D.groups.get(r.g)||[]).filter(x=>x.t===r.t).sort((a,b)=>a.dt<b.dt?-1:1);const i=gs.findIndex(x=>x.id===r.id);if(i>=0)return`分期 #${i+1+(ru.off||0)} / ${ru.n}`}}
   return''}
+const aggTxt=(arr,unit)=>{const u=[...new Set(arr.filter(Boolean))];return u.length>1?u.length+' 個'+unit:(u[0]||'')};
+const projPill=t=>t?`<span class="ppill">${esc(t)}</span>`:'';
 function homeRow(r,noShop){
   const td=TODAY();const cur=r.cu||curOf(r);const v=raw(r);const isTr=r.t==='轉出'||r.t==='轉入';const a=D.acct.get(r.a);
   let amt,acct=a?a.name:'';
@@ -2432,7 +2436,7 @@ function homeRow(r,noShop){
   if(r.sh&&!noShop&&!isTr)sub.push(r.sh);const shop='';
   const conv=cur!=='TWD'&&!isTr?`<small class="num">≈ ${money(Math.round(Math.abs(val(r))*rateOf(curOf(r))),'TWD')}</small>`:'';
   const fut=r.dt>td;const sel=S.search.selMode&&S.search.sel.has(r.id);
-  return`<button class="row hrow${fut?' future':''}${sel?' sel':''}" data-act="${S.search.selMode?'sel-toggle':'edit-rec'}" data-id="${r.id}">${hbadge(r)}<div style="min-width:0"><div class="t">${esc(noShop?((r.n&&r.n!==noShop?r.n:'')||r.s||r.c||titleOf(r)):titleOf(r))}</div>${sub.length||fut?`<div class="s">${fut?'<span class="pill warn" style="margin:0 6px 0 0">未入帳</span>':''}${esc(sub.join('・'))}</div>`:''}${shop?`<div class="s shp">🏪 ${esc(shop)}</div>`:''}</div><div class="amt">${amt}${conv}${acct?`<span class="apill">${esc(acct)}</span>`:''}</div>${trl}</button>`;
+  return`<button class="row hrow${fut?' future':''}${sel?' sel':''}" data-act="${S.search.selMode?'sel-toggle':'edit-rec'}" data-id="${r.id}">${hbadge(r)}<div style="min-width:0"><div class="t">${esc(noShop?((r.n&&r.n!==noShop?r.n:'')||r.s||r.c||titleOf(r)):titleOf(r))}</div>${sub.length||fut?`<div class="s">${fut?'<span class="pill warn" style="margin:0 6px 0 0">未入帳</span>':''}${esc(sub.join('・'))}</div>`:''}${shop?`<div class="s shp">🏪 ${esc(shop)}</div>`:''}</div><div class="amt">${amt}${conv}${(acct||(!isTr&&r.p))?`<span class="pills">${isTr?'':projPill(r.p)}${acct?`<span class="apill">${esc(acct)}</span>`:''}</span>`:''}</div>${trl}</button>`;
 }
 const homeProjOk=r=>!S.settings.homeProj||r.p===S.settings.homeProj;
 function calCells(){
@@ -2485,9 +2489,9 @@ function homeItems(list){
     const ch=list.filter(x=>gkey(x)===key);const open=false;
     let net=0;for(const x of ch)net+=raw(x);const cur=r.cu||curOf(r);
     const subs=[...new Set(ch.map(x=>x.s||x.c))];const big=ch.slice().sort((a,b)=>Math.abs(raw(b))-Math.abs(raw(a)))[0];
-    const title=grpTitle(ch);const a=D.acct.get(r.a);const sel=S.search.selMode&&ch.every(x=>S.search.sel.has(x.id));
+    const title=grpTitle(ch);const a=D.acct.get(r.a);const pjt=aggTxt(ch.map(x=>x.p),'專案');const acn=aggTxt(ch.map(x=>D.acct.get(x.a)?.name||''),'帳戶');const sel=S.search.selMode&&ch.every(x=>S.search.sel.has(x.id));
     const sub=[];const grt=ruleTag(r);if(grt)sub.push(grt);if(r.sh&&grpTitle(ch)!==r.sh)sub.push(r.sh);
-    h+=`<button class="row hrow grpr${open?' open':''}${sel?' sel':''}" data-act="grp-toggle" data-g="${esc(key)}">${title==='多類別'||new Set(ch.map(x=>x.c)).size>1?'<span class="hb" style="--bc:#6BD66B">📁</span>':hbadge(big)}<div style="min-width:0"><div class="t">${esc(title)}</div>${sub.length?`<div class="s">${esc(sub.join('・'))}</div>`:''}</div><div class="amt"><span class="num ${net<0?'neg':net>0?'pos':''}">${money(Math.abs(net),cur)}</span>${a?`<span class="apill">${esc(a.name)}</span>`:''}</div></button>`;
+    h+=`<button class="row hrow grpr${open?' open':''}${sel?' sel':''}" data-act="grp-toggle" data-g="${esc(key)}">${title==='多類別'||new Set(ch.map(x=>x.c)).size>1?'<span class="hb" style="--bc:#6BD66B">📁</span>':hbadge(big)}<div style="min-width:0"><div class="t">${esc(title)}</div>${sub.length?`<div class="s">${esc(sub.join('・'))}</div>`:''}</div><div class="amt"><span class="num ${net<0?'neg':net>0?'pos':''}">${money(Math.abs(net),cur)}</span>${(pjt||acn)?`<span class="pills">${projPill(pjt)}${acn?`<span class="apill">${esc(acn)}</span>`:''}</span>`:''}</div></button>`;
   }
   return h;
 }
@@ -2496,7 +2500,7 @@ function grpSheet(g){
   const ch=grpMembers(g).slice().sort((a,b)=>(a.o||0)-(b.o||0));if(!ch.length)return;const r=ch[0];
   let net=0;for(const x of ch)net+=raw(x);const cur=r.cu||curOf(r);const a=D.acct.get(r.a);const rt=ruleTag(r);
   const big=ch.slice().sort((x,y)=>Math.abs(raw(y))-Math.abs(raw(x)))[0];const col=catColor(big)||'var(--c11)';
-  const info=[['帳戶',a?a.name:'—'],['商家',r.sh||'—'],['日期',r.dt.replace(/-/g,'/')],['時間',r.tm||'—'],['專案',r.p||'—'],['項目',ch.length+' 項']];
+  const info=[['帳戶',aggTxt(ch.map(x=>D.acct.get(x.a)?.name||''),'帳戶')||'—'],['專案',aggTxt(ch.map(x=>x.p),'專案')||'—'],['商家',r.sh||'—'],['日期',r.dt.replace(/-/g,'/')],['時間',r.tm||'—'],['項目',ch.length+' 項']];
   openSheet('多類別',`<div class="gdet"><div class="gdh" style="--bc:${col}"><span class="hb">${catEmoji(big)||'🧾'}</span><div class="grow"><div class="gdt">${esc(grpTitle(ch))}</div>${rt?`<div class="hint">${esc(rt)}</div>`:''}</div><div class="num gda ${net<0?'neg':'pos'}">${net<0?'-':'+'}${money(Math.abs(net),cur)}</div></div>
     <div class="gdi">${info.map(([k,v])=>`<div><span>${k}</span><b>${esc(v)}</b></div>`).join('')}</div></div>
     <div class="hlist gl">${ch.map(x=>homeRow(x,grpName(ch)||true).replace('data-act="edit-rec"','data-act="grp-edit"')).join('')}</div>
