@@ -563,7 +563,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.65';
+window.APP_VER='v2.0.66';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1004,7 +1004,7 @@ function openSheet(title,body,opt={}){
 function closeSheet(silent){const a=$('#sheet'),b=$('#scrim');if(a)a.remove();if(b)b.remove();if(!silent&&sheetOnClose){const f=sheetOnClose;sheetOnClose=null;f()}EF=null}
 function askConfirm(msg,ok='確定',danger=true){return new Promise(res=>{openSheet('確認',`<p style="margin:0">${msg}</p><div class="btns fill"><button class="btn" id="cf-no">取消</button><button class="btn ${danger?'danger':'pri'}" id="cf-ok">${esc(ok)}</button></div>`,{onClose:()=>res(false)});
   $('#cf-ok').onclick=()=>{sheetOnClose=null;closeSheet();res(true)};$('#cf-no').onclick=()=>{sheetOnClose=null;closeSheet();res(false)}})}
-function askText(title,init='',label='',type='text'){return new Promise(res=>{openSheet(title,`<label class="field"><span>${esc(label)}</span><input class="in" id="at-in" type="${type}" value="${esc(init)}" ${type==='text'?'':'inputmode="decimal"'}></label><div class="btns fill"><button class="btn" id="at-no">取消</button><button class="btn pri" id="at-ok">確定</button></div>`,{focus:'#at-in',onClose:()=>res(null)});
+function askText(title,init='',label='',type='text'){return new Promise(res=>{openSheet(title,`<label class="field"><span>${esc(label)}</span><input class="in" id="at-in" type="${type}" value="${esc(init)}" ${type==='text'?'':'inputmode="decimal" data-calc'}></label><div class="btns fill"><button class="btn" id="at-no">取消</button><button class="btn pri" id="at-ok">確定</button></div>`,{focus:'#at-in',onClose:()=>res(null)});
   const done=v=>{sheetOnClose=null;closeSheet();res(v)};$('#at-ok').onclick=()=>done($('#at-in').value);$('#at-no').onclick=()=>done(null);$('#at-in').onkeydown=e=>{if(e.key==='Enter')done($('#at-in').value)}})}
 
 const IC={
@@ -3320,6 +3320,8 @@ document.addEventListener('change',async e=>{const t=e.target;if(t.matches&&t.ma
 /* ================= 金額計算機鍵盤：+ − × ÷，觸控裝置取代系統數字鍵盤 ================= */
 const CALC_TOUCH=matchMedia('(pointer:coarse)').matches;
 const CALC_IM=CALC_TOUCH?'none':'decimal';
+if(CALC_TOUCH){const conv=root=>{(root.querySelectorAll?root:document).querySelectorAll('input[inputmode="decimal"],input[data-calc]').forEach(i=>{if(i.id==='tw-in')return;i.setAttribute('data-calc','');i.setAttribute('inputmode','none')})};
+  new MutationObserver(ms=>{for(const m of ms)for(const n of m.addedNodes)if(n.nodeType===1)conv(n)}).observe(document.documentElement,{childList:true,subtree:true});conv(document);document.addEventListener("DOMContentLoaded",()=>conv(document))}
 let CK=null;   // 目前輸入中的欄位
 const CALC_KEYS=[['÷','×','−','+'],['7','8','9','⌫'],['4','5','6','AC'],['1','2','3','='],['.','0','00','完成']];
 function calcEl(){let k=$('#calc');if(k)return k;k=document.createElement('div');k.id='calc';k.className='calc';k.hidden=true;
