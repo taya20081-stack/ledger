@@ -421,8 +421,8 @@ h1{font-weight:700}
 .calc-g{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;max-width:520px;margin:0 auto}
 .calc-g button{height:50px;border:0;border-radius:12px;background:var(--paper);color:var(--ink);font-size:22px;font-weight:500;box-shadow:0 1px 0 rgba(0,0,0,.12);touch-action:manipulation;-webkit-user-select:none;user-select:none}
 .calc-g button:active{filter:brightness(.9)}
-.calc-g .op{background:#E8F3E9;color:#3E8E4A;font-size:26px}
-.calc-g .fn{background:#E9E9EC;font-size:18px}
+.calc-g .op{background:color-mix(in srgb,var(--accent) 16%,var(--paper));color:var(--accent);font-size:26px}
+.calc-g .fn{background:var(--rule);color:var(--ink);font-size:18px}
 .calc-g .ok{background:#7BBF7F;color:#fff;font-size:18px;font-weight:600}
 body.calc-on #sb{padding-bottom:330px}
 /* ---------- v2.0.40 MOZE 風格「記一筆」 ---------- */
@@ -473,7 +473,6 @@ body.calc-on #sb{padding-bottom:330px}
 .calc-q{display:flex;gap:8px;overflow-x:auto;padding:4px 6px 8px;scrollbar-width:none}
 .calc-q button{flex:none;border:1px solid var(--rule);background:var(--paper);color:var(--ink);border-radius:99px;padding:6px 14px;font-size:15px}
 .calc-pv{display:none}
-.calc-g .op{background:var(--paper2)}
 body.calc-on #sb{padding-bottom:370px}
 
 
@@ -491,7 +490,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.40';
+window.APP_VER='v2.0.41';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
