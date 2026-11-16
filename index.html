@@ -439,7 +439,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.37';
+window.APP_VER='v2.0.38';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -2589,8 +2589,18 @@ document.addEventListener('focusin',dateFill);
    ID 固定為 al_<帳戶>_<觸發記錄>_<n>，多台裝置同時執行也不會重複；使用者刪掉的加值不會再補回。 */
 let alBusy=false,alTimer=null;
 function alSort(a,b){return a.dt<b.dt?-1:a.dt>b.dt?1:(a.tm||'')<(b.tm||'')?-1:(a.tm||'')>(b.tm||'')?1:(a.o||0)-(b.o||0)}
+async function mergeAutoload(){
+  const grp=new Map();
+  for(const r of S.recs){if(r.x||r.tg!=='autoload'||r.t!=='轉入')continue;const m=/^(al_.+)_(\d+)$/.exec(r.id);if(!m)continue;(grp.get(m[1])||grp.set(m[1],[]).get(m[1])).push({r,n:+m[2]})}
+  const up=[],rm=[];
+  for(const [,l] of grp){if(l.length<2)continue;l.sort((x,y)=>x.n-y.n);const keep=l[0].r;const kout=S.byId.get(keep.id+'_o');if(!kout||kout.x)continue;
+    let tot=0;for(const {r} of l)tot+=r.m;
+    up.push({...keep,m:tot,u:Date.now()},{...kout,m:-tot,u:Date.now()});
+    for(const {r} of l.slice(1)){rm.push(r.id);const o=S.byId.get(r.id+'_o');if(o)rm.push(o.id)}}
+  if(up.length){await mutate(up,rm);toast('已把重複的自動加值合併為單筆轉帳')}
+}
 async function runAutoload(){
-  if(alBusy)return 0;const td=TODAY();const add=[];
+  if(alBusy)return 0;await mergeAutoload();const td=TODAY();const add=[];
   for(const a of S.accts){const al=a.al;if(!al||!al.on||a.arch||!(al.amt>0)||!al.from||!D.acct.has(al.from)||al.from===a.id)continue;
     const since=al.since||td;let bal=a.init||0;const mine=[];const exist=new Map();
     for(const r of S.recs){if(r.a!==a.id||r.dt>td)continue;
@@ -2601,11 +2611,12 @@ async function runAutoload(){
       const ex=exist.get(r.id)||[];let n=0;for(const e of ex){if(!e.x)bal+=val(e);n=Math.max(n,+e.id.split('_').pop()+1)}
       const pre='al_'+a.id+'_'+r.id+'_';if(S.byId.get(pre+n)?.x||n===0&&S.byId.get(pre+'0_o')?.x)continue;   // 使用者刪過這次加值 → 尊重
       if(val(r)>=0||bal>=al.thr)continue;
-      let guard=0;while(bal<al.thr&&guard++<20){const id='al_'+a.id+'_'+r.id+'_'+n;const k='alk_'+a.id+'_'+r.id+'_'+n;n++;
+      const times=Math.min(20,Math.ceil((al.thr-bal)/al.amt));   // 一次扣款需要加值幾次，合併成一筆轉帳（例：不足 1,000 ＝ 一筆 1,000，而非兩筆 500）
+      if(times>0){const tot=al.amt*times;const id='al_'+a.id+'_'+r.id+'_'+n;const k='alk_'+a.id+'_'+r.id+'_'+n;
         const from=D.acct.get(al.from);const sub=a.grp==='信用卡'?'信用卡繳款':'轉帳';
         const base={dt:r.dt,tm:r.tm||'00:00',o:(r.o||0)+0.5,n:'自動加值',sh:'',p:'',ds:'',tg:'autoload',w:'',f:0,d:0,g:''};
-        add.push({...base,id:id+'_o',a:from.id,t:'轉出',c:'轉帳',s:sub,m:-al.amt,k},{...base,id,a:a.id,t:'轉入',c:'轉帳',s:sub,m:al.amt,k,o:base.o+0.1});
-        bal+=al.amt}}
+        add.push({...base,id:id+'_o',a:from.id,t:'轉出',c:'轉帳',s:sub,m:-tot,k},{...base,id,a:a.id,t:'轉入',c:'轉帳',s:sub,m:tot,k,o:base.o+0.1});
+        bal+=tot}}
   }
   if(!add.length)return 0;
   alBusy=true;try{await mutate(add)}finally{alBusy=false}
