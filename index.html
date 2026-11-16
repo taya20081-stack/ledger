@@ -426,7 +426,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.32';
+window.APP_VER='v2.0.33';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1769,7 +1769,7 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
   if(insts.length){for(const q of insts){S.rules.push(q.rule)}await saveKV('rules');await mutate(insts.flatMap(q=>q.recs));scheduleRender();toast('Claude 幫你建了 '+insts.length+' 個分期：'+insts.map(q=>q.rule.name).join('、'))}
   if(eds.length){const up=[],rm=[],bad=[],okN=[];
     for(const x of eds){const nm=String(x.n||'').trim();const dt=String(x.dt||'');if(!nm||!/^\d{4}-\d{2}-\d{2}$/.test(dt)){bad.push((nm||'?')+'（資料不完整）');continue}
-      const hit=D.live.filter(r=>r.dt===dt&&((r.n||'')===nm||(!r.n&&r.s===nm))&&(!x.tm||r.tm===x.tm)&&(!x.a||r.a===x.a||D.acct.get(r.a)?.name===x.a));
+      const hit=D.live.filter(r=>r.dt===dt&&((r.n||'')===nm||(!r.n&&r.s===nm))&&(!x.tm||r.tm===x.tm)&&(x.oamt==null||Math.abs(Math.abs(r.m)-Math.abs(+x.oamt))<0.5)&&(!x.a||r.a===x.a||D.acct.get(r.a)?.name===x.a));
       if(hit.length!==1){bad.push(nm+'（找到 '+hit.length+' 筆）');continue}const r=hit[0];
       if(x.kind==='del'){rm.push(r.id);okN.push('刪除 '+nm);continue}
       const o={...r};if(x.nn!=null&&String(x.nn).trim())o.n=String(x.nn).trim().slice(0,80);
