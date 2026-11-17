@@ -567,7 +567,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.69';
+window.APP_VER='v2.0.70';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1946,6 +1946,10 @@ function processInbox(docs){inboxBusy=inboxBusy.then(async()=>{
       dels.push(d.ref);continue}
     if(x.kind==='mvproj'){mvq.push(x);dels.push(d.ref);continue}
     if(x.kind==='renproj'){const o=String(x.o||'').trim(),nv=String(x.nv||'').trim();if(o&&nv&&o!==nv){const n=await renProj(o,nv);toast('專案「'+o+'」→「'+nv+'」：'+n.recs+' 筆'+(n.rules?'、週期 '+n.rules+' 個':''))}dels.push(d.ref);continue}
+    if(x.kind==='hold'){const pf=String(x.pf||'我的').trim()||'我的',code=String(x.n||'').trim().toUpperCase();const H=S.settings.hold||(S.settings.hold=[]);
+      if(x.rm==='1'){const b=H.length;S.settings.hold=H.filter(h=>!((h.pf||'我的')===pf&&(!code||code==='*'||h.code===code)));await saveKV('settings');toast('持股：刪除「'+pf+'」'+(b-S.settings.hold.length)+' 檔')}
+      else{const sh=parseFloat(x.sh);if(code&&sh>=0){holdUpsert(pf,code,sh,0,x.cu||'');await saveKV('settings');toast('持股：'+pf+' '+code+' '+sh+' 股')}}
+      dels.push(d.ref);continue}
     if(x.kind==='gold'){const q=parseFloat(x.q);if(q>=0){S.settings.gold={...(S.settings.gold||{}),q,u:GOLD_U[x.u]?x.u:'錢'};await saveKV('settings');toast('黃金：'+q+' '+S.settings.gold.u)}dels.push(d.ref);continue}
     if(x.kind==='osshop'){const L=new Set(S.settings.osShops||[]);const rm=x.rm==='1';String(x.n||'').split(/[,、，]/).map(t=>t.trim()).filter(Boolean).forEach(t=>rm?L.delete(t):L.add(t));S.settings.osShops=[...L];await saveKV('settings');toast('海外店家：'+(rm?'移除 ':'加入 ')+String(x.n||''));dels.push(d.ref);continue}
     if(x.kind==='updrule'&&(x.nn!=null||x.p!=null)){rups.push(x);dels.push(d.ref);continue}
