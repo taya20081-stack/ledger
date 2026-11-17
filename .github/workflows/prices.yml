@@ -197,7 +197,9 @@ jobs:
                   with sync_playwright() as pw:
                       b = pw.chromium.launch(channel='chrome', headless=True)
                       try:
-                          pg = b.new_page(locale='zh-TW')   # 用瀏覽器自己的 User-Agent
+                          # 預設 UA 含 HeadlessChrome 會被臺銀擋；改用「實際 Chrome 版本」的一般桌面 UA
+                          ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/%s.0.0.0 Safari/537.36' % b.version.split('.')[0]
+                          pg = b.new_page(locale='zh-TW', user_agent=ua)
                           pg.goto(URL, wait_until='domcontentloaded', timeout=60000)
                           for _ in range(15):   # 驗證頁會自己 reload；直到「黃金存摺」那列解析成功才算載入完成
                               try: v, d = parse(pg.content())
