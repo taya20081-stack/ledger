@@ -568,7 +568,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.74';
+window.APP_VER='v2.0.75';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1049,6 +1049,16 @@ async function fixOsGroups(){const up=[];const byKey=new Map();
     const g0=ms.find(m=>m.o===f.o-1);const grp=g0.g?ms.filter(m=>m.g===g0.g):[g0];const g=g0.g||uid();
     const gn=grp.length>1?(g0.gn||''):(g0.gn||g0.n||'');
     grp.forEach(m=>{if(m.g!==g||(gn&&!m.gn))up.push({...m,g,...(gn&&!m.gn?{gn}:{})})});up.push({...f,g,...(gn?{gn}:{})})}
+  /* 另記的單筆「跨國／海外交易手續費」（例如對話記帳）→ 併入同帳戶、同日，金額 1.5% 相符或名稱／商家相符的那筆支出 */
+  const FEE=/^(跨國|海外)交易手續費$/,done=new Set(up.map(r=>r.id)),used=new Set();
+  for(const f of D.live){if(f.g||done.has(f.id)||!FEE.test(f.n||'')||f.t!=='支出'&&f.t!=='手續費')continue;
+    const fv=Math.abs(f.m),hint=[f.sh,f.gn,f.ds,f.p].filter(Boolean).join(' ');const units=new Map();
+    for(const r of D.live)if(r.t==='支出'&&!FEE.test(r.n||'')&&r.a===f.a&&r.dt===f.dt&&!done.has(r.id)){const k=r.g||r.id;(units.get(k)||units.set(k,[]).get(k)).push(r)}
+    let best=null,bs=0;for(const[k,ch]of units){if(used.has(k))continue;const nm=grpName(ch)||ch[0].n||'',tot=ch.reduce((t,r)=>t+Math.abs(r.m),0);
+      const sc=(osFeeOf(tot)===fv?2:0)+((nm&&hint.includes(nm))||ch.some(r=>r.sh&&hint.includes(r.sh))?1:0);
+      if(sc>bs||(sc===bs&&sc&&Math.abs(ch[0].o-f.o)<Math.abs(best[0].o-f.o))){best=ch;bs=sc}}
+    if(!best)continue;const k0=best[0].g||best[0].id;used.add(k0);const g=best[0].g||uid();const gn=grpName(best)||(best.length===1?best[0].n||'':'');
+    best.forEach(m=>{if(m.g!==g||(gn&&!m.gn)){up.push({...m,g,...(gn&&!m.gn?{gn}:{})});done.add(m.id)}});up.push({...f,g,...(gn?{gn}:{})});done.add(f.id)}
   if(up.length)await mutate(up)}
 function grpName(ch){const g=ch.find(x=>x.gn);if(g)return g.gn;if(ch.length>1&&ch[0].n&&ch.every(x=>x.n===ch[0].n))return ch[0].n;return''}
 function titleOf(r){
@@ -1987,7 +1997,7 @@ function processInbox(docs){let mine=[];inboxBusy=inboxBusy.then(async()=>{
     if(gone.length){const ids=S.recs.filter(r=>!r.x&&r.dt>td&&/_\d+_\d+$/.test(r.id)&&gone.some(q=>r.id.startsWith(q.id+'_'))).map(r=>r.id);
       S.rules=S.rules.filter(q=>!gone.includes(q));await saveKV('rules');if(ids.length)await mutate([],ids);scheduleRender();toast('Claude 幫你刪除了 '+gone.length+' 個週期')}}
   if(apN||apDup||pxN)await saveKV('settings');if(pxN)scheduleRender();
-  if(add.length){Cloud.inboxN=(Cloud.inboxN||0)+add.length;await mutate(add);scheduleRender();const cl=add.filter(r=>r.tg!=='ap');
+  if(add.length){Cloud.inboxN=(Cloud.inboxN||0)+add.length;await mutate(add);await fixOsGroups().catch(()=>{});scheduleRender();const cl=add.filter(r=>r.tg!=='ap');
     toast([cl.length?'Claude 幫你記了 '+cl.length+' 筆：'+cl.slice(0,3).map(r=>(r.n||r.s)+' '+fmt(Math.abs(r.m))).join('、'):'',apN?'Apple Pay 自動記了 '+apN+' 筆'+(apUnk?'（'+apUnk+' 筆卡片未設定對應帳戶）':''):''].filter(Boolean).join('；')+(apDup?'；略過重複 '+apDup+' 筆':''))}
   else if(apDup)toast('Apple Pay：略過 '+apDup+' 筆已記過的交易')
   if(rups.length){const up=[],okN=[],bad=[];let ch=false;
