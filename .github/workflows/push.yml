@@ -50,25 +50,35 @@ jobs:
           for it in items:
               at = datetime.datetime.strptime(it['at'], '%Y-%m-%dT%H:%M').replace(tzinfo=TW)
               h = hashlib.sha256((E['OWNER_UID'] + '|' + it['id']).encode()).hexdigest()[:20]
-              if at <= now and now - at < datetime.timedelta(hours=20) and h not in sent:
+              if at <= now and now - at < datetime.timedelta(hours=20) and h not in sent:   # h 在 sent＝舊格式「整則已送」
                   due.append((h, it))
           print('裝置', len(subs), '台，排程', len(items), '則，到期', len(due), '則')
-          for h, it in due:
-              ok = False
+          dev = lambda s: hashlib.sha256(s['endpoint'].encode()).hexdigest()[:8]
+          for h, it in due:   # 逐台裝置記錄：成功的不再重送，失敗的下次排程補送
               for s in subs:
+                  k = h + '.' + dev(s)
+                  if k in sent: continue
                   try:
                       webpush(subscription_info={'endpoint': s['endpoint'], 'keys': s['keys']},
                               data=json.dumps({'title': it['t'], 'body': it['b'], 'tag': it['id']}, ensure_ascii=False),
                               vapid_private_key=E['VAPID_PRIVATE'], vapid_claims={'sub': 'mailto:' + E.get('VAPID_SUB', 'noreply@example.com')}, ttl=43200)
-                      ok = True
+                      sent[k] = now.strftime('%Y-%m-%d'); print('  已送出 1 台')
                   except WebPushException as e:
-                      print('  發送失敗', getattr(e.response, 'status_code', ''), str(e)[:120])
-              if ok:
-                  sent[h] = now.strftime('%Y-%m-%d'); print('  已送出 1 則')
+                      code = getattr(e.response, 'status_code', '')
+                      print('  發送失敗', code, str(e)[:120])
+                      if code in (404, 410): sent[k] = now.strftime('%Y-%m-%d')   # 裝置已取消訂閱，不再重試
+              json.dump(sent, open(path, 'w'), separators=(',', ':'))   # 每則送完就寫檔，中途失敗也保留已送記錄
           json.dump(sent, open(path, 'w'), separators=(',', ':'))
           PY
       - name: 記錄已送出的提醒（只存雜湊，不含內容）
         run: |
           git config user.name 'github-actions'; git config user.email 'actions@users.noreply.github.com'
           git add push-sent.json
-          git diff --cached --quiet || (git commit -m "push log" && git push)
+          git diff --cached --quiet && exit 0
+          git commit -m "push log"
+          for i in 1 2 3 4; do   # 推不上去下次會重送推播，所以要確實推上去：rebase 重試，最後失敗明確報錯
+            git push && exit 0
+            git pull --rebase -q || { git rebase --abort || true; }
+            sleep $((i * 5))
+          done
+          echo "::error::push-sent.json 推送失敗，下次排程可能重複推播"; exit 1
