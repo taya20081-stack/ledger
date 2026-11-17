@@ -1,7 +1,7 @@
 name: 股票收盤價
 on:
   schedule:
-    - cron: '40 6 * * 1-5'    # 週一至週五 14:40（台灣時間），證交所當日收盤行情公布後
+    - cron: '40 6 * * 1-5'    # 週一至週五 14:40（台灣時間）；主要由外部排程 cron-job.org 每天 14:25 觸發（股票＋黃金＋匯率），這裡是備援
     - cron: '30 9 * * 1-5'    # 17:30 再抓一次（GitHub 排程偶爾延遲或漏跑）
     - cron: '30 12 * * 1-5'   # 20:30 補抓
     - cron: '30 22 * * 1-5'   # 週二至週六 06:30（台灣時間），美股收盤後
@@ -9,11 +9,14 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+concurrency:   # 外部排程與 GitHub 排程同時觸發時排隊執行，避免互相覆蓋 prices.json
+  group: prices
+  cancel-in-progress: false
 jobs:
   fetch:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: 抓取上市、上櫃收盤價
         run: |
           python3 - <<'PY'
@@ -74,7 +77,17 @@ jobs:
               return d, out
           # 上市：先抓當天（MI_INDEX），沒有才用 openapi（openapi 通常晚一天才更新）
           tw_d, tw = '', {}
+          now = datetime.datetime.now(TW)
+          if now.weekday() < 5 and '13:30' <= now.strftime('%H:%M') < '15:00':   # 外部排程 14:25 觸發：今天行情還沒出來就每 2 分鐘再試，最多等 25 分鐘
+              import time
+              for i in range(13):
+                  try:
+                      x = mi_index(today)
+                      if len(x) > 500: tw_d, tw = today, x; print('今天行情已公布（第', i + 1, '次）'); break
+                  except Exception as e: print('MI_INDEX 今天', '失敗', repr(e)[:120])
+                  if i < 12: print('今天行情尚未公布，2 分鐘後重試'); time.sleep(120)
           for back in range(0, 6):
+              if tw_d: break
               d = (datetime.datetime.now(TW) - datetime.timedelta(days=back)).strftime('%Y-%m-%d')
               if d < (old.get('d') or ''): break
               try:
@@ -150,6 +163,8 @@ jobs:
               req(BASE + '/inbox', {'fields': {'kind': {'stringValue': 'px'}, 'd': {'stringValue': day}, 'p': {'stringValue': json.dumps(p)}}}, A)
               print('已寫入收件匣')
           PY
+      - name: 安裝 Playwright（用 runner 內建的 Google Chrome，不另外下載瀏覽器）
+        run: pip install -q playwright
       - name: 黃金牌價（臺灣銀行黃金存摺・本行買進・每公克）
         run: |
           python3 - <<'PY'
@@ -162,16 +177,31 @@ jobs:
           data = json.load(open('prices.json', encoding='utf-8')) if os.path.exists('prices.json') else {'d': '', 'p': {}}
           old = data.get('p', {}).get('GOLD')
           v, d, src = 0.0, '', ''
-          try:   # 來源 1：臺灣銀行黃金牌價網頁
-              t = re.sub(r'<[^>]+>', ' ', get('https://rate.bot.com.tw/gold?Lang=zh-TW'))
-              t = re.sub(r'\s+', ' ', t)
+          URL = 'https://rate.bot.com.tw/gold?Lang=zh-TW'
+          def parse(html):   # 回傳 (本行買進每公克, 掛牌日期)
+              t = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', html))
+              i = t.find('本行買進'); print('臺銀片段', t[max(0, i-60):i+60] if i >= 0 else t[:120])
               m = re.search(r'本行買進[^\d]{0,20}?([\d]{1,2},\d{3}|\d{4,5})(?!\d)', t)
-              i = t.find('本行買進'); print('臺銀片段', t[max(0, i-60):i+60] if i >= 0 else t[:200])
-              if m: v = float(m.group(1).replace(',', ''))
+              if m: print('抓到的位置', t[max(0, m.start()-80):m.end()+20])
+              pv = float(m.group(1).replace(',', '')) if m else 0.0
               m = re.search(r'(\d{4})/(\d{2})/(\d{2})\s+\d{2}:\d{2}', t)
-              if m: d = '%s-%s-%s' % m.groups()
-              src = '臺銀'
+              return pv, ('%s-%s-%s' % m.groups() if m else '')
+          try:   # 來源 1：臺灣銀行黃金牌價網頁（一般請求）
+              v, d = parse(get(URL)); src = '臺銀'
           except Exception as e: print('臺銀黃金失敗', repr(e)[:120])
+          if not (1000 < v < 30000):   # 來源 1b：臺銀有 JS 驗證頁擋爬蟲，改用真的瀏覽器開（runner 內建 Google Chrome）
+              try:
+                  from playwright.sync_api import sync_playwright
+                  with sync_playwright() as pw:
+                      b = pw.chromium.launch(channel='chrome', headless=True)
+                      pg = b.new_page(locale='zh-TW', user_agent=HDR['User-Agent'])
+                      pg.goto(URL, timeout=60000)
+                      for _ in range(10):   # 驗證頁會自己 reload，等到出現「本行買進」
+                          if '本行買進' in pg.content(): break
+                          pg.wait_for_timeout(2000)
+                      v, d = parse(pg.content()); src = '臺銀'
+                      b.close()
+              except Exception as e: print('瀏覽器開臺銀失敗', repr(e)[:160])
           if not (1000 < v < 30000):   # 來源 2：國際金價 × 美元匯率 換算每公克（臺銀抓不到時備援）
               v = 0.0
               try:
@@ -191,4 +221,8 @@ jobs:
         run: |
           git config user.name 'github-actions'; git config user.email 'actions@users.noreply.github.com'
           git add prices.json
-          git diff --cached --quiet || (git commit -m "股價 $(date +%F)" && git push)
+          git diff --cached --quiet || (git commit -m "股價 $(date +%F)" && (git push || (git pull --rebase && git push)))
+  rates:   # 股價、金價存好之後接著更新匯率，同一個外部排程就能更新三項
+    needs: fetch
+    if: always()
+    uses: ./.github/workflows/rates.yml
