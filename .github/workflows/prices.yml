@@ -163,6 +163,8 @@ jobs:
               req(BASE + '/inbox', {'fields': {'kind': {'stringValue': 'px'}, 'd': {'stringValue': day}, 'p': {'stringValue': json.dumps(p)}}}, A)
               print('已寫入收件匣')
           PY
+      - name: 安裝 Playwright（用 runner 內建的 Google Chrome，不另外下載瀏覽器）
+        run: pip install -q playwright
       - name: 黃金牌價（臺灣銀行黃金存摺・本行買進・每公克）
         run: |
           python3 - <<'PY'
@@ -188,8 +190,6 @@ jobs:
           except Exception as e: print('臺銀黃金失敗', repr(e)[:120])
           if not (1000 < v < 30000):   # 來源 1b：臺銀有 JS 驗證頁擋爬蟲，改用真的瀏覽器開（runner 內建 Google Chrome）
               try:
-                  import subprocess, sys
-                  subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', 'playwright'], check=True)
                   from playwright.sync_api import sync_playwright
                   with sync_playwright() as pw:
                       b = pw.chromium.launch(channel='chrome', headless=True)
