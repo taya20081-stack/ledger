@@ -1,7 +1,7 @@
 name: 股票收盤價
 on:
   schedule:
-    - cron: '40 6 * * 1-5'    # 週一至週五 14:40（台灣時間）；主要由外部排程 cron-job.org 每天 14:25 觸發（股票＋黃金＋匯率），這裡是備援
+    - cron: '40 6 * * 1-5'    # 週一至週五 14:40（台灣時間）；主要由 Claude 排程每天 14:25 以 workflow_dispatch 觸發（股票＋黃金＋匯率），這裡是備援
     - cron: '30 9 * * 1-5'    # 17:30 再抓一次（GitHub 排程偶爾延遲或漏跑）
     - cron: '30 12 * * 1-5'   # 20:30 補抓
     - cron: '30 22 * * 1-5'   # 週二至週六 06:30（台灣時間），美股收盤後
@@ -178,14 +178,16 @@ jobs:
           old = data.get('p', {}).get('GOLD')
           v, d, src = 0.0, '', ''
           URL = 'https://rate.bot.com.tw/gold?Lang=zh-TW'
-          def parse(html):   # 回傳 (本行買進每公克, 掛牌日期)
+          N = r'(\d{1,2},\d{3}|\d{4,5})(?!\d)'
+          def parse(html):   # 只認「1 公克 黃金存摺」那一列：本行賣出 X … 本行買進 Y，且 Y < X；回傳 (本行買進每公克, 掛牌日期)
               t = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', html))
-              i = t.find('本行買進'); print('臺銀片段', t[max(0, i-60):i+60] if i >= 0 else t[:120])
-              m = re.search(r'本行買進[^\d]{0,20}?([\d]{1,2},\d{3}|\d{4,5})(?!\d)', t)
-              if m: print('抓到的位置', t[max(0, m.start()-80):m.end()+20])
-              pv = float(m.group(1).replace(',', '')) if m else 0.0
+              m = re.search(r'1 ?公克 ?黃金存摺.{0,20}?本行賣出 ?' + N + r'.{0,20}?本行買進 ?' + N, t)
+              if not m: print('找不到黃金存摺列：', t[:120]); return 0.0, ''
+              print('抓到的位置', t[m.start():m.end() + 10])
+              sell, buy = float(m.group(1).replace(',', '')), float(m.group(2).replace(',', ''))
+              if not (1000 < buy < sell < buy * 1.05): print('買賣價不合理', sell, buy); return 0.0, ''
               m = re.search(r'(\d{4})/(\d{2})/(\d{2})\s+\d{2}:\d{2}', t)
-              return pv, ('%s-%s-%s' % m.groups() if m else '')
+              return buy, ('%s-%s-%s' % m.groups() if m else '')
           try:   # 來源 1：臺灣銀行黃金牌價網頁（一般請求）
               v, d = parse(get(URL)); src = '臺銀'
           except Exception as e: print('臺銀黃金失敗', repr(e)[:120])
@@ -194,14 +196,20 @@ jobs:
                   from playwright.sync_api import sync_playwright
                   with sync_playwright() as pw:
                       b = pw.chromium.launch(channel='chrome', headless=True)
-                      pg = b.new_page(locale='zh-TW', user_agent=HDR['User-Agent'])
-                      pg.goto(URL, timeout=60000)
-                      for _ in range(10):   # 驗證頁會自己 reload，等到出現「本行買進」
-                          if '本行買進' in pg.content(): break
-                          pg.wait_for_timeout(2000)
-                      v, d = parse(pg.content()); src = '臺銀'
-                      b.close()
+                      try:
+                          # 預設 UA 含 HeadlessChrome 會被臺銀擋；改用「實際 Chrome 版本」的一般桌面 UA
+                          ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/%s.0.0.0 Safari/537.36' % b.version.split('.')[0]
+                          pg = b.new_page(locale='zh-TW', user_agent=ua)
+                          pg.goto(URL, wait_until='domcontentloaded', timeout=60000)
+                          for _ in range(15):   # 驗證頁會自己 reload；直到「黃金存摺」那列解析成功才算載入完成
+                              try: v, d = parse(pg.content())
+                              except Exception: v = 0.0   # 頁面正在 reload
+                              if 1000 < v < 30000: src = '臺銀'; break
+                              pg.wait_for_timeout(2000)
+                      finally: b.close()
               except Exception as e: print('瀏覽器開臺銀失敗', repr(e)[:160])
+          if not (1000 < v < 30000) and old and len(old) > 3 and '臺銀' in old[0] and old[3] >= (datetime.datetime.now(TW) - datetime.timedelta(days=4)).strftime('%Y-%m-%d'):
+              print('臺銀這次抓不到，保留上一筆臺銀牌價', old); raise SystemExit(0)   # 不用國際估算價覆蓋近期的正式牌價
           if not (1000 < v < 30000):   # 來源 2：國際金價 × 美元匯率 換算每公克（臺銀抓不到時備援）
               v = 0.0
               try:
@@ -222,7 +230,7 @@ jobs:
           git config user.name 'github-actions'; git config user.email 'actions@users.noreply.github.com'
           git add prices.json
           git diff --cached --quiet || (git commit -m "股價 $(date +%F)" && (git push || (git pull --rebase && git push)))
-  rates:   # 股價、金價存好之後接著更新匯率，同一個外部排程就能更新三項
+  rates:   # 股價、金價存好之後接著更新匯率，同一個排程就能更新三項（股價失敗也照樣更新匯率，被取消則不跑）
     needs: fetch
-    if: always()
+    if: ${{ !cancelled() }}
     uses: ./.github/workflows/rates.yml

@@ -311,6 +311,7 @@ input[type=date].in,input[type=time].in{min-width:0;width:100%;display:block;-we
 .pcard{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:12px;align-items:center;width:100%;text-align:left;border:1px solid var(--rule);background:var(--paper);border-radius:18px;padding:14px;box-shadow:0 3px 12px rgba(30,41,64,.06)}
 .pcard .t{font-size:18px;font-weight:600}
 .pcard .s{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pcard.pc2{row-gap:2px}.pcard.pc2 .hb{grid-row:1/3}.pcard.pc2 .s{grid-column:2/4;grid-row:2}  /* 本月收支放第二列、橫跨到右側，完整金額不截斷 */
 .pcard .amt{align-self:start;font-size:16px;white-space:nowrap;display:flex;gap:6px;align-items:baseline}
 .pcard .amt i{font-style:normal;color:var(--muted);font-size:12px}
 .hb{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;font-size:24px;line-height:1;background:color-mix(in srgb,var(--bc,var(--c11)) 22%,var(--paper));flex:none}
@@ -567,7 +568,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.72';
+window.APP_VER='v2.0.74';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1929,7 +1930,7 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 const inboxSeen=new Set();   // 同一份指令可能同時由 onSnapshot 與 pollInbox 送來，只處理一次（失敗時移除以便重試）
 function processInbox(docs){let mine=[];inboxBusy=inboxBusy.then(async()=>{
   if(!Cloud.decided){await new Promise(r=>{const t=setInterval(()=>{if(Cloud.decided){clearInterval(t);r()}},300)})}
-  docs=docs.filter(d=>!inboxSeen.has(d.id));mine=docs.map(d=>d.id);mine.forEach(i=>inboxSeen.add(i));if(!docs.length)return;
+  const sk=d=>(Cloud.user?Cloud.user.uid:'')+'/'+d.id;docs=docs.filter(d=>!inboxSeen.has(sk(d)));mine=docs.map(sk);mine.forEach(i=>inboxSeen.add(i));if(!docs.length)return;
   const add=[],dels=[],newRules=[],delNames=[],upds=[],insts=[],eds=[],rups=[];
   let apN=0,apDup=0,apUnk=0,pxN=0;const mvq=[];
   for(const d of docs){const x=d.data()||{};const id='ib_'+d.id;
@@ -1937,9 +1938,10 @@ function processInbox(docs){let mine=[];inboxBusy=inboxBusy.then(async()=>{
     if(x.kind==='px'){try{const q=JSON.parse(x.p||'{}');const cur=S.settings.pxx||{d:'',p:{}};if((x.d||'')>=(cur.d||'')){S.settings.pxx={d:x.d||'',p:{...cur.p,...q}};pxApply(S.settings.pxx.p);pxN++}}catch(e){}dels.push(d.ref);continue}
     if(x.kind==='edit'||x.kind==='del'){eds.push(x);dels.push(d.ref);continue}
     if(x.kind==='inst'){const amt=Math.abs(+x.amt),k=parseInt(x.cnt)||0,acct=S.accts.find(a=>a.id===x.a||a.name===x.a);
-      if(!S.rules.some(q=>q.id===id)&&amt>0&&k>1&&acct&&/^\d{4}-\d{2}-\d{2}$/.test(x.dt||'')){const sno=Math.max(1,Math.min(k,parseInt(x.sno)||1));const nm=String(x.n||'分期付款').slice(0,80);const tm=/^\d{2}:\d{2}$/.test(x.tm||'')?x.tm:'00:00';const day=+x.dt.slice(8),o=Date.now();
-        const recs=[];for(let i=sno;i<=k;i++){recs.push({id:uid(),a:acct.id,t:'支出',c:x.c||'個人支出',s:x.s||'',m:-amt,f:0,d:0,n:nm,sh:String(x.sh||'').slice(0,60),dt:addMonths(x.dt,i-sno,day),tm,p:String(x.p||'').slice(0,60),ds:nm+'・第 '+i+'/'+k+' 期',tg:'claude',w:'',k:'',g:id,o:o+i})}
-        insts.push({rule:{id,fq:'I',name:nm,total:Math.abs(+x.tot)||amt*k,n:k,rate:parseFloat(x.rate)||0,start:x.dt,a:acct.id,off:sno-1,u:o},recs})}
+      if(amt>0&&k>1&&acct&&/^\d{4}-\d{2}-\d{2}$/.test(x.dt||'')){const sno=Math.max(1,Math.min(k,parseInt(x.sno)||1));const nm=String(x.n||'分期付款').slice(0,80);const tm=/^\d{2}:\d{2}$/.test(x.tm||'')?x.tm:'00:00';const day=+x.dt.slice(8),o=Date.now();
+        const recs=[];for(let i=sno;i<=k;i++){const rid=id+'_i'+i;if(S.byId.has(rid))continue;recs.push({id:rid,a:acct.id,t:'支出',c:x.c||'個人支出',s:x.s||'',m:-amt,f:0,d:0,n:nm,sh:String(x.sh||'').slice(0,60),dt:addMonths(x.dt,i-sno,day),tm,p:String(x.p||'').slice(0,60),ds:nm+'・第 '+i+'/'+k+' 期',tg:'claude',w:'',k:'',g:id,o:o+i})}
+        /* 各期記錄用固定 id（ib_<doc>_i<期>）：重試時已寫入的期數會略過、缺的補上，規則已存在就不重建 */
+        insts.push({rule:S.rules.some(q=>q.id===id)?null:{id,fq:'I',name:nm,total:Math.abs(+x.tot)||amt*k,n:k,rate:parseFloat(x.rate)||0,start:x.dt,a:acct.id,off:sno-1,u:o},recs,nm})}
       dels.push(d.ref);continue}
     if(x.kind==='rensub'){const k=x.k==='inc'?'inc':'exp';const n=await renameSub(k,String(x.c||''),String(x.s||''),String(x.ns||'').trim());toast(n||S.cats[k].some(q=>q.n===x.c&&q.subs.includes(String(x.ns||'').trim()))?'Claude 已把「'+x.c+'・'+x.s+'」改名為「'+x.ns+'」（'+n+' 筆記錄）':'找不到子類別：'+x.c+'・'+x.s);dels.push(d.ref);continue}
     if(x.kind==='clrshop'){const pats=String(x.n||'').split(/[,、，]/).map(t=>t.trim()).filter(Boolean).map(t=>new RegExp('^'+t.replace(/[.+?^${}()|[\]\\]/g,'\\$&').replace(/\*/g,'.*')+'$','i'));
@@ -1984,7 +1986,7 @@ function processInbox(docs){let mine=[];inboxBusy=inboxBusy.then(async()=>{
   if(delNames.length){const td=TODAY();const gone=S.rules.filter(q=>q.fq!=='I'&&String(q.id).startsWith('ib_')&&delNames.includes(q.name));
     if(gone.length){const ids=S.recs.filter(r=>!r.x&&r.dt>td&&/_\d+_\d+$/.test(r.id)&&gone.some(q=>r.id.startsWith(q.id+'_'))).map(r=>r.id);
       S.rules=S.rules.filter(q=>!gone.includes(q));await saveKV('rules');if(ids.length)await mutate([],ids);scheduleRender();toast('Claude 幫你刪除了 '+gone.length+' 個週期')}}
-  if(apN||apDup||pxN)saveKV('settings');if(pxN)scheduleRender();
+  if(apN||apDup||pxN)await saveKV('settings');if(pxN)scheduleRender();
   if(add.length){Cloud.inboxN=(Cloud.inboxN||0)+add.length;await mutate(add);scheduleRender();const cl=add.filter(r=>r.tg!=='ap');
     toast([cl.length?'Claude 幫你記了 '+cl.length+' 筆：'+cl.slice(0,3).map(r=>(r.n||r.s)+' '+fmt(Math.abs(r.m))).join('、'):'',apN?'Apple Pay 自動記了 '+apN+' 筆'+(apUnk?'（'+apUnk+' 筆卡片未設定對應帳戶）':''):''].filter(Boolean).join('；')+(apDup?'；略過重複 '+apDup+' 筆':''))}
   else if(apDup)toast('Apple Pay：略過 '+apDup+' 筆已記過的交易')
@@ -2005,7 +2007,7 @@ function processInbox(docs){let mine=[];inboxBusy=inboxBusy.then(async()=>{
       S.recs.forEach(r=>{if(!r.x&&r.dt>td&&r.id.startsWith(rule.id+'_')&&/_\d+_\d+$/.test(r.id))dd.push(r.id)});
       rule.done=keep;rule.u=Date.now();ch=true}}
     if(ch){await saveKV('rules');if(dd.length)await mutate([],dd);await runRules();scheduleRender();toast('Claude 幫你更新了週期設定')}}
-  if(insts.length){for(const q of insts){S.rules.push(q.rule)}await saveKV('rules');await mutate(insts.flatMap(q=>q.recs));scheduleRender();toast('Claude 幫你建了 '+insts.length+' 個分期：'+insts.map(q=>q.rule.name).join('、'))}
+  if(insts.length){await mutate(insts.flatMap(q=>q.recs));const nr=insts.map(q=>q.rule).filter(Boolean);if(nr.length){S.rules.push(...nr);await saveKV('rules')}scheduleRender();toast('Claude 幫你建了 '+insts.length+' 個分期：'+insts.map(q=>q.nm).join('、'))}
   if(eds.length){const up=[],rm=[],bad=[],okN=[];
     for(const x of eds){const nm=String(x.n||'').trim();const dt=String(x.dt||'');if(!nm||!/^\d{4}-\d{2}-\d{2}$/.test(dt)){bad.push((nm||'?')+'（資料不完整）');continue}
       const hit=D.live.filter(r=>r.dt===dt&&((r.n||'')===nm||(!r.n&&r.s===nm))&&(!x.tm||r.tm===x.tm)&&(x.oamt==null||Math.abs(Math.abs(r.m)-Math.abs(+x.oamt))<0.5)&&(!x.a||r.a===x.a||D.acct.get(r.a)?.name===x.a));
@@ -2022,7 +2024,8 @@ function processInbox(docs){let mine=[];inboxBusy=inboxBusy.then(async()=>{
       up.push(o);okN.push(nm+(o.n!==nm?' → '+o.n:''))}
     if(up.length||rm.length){await mutate(up,rm);scheduleRender()}
     toast([okN.length?'Claude 幫你修改了：'+okN.slice(0,3).join('、'):'',bad.length?'沒有修改：'+bad.slice(0,3).join('、'):''].filter(Boolean).join('；'))}
-  dels.forEach(ref=>ref.delete().catch(()=>{}));
+  const dr=await Promise.allSettled(dels.map(ref=>ref.delete()));   /* 刪除失敗：移出 inboxSeen，下次查收件匣再處理（各指令皆可重複執行） */
+  const bad=dels.filter((ref,i)=>dr[i].status==='rejected');if(bad.length){bad.forEach(ref=>inboxSeen.delete((Cloud.user?Cloud.user.uid:'')+'/'+ref.id));Cloud.inboxErr='收件匣刪除失敗 '+bad.length+' 筆，稍後重試'}
 }).catch(e=>{mine.forEach(i=>inboxSeen.delete(i));Cloud.inboxErr='處理失敗：'+(e&&e.message||e)})}
 ACT['copy-uid']=el=>{const v=Cloud.user?.uid||'';(navigator.clipboard?.writeText(v)||Promise.reject()).then(()=>toast('已複製 UID'),()=>toast('請長按 UID 文字手動複製'))};
 
@@ -2711,8 +2714,8 @@ function pageHome(){
   const body=`${S.settings.sample?`<div class="note alert" style="margin-bottom:12px"><div class="grow">目前顯示的是<b>範例資料</b>，可以先試用各項功能。</div><button class="btn sm" data-act="clear-sample">清除並開始</button></div>`:''}
   <div class="cal${S.calCol?' col':''}" id="cal"><div class="calnav"><button class="ibtn" data-act="cal-nav" data-d="-1" aria-label="上一頁">${IC.l}</button><span class="num">${S.calCol?'':`${S.month.replace('-',' / ')}`}</span><button class="ibtn" data-act="cal-nav" data-d="1" aria-label="下一頁">${IC.r}</button></div>
     <div class="cal-wd">${wdh}</div><div class="cal-grid">${calCells()}</div><button class="cal-handle" data-act="cal-col" aria-label="${S.calCol?'展開月曆':'收合月曆'}"><i></i></button></div>
-  <button class="pcard" data-act="home-proj"><span class="hb pj">${proj?'🐷':'📒'}</span><div style="min-width:0"><div class="t">${esc(proj||'全部記錄')}</div><div class="s">${proj?`專案總額 <span class="num ${tot<0?'neg':'pos'}">${money(Math.round(Math.abs(tot)))}</span>`:`本月 支 <span class="num neg">${shortNum(ms.exp)}</span> · 收 <span class="num pos">${shortNum(ms.inc)}</span>`}</div></div>
-    <div class="amt num"><span class="neg">${money(Math.round(dexp))}</span><i>•</i><span class="pos">${money(Math.round(dinc))}</span></div></button>
+  <button class="pcard pc2" data-act="home-proj"><span class="hb pj">${proj?'🐷':'📒'}</span><div style="min-width:0"><div class="t">${esc(proj||'全部記錄')}</div></div>
+    <div class="amt num"><span class="neg">${money(Math.round(dexp))}</span><i>•</i><span class="pos">${money(Math.round(dinc))}</span></div><div class="s">${proj?`專案總額 <span class="num ${tot<0?'neg':'pos'}">${money(Math.round(Math.abs(tot)))}</span>`:`本月 支 <span class="num neg">${money(Math.round(ms.exp))}</span> · 收 <span class="num pos">${money(Math.round(ms.inc))}</span>`}</div></button>
   <div class="hlist">${budgetBlock(ym,true)?`<div class="sum mt">${budgetBlock(ym,true)}</div>`:''}${list.length?homeItems(list):`<div class="empty">這天沒有記錄<br><button class="btn pri mt" data-act="add">記一筆</button></div>`}</div>`;
   return{head,body,cls:'home'};
 }
