@@ -334,6 +334,7 @@ input[type=date].in,input[type=time].in{min-width:0;width:100%;display:block;-we
   .tab.add svg{stroke:var(--accent);width:30px;height:30px;stroke-width:2}
 }
 .srt{display:grid;gap:6px;margin-top:10px}
+#projList .li{touch-action:pan-y}#projList .li.drag{box-shadow:var(--shadow);position:relative;z-index:2;background:var(--paper)}.proj-h{font-size:20px;line-height:1;color:var(--muted);padding:4px 2px 4px 0;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;flex:none}
 .srt-row{-webkit-user-select:none;user-select:none;display:flex;align-items:center;gap:8px;background:var(--paper);border:1px solid var(--rule);border-radius:12px;padding:6px 8px}
 .srt-row.drag{box-shadow:var(--shadow);border-color:var(--accent);position:relative;z-index:2}
 .srt-h{font-size:22px;line-height:1;color:var(--muted);padding:6px 10px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -568,7 +569,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.76';
+window.APP_VER='v2.0.77';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1272,13 +1273,24 @@ function projDoneAt(name){const d=(S.settings.projDone||{})[name];if(d)return d;
 function pageProjects(){
   const stat=new Map();for(const r of D.live){if(!r.p)continue;const o=stat.get(r.p)||{n:r.p,c:0,sp:0,first:r.dt,last:r.dt};o.c++;o.sp+=spendOf(r)*rateOf(curOf(r));if(r.dt<o.first)o.first=r.dt;if(r.dt>o.last)o.last=r.dt;stat.set(r.p,o)}
   const arr=[...stat.values()].sort((a,b)=>a.last<b.last?1:-1);const done={};arr.forEach(o=>{const d=projDoneAt(o.n);if(d)done[o.n]=d});
-  const li=o=>`<button class="li" data-act="push" data-p="project" data-id="${esc(o.n)}"><div class="grow"><div>${esc(o.n)}${done[o.n]?'<span class="pill">已完成</span>':''}</div><small class="num">${o.first.replace(/-/g,'/')} – ${o.last.replace(/-/g,'/')} · ${o.c} 筆</small></div><div class="r num neg">${money(o.sp)}</div><span class="chev">${IC.chev}</span></button>`;
-  const act=arr.filter(o=>!done[o.n]),fin=arr.filter(o=>done[o.n]).sort((a,b)=>(done[a.n]<done[b.n]?1:-1));const op=S.projDoneOpen;
+  const li=(o,drag)=>`<div class="li" role="button" tabindex="0" data-act="push" data-p="project" data-id="${esc(o.n)}"${drag?` data-n="${esc(o.n)}"`:''}>${drag?`<span class="proj-h" aria-label="拖曳排序">≡</span>`:''}<div class="grow"><div>${esc(o.n)}${done[o.n]?'<span class="pill">已完成</span>':''}</div><small class="num">${o.first.replace(/-/g,'/')} – ${o.last.replace(/-/g,'/')} · ${o.c} 筆</small></div><div class="r num neg">${money(o.sp)}</div><span class="chev">${IC.chev}</span></div>`;
+  let act=arr.filter(o=>!done[o.n]);const fin=arr.filter(o=>done[o.n]).sort((a,b)=>(done[a.n]<done[b.n]?1:-1));const op=S.projDoneOpen;
+  const ord=S.settings.projOrder||[];act=act.map((o,i)=>({o,i})).sort((a,b)=>{const ia=ord.indexOf(a.o.n),ib=ord.indexOf(b.o.n);if(ia<0&&ib<0)return a.i-b.i;if(ia<0)return 1;if(ib<0)return-1;return ia-ib}).map(x=>x.o);
   const sum=xs=>money(Math.round(xs.reduce((t,o)=>t+o.sp,0)));
-  return{back:1,head:`<h1>專案</h1>`,body:arr.length?`<div class="grp" style="margin-top:0"><div class="grph"><span>進行中（${act.length}）</span><span class="num">${sum(act)}</span></div>${act.length?`<div class="list">${act.map(li).join('')}</div>`:'<div class="empty" style="padding:16px 0">沒有進行中的專案</div>'}</div>
-  ${fin.length?`<div class="grp"><button class="grph" data-act="proj-done-list" style="width:100%;border:0;background:none;cursor:pointer"><span>已完成（${fin.length}）</span><span>${op?'收合':'展開'}</span></button>${op?`<div class="list">${fin.map(li).join('')}</div>`:''}</div>`:''}
+  return{back:1,head:`<h1>專案</h1>`,body:arr.length?`<div class="grp" style="margin-top:0"><div class="grph"><span>進行中（${act.length}）</span><span class="num">${sum(act)}</span></div>${act.length?`<div class="list" id="projList">${act.map(o=>li(o,true)).join('')}</div><div class="hint mt">按住 ≡ 拖曳可調整順序</div>`:'<div class="empty" style="padding:16px 0">沒有進行中的專案</div>'}</div>
+  ${fin.length?`<div class="grp"><button class="grph" data-act="proj-done-list" style="width:100%;border:0;background:none;cursor:pointer"><span>已完成（${fin.length}）</span><span>${op?'收合':'展開'}</span></button>${op?`<div class="list">${fin.map(o=>li(o,false)).join('')}</div>`:''}</div>`:''}
   <div class="hint mt">超過 ${PROJ_IDLE} 天沒有新記錄的專案會自動移到已完成（名稱以年月開頭的旅遊專案是 ${PROJ_TRIP} 天），再記一筆就會回到進行中；也可以點進專案手動「標記為已完成」或「重新開啟」。已完成的專案不會出現在記帳時的專案建議清單。</div>`:'<div class="empty">還沒有專案。記帳時在「專案」欄填入名稱即可建立。</div>'};
 }
+async function projSaveOrder(order){S.settings.projOrder=order;S.settings.u=Date.now();await saveKV('settings')}
+let pjDrag=null;
+document.addEventListener('click',e=>{if(e.target.closest('.proj-h'))e.stopPropagation()},true);
+document.addEventListener('pointerdown',e=>{const h=e.target.closest('.proj-h');if(!h)return;e.preventDefault();const row=h.closest('.li');const box=row.parentElement;
+  pjDrag={row,box,id:e.pointerId};row.classList.add('drag');try{h.setPointerCapture(e.pointerId)}catch(_){}});
+document.addEventListener('pointermove',e=>{if(!pjDrag||e.pointerId!==pjDrag.id)return;e.preventDefault();const rows=[...pjDrag.box.children].filter(r=>r!==pjDrag.row);
+  let before=null;for(const r of rows){const b=r.getBoundingClientRect();if(e.clientY<b.top+b.height/2){before=r;break}}
+  if(before!==pjDrag.row.nextSibling)pjDrag.box.insertBefore(pjDrag.row,before)},{passive:false});
+['pointerup','pointercancel'].forEach(t=>document.addEventListener(t,e=>{if(!pjDrag||e.pointerId!==pjDrag.id)return;pjDrag.row.classList.remove('drag');const box=pjDrag.box;pjDrag=null;
+  if(box&&box.id==='projList')projSaveOrder([...box.children].map(r=>r.dataset.n))}));
 function pageProject(name){
   const rs=D.live.filter(r=>r.p===name);const by=new Map();let sp=0,inc=0;
   for(const r of rs){const k=rateOf(curOf(r));const v=spendOf(r)*k;sp+=v;inc+=incomeOf(r)*k;if(v)by.set(r.c,(by.get(r.c)||0)+v)}
