@@ -336,6 +336,7 @@ input[type=date].in,input[type=time].in{min-width:0;width:100%;display:block;-we
 .srt{display:grid;gap:6px;margin-top:10px}
 #projList .li{touch-action:pan-y}#projList .li.drag{box-shadow:var(--shadow);position:relative;z-index:2;background:var(--paper)}.proj-h{font-size:20px;line-height:1;color:var(--muted);padding:4px 2px 4px 0;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;flex:none}
 #catList .catcard.drag{box-shadow:var(--shadow);position:relative;z-index:2}.cat-h{font-size:20px;line-height:1;color:var(--muted);padding:4px 6px 4px 0;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;flex:none}
+.subrow{cursor:pointer}.subrow.drag{box-shadow:var(--shadow);position:relative;z-index:2;background:var(--paper)}.sub-h{font-size:16px;line-height:1;color:var(--muted);padding:2px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;flex:none}
 .srt-row{-webkit-user-select:none;user-select:none;display:flex;align-items:center;gap:8px;background:var(--paper);border:1px solid var(--rule);border-radius:12px;padding:6px 8px}
 .srt-row.drag{box-shadow:var(--shadow);border-color:var(--accent);position:relative;z-index:2}
 .srt-h{font-size:22px;line-height:1;color:var(--muted);padding:6px 10px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -570,7 +571,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.78';
+window.APP_VER='v2.0.79';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1333,9 +1334,23 @@ function pageTpls(){return{back:1,head:`<h1>範本</h1>`,body:S.tpls.length?`<di
 function pageCats(){
   const k=S.catTab||'exp';const used=new Map();for(const r of D.live){if((k==='exp'&&r.t==='支出')||(k==='inc'&&r.t==='收入'))used.set(r.c,(used.get(r.c)||0)+1)}
   return{back:1,head:`<h1>分類管理</h1>`,body:`<div class="toolbar"><div class="seg"><button class="${k==='exp'?'on':''}" data-act="cat-tab" data-k="exp">支出</button><button class="${k==='inc'?'on':''}" data-act="cat-tab" data-k="inc">收入</button></div><button class="btn sm pri" data-act="cat-add">新增主類別</button></div>
-  <div id="catList">${S.cats[k].map((c,i)=>`<div class="card stack catcard" style="gap:10px" data-cn="${esc(c.n)}"><div class="toolbar"><div style="display:flex;gap:6px;align-items:center;min-width:0"><span class="cat-h" aria-label="拖曳排序">≡</span><button class="badge" style="background:var(--c${c.ci});border:0" data-act="cat-color" data-i="${i}" aria-label="變更顏色">${esc(c.n.slice(0,1))}</button><div style="min-width:0"><b>${esc(c.n)}</b><div class="hint">${used.get(c.n)||0} 筆</div></div></div><div class="btns"><button class="btn sm" data-act="cat-move" data-i="${i}" data-d="-1" aria-label="上移">↑</button><button class="btn sm" data-act="cat-move" data-i="${i}" data-d="1" aria-label="下移">↓</button><button class="btn sm" data-act="cat-ren" data-i="${i}">改名</button><button class="btn sm" data-act="cat-sub-add" data-i="${i}">＋子類別</button>${c.subs.length>1?`<button class="btn sm" data-act="sub-sort" data-i="${i}">子類別排序</button>`:''}${used.get(c.n)?'':`<button class="btn sm danger" data-act="cat-del" data-i="${i}">刪除</button>`}</div></div><div class="sublist">${c.subs.map((s,j)=>`<button class="subrow" data-act="cat-sub-ren" data-i="${i}" data-j="${j}"><span class="hb sm" style="--bc:${(CAT_ICON[c.n]||{}).col||`var(--c${c.ci})`}">${iconOf(c.n,s)||esc(s.slice(0,1))}</span><span>${esc(s)}</span></button>`).join('')}</div></div>`).join('')}</div>
-  <div class="hint mt">按主類別左邊的 ≡ 可拖曳調整順序；子類別可點「子類別排序」拖曳調整（記帳時的選單也會照這個順序）。點子類別可改名、換圖示或刪除。改名會同步更新所有相關記錄。</div>`};
+  <div id="catList">${S.cats[k].map((c,i)=>`<div class="card stack catcard" style="gap:10px" data-cn="${esc(c.n)}"><div class="toolbar"><div style="display:flex;gap:6px;align-items:center;min-width:0"><span class="cat-h" aria-label="拖曳排序">≡</span><button class="badge" style="background:var(--c${c.ci});border:0" data-act="cat-color" data-i="${i}" aria-label="變更顏色">${esc(c.n.slice(0,1))}</button><div style="min-width:0"><b>${esc(c.n)}</b><div class="hint">${used.get(c.n)||0} 筆</div></div></div><div class="btns"><button class="btn sm" data-act="cat-move" data-i="${i}" data-d="-1" aria-label="上移">↑</button><button class="btn sm" data-act="cat-move" data-i="${i}" data-d="1" aria-label="下移">↓</button><button class="btn sm" data-act="cat-ren" data-i="${i}">改名</button><button class="btn sm" data-act="cat-sub-add" data-i="${i}">＋子類別</button>${c.subs.length>1?`<button class="btn sm" data-act="sub-sort" data-i="${i}">子類別排序</button>`:''}${used.get(c.n)?'':`<button class="btn sm danger" data-act="cat-del" data-i="${i}">刪除</button>`}</div></div><div class="sublist">${c.subs.map((s,j)=>`<div class="subrow" role="button" tabindex="0" data-act="cat-sub-ren" data-i="${i}" data-j="${j}" data-sn="${esc(s)}"><span class="sub-h" aria-label="拖曳排序">≡</span><span class="hb sm" style="--bc:${(CAT_ICON[c.n]||{}).col||`var(--c${c.ci})`}">${iconOf(c.n,s)||esc(s.slice(0,1))}</span><span>${esc(s)}</span></div>`).join('')}</div></div>`).join('')}</div>
+  <div class="hint mt">按主類別或子類別左邊的 ≡ 可直接拖曳調整順序（記帳時的選單也會照這個順序）。點子類別可改名、換圖示或刪除。改名會同步更新所有相關記錄。</div>`};
 }
+async function subSaveOrder(cn,order){const k=S.catTab||'exp';const c=S.cats[k].find(x=>x.n===cn);if(!c)return;
+  const next=order.filter(n=>c.subs.includes(n));for(const n of c.subs)if(!next.includes(n))next.push(n);   // 保險：名稱沒對上的補回結尾
+  c.subs=next;S.cats.u=Date.now();await saveKV('cats');render(true)}
+let subDrag=null;
+document.addEventListener('click',e=>{if(e.target.closest('.sub-h'))e.stopPropagation()},true);
+document.addEventListener('pointerdown',e=>{const h=e.target.closest('.sub-h');if(!h)return;e.preventDefault();const row=h.closest('.subrow');const box=row.parentElement;
+  subDrag={row,box,id:e.pointerId};row.classList.add('drag');try{h.setPointerCapture(e.pointerId)}catch(_){}});
+document.addEventListener('pointermove',e=>{if(!subDrag||e.pointerId!==subDrag.id)return;e.preventDefault();
+  const items=[...subDrag.box.children];let target=null,bestD=Infinity;
+  for(const el of items){if(el===subDrag.row)continue;const r=el.getBoundingClientRect();const dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2);const d=dx*dx+dy*dy;if(d<bestD){bestD=d;target=el}}
+  if(!target)return;const curIdx=items.indexOf(subDrag.row),tgtIdx=items.indexOf(target);
+  subDrag.box.insertBefore(subDrag.row,curIdx<tgtIdx?target.nextSibling:target)},{passive:false});
+['pointerup','pointercancel'].forEach(t=>document.addEventListener(t,e=>{if(!subDrag||e.pointerId!==subDrag.id)return;subDrag.row.classList.remove('drag');const box=subDrag.box;subDrag=null;
+  if(box&&box.classList.contains('sublist')){const cn=box.closest('.catcard')?.dataset.cn;if(cn)subSaveOrder(cn,[...box.children].map(r=>r.dataset.sn))}}));
 async function catSaveOrder(order){const k=S.catTab||'exp';const byName=new Map(S.cats[k].map(c=>[c.n,c]));const next=order.map(n=>byName.get(n)).filter(Boolean);
   for(const c of S.cats[k])if(!next.includes(c))next.push(c);   // 保險：名稱沒對上的（理論上不會發生）補回結尾，避免整類別消失
   S.cats[k]=next;S.cats.u=Date.now();await saveKV('cats');render(true)}
