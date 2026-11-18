@@ -334,8 +334,8 @@ input[type=date].in,input[type=time].in{min-width:0;width:100%;display:block;-we
   .tab.add svg{stroke:var(--accent);width:30px;height:30px;stroke-width:2}
 }
 .srt{display:grid;gap:6px;margin-top:10px}
-#projList .li{touch-action:pan-y}#projList .li.drag{box-shadow:var(--shadow);position:relative;z-index:2;background:var(--paper)}.proj-h{font-size:20px;line-height:1;color:var(--muted);padding:4px 2px 4px 0;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;flex:none}
-#catList .catcard.drag{box-shadow:var(--shadow);position:relative;z-index:2}.cat-h{font-size:20px;line-height:1;color:var(--muted);padding:4px 6px 4px 0;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;flex:none}
+#projList .li{touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}#projList .li.drag{box-shadow:var(--shadow);position:relative;z-index:2;background:var(--paper)}.proj-h{font-size:20px;line-height:1;color:var(--muted);padding:4px 2px 4px 0;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;flex:none}
+#catList .catcard{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}#catList .catcard.drag{box-shadow:var(--shadow);position:relative;z-index:2}.cat-h{font-size:20px;line-height:1;color:var(--muted);padding:4px 6px 4px 0;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;flex:none}
 .subrow{cursor:pointer}.subrow.drag{box-shadow:var(--shadow);position:relative;z-index:2;background:var(--paper)}.sub-h{font-size:16px;line-height:1;color:var(--muted);padding:2px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;flex:none}
 .srt-row{-webkit-user-select:none;user-select:none;display:flex;align-items:center;gap:8px;background:var(--paper);border:1px solid var(--rule);border-radius:12px;padding:6px 8px}
 .srt-row.drag{box-shadow:var(--shadow);border-color:var(--accent);position:relative;z-index:2}
@@ -386,7 +386,7 @@ button.dtitle{border:0;background:none;padding:0;color:inherit}
 .row.hrow .amt .num,.pcard .amt,.dtitle h1{font-family:var(--sans);font-variant-numeric:tabular-nums;letter-spacing:0}
 .row.hrow .amt{font-size:18px}
 .sublist{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
-.subrow{display:flex;align-items:center;gap:8px;border:1px solid var(--rule);background:var(--paper);border-radius:12px;padding:6px 8px;text-align:left;min-width:0}
+.subrow{display:flex;align-items:center;gap:8px;border:1px solid var(--rule);background:var(--paper);border-radius:12px;padding:6px 8px;text-align:left;min-width:0;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .subrow span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .icpick{display:grid;grid-template-columns:repeat(10,1fr);gap:4px;margin-top:8px}
 .icpick button{border:0;background:none;font-size:22px;padding:4px 0;border-radius:8px}
@@ -571,7 +571,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.79';
+window.APP_VER='v2.0.80';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
