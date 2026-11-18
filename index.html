@@ -334,8 +334,10 @@ input[type=date].in,input[type=time].in{min-width:0;width:100%;display:block;-we
   .tab.add svg{stroke:var(--accent);width:30px;height:30px;stroke-width:2}
 }
 .srt{display:grid;gap:6px;margin-top:10px}
-#projList .li{touch-action:pan-y}#projList .li.drag{box-shadow:var(--shadow);position:relative;z-index:2;background:var(--paper)}.proj-h{font-size:20px;line-height:1;color:var(--muted);padding:4px 2px 4px 0;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;flex:none}
-#catList .catcard.drag{box-shadow:var(--shadow);position:relative;z-index:2}.cat-h{font-size:20px;line-height:1;color:var(--muted);padding:4px 6px 4px 0;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;flex:none}
+#projList .li{touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}#projList .li.drag{box-shadow:var(--shadow);position:relative;z-index:2;background:var(--paper)}.proj-h{font-size:20px;line-height:1;color:var(--muted);padding:4px 2px 4px 0;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;flex:none}
+#catList .catcard{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}#catList .catcard.drag{box-shadow:var(--shadow);position:relative;z-index:2}
+#mktList .li{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}#mktList .li.drag{box-shadow:var(--shadow);position:relative;z-index:2;background:var(--paper)}.mk-h{font-size:20px;line-height:1;color:var(--muted);padding:4px 2px 4px 0;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;flex:none}
+.hdList .li{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}.hdList .li.drag{box-shadow:var(--shadow);position:relative;z-index:2;background:var(--paper)}.hd-h{font-size:20px;line-height:1;color:var(--muted);padding:4px 2px 4px 0;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;flex:none}.cat-h{font-size:20px;line-height:1;color:var(--muted);padding:4px 6px 4px 0;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;flex:none}
 .subrow{cursor:pointer}.subrow.drag{box-shadow:var(--shadow);position:relative;z-index:2;background:var(--paper)}.sub-h{font-size:16px;line-height:1;color:var(--muted);padding:2px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;flex:none}
 .srt-row{-webkit-user-select:none;user-select:none;display:flex;align-items:center;gap:8px;background:var(--paper);border:1px solid var(--rule);border-radius:12px;padding:6px 8px}
 .srt-row.drag{box-shadow:var(--shadow);border-color:var(--accent);position:relative;z-index:2}
@@ -386,7 +388,7 @@ button.dtitle{border:0;background:none;padding:0;color:inherit}
 .row.hrow .amt .num,.pcard .amt,.dtitle h1{font-family:var(--sans);font-variant-numeric:tabular-nums;letter-spacing:0}
 .row.hrow .amt{font-size:18px}
 .sublist{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
-.subrow{display:flex;align-items:center;gap:8px;border:1px solid var(--rule);background:var(--paper);border-radius:12px;padding:6px 8px;text-align:left;min-width:0}
+.subrow{display:flex;align-items:center;gap:8px;border:1px solid var(--rule);background:var(--paper);border-radius:12px;padding:6px 8px;text-align:left;min-width:0;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .subrow span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .icpick{display:grid;grid-template-columns:repeat(10,1fr);gap:4px;margin-top:8px}
 .icpick button{border:0;background:none;font-size:22px;padding:4px 0;border-radius:8px}
@@ -571,7 +573,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.79';
+window.APP_VER='v2.0.81';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -3223,15 +3225,27 @@ function mktParts(){const H=S.settings.hold||[];const g=S.settings.gold;const fx
     {k:'外匯',p:'fx',v:fx.reduce((t,x)=>t+x.v,0),d:S.rates.at||'',sub:fx.length?new Set(fx.map(x=>x.a.cur)).size+' 種幣別':'沒有外幣餘額'}]}
 function mktTotal(){return mktParts().reduce((t,x)=>t+x.v,0)}
 function mktDate(){return mktParts().map(x=>x.d).filter(Boolean).sort().pop()||'—'}
-function pageMarket(){const P=mktParts();const tot=P.reduce((t,x)=>t+x.v,0);const fx=fxList();
-  const row=x=>x.p?`<button class="li" data-act="push" data-p="${x.p}"><div class="grow"><div>${x.k}</div><small>${esc(x.sub)}${x.d?' · 更新：'+x.d:''}</small></div><div class="r num">${x.v?money(x.v):'—'}</div><span class="chev">${IC.chev}</span></button>`
-    :`<div class="li"><div class="grow"><div>${x.k}</div><small>${esc(x.sub)}${x.d?' · 匯率更新：'+esc(x.d):''}</small></div><div class="r num">${x.v?money(x.v):'—'}</div></div>`;
+function pageMarket(){let P=mktParts();const tot=P.reduce((t,x)=>t+x.v,0);const fx=fxList();
+  const mo=S.settings.mktOrder||[];P=P.map((x,i)=>({x,i})).sort((a,b)=>{const ia=mo.indexOf(a.x.k),ib=mo.indexOf(b.x.k);if(ia<0&&ib<0)return a.i-b.i;if(ia<0)return 1;if(ib<0)return-1;return ia-ib}).map(y=>y.x);
+  const row=x=>{const h=`<span class="mk-h" aria-label="拖曳排序">≡</span>`,body=`<div class="grow"><div>${x.k}</div><small>${esc(x.sub)}${x.d?' · 更新：'+x.d:''}</small></div><div class="r num">${x.v?money(x.v):'—'}</div>`;
+    return x.p?`<div class="li" role="button" tabindex="0" data-act="push" data-p="${x.p}" data-mk="${esc(x.k)}">${h}${body}<span class="chev">${IC.chev}</span></div>`
+      :`<div class="li" data-mk="${esc(x.k)}">${h}${body}</div>`};
   return{back:1,head:`<h1>投資市值</h1><button class="ibtn" data-act="px-refresh" aria-label="更新價格">${IC.sync||'↻'}</button>`,body:`
   <div class="sum"><div class="lbl">投資市值（TWD） · 更新：${esc(mktDate())}</div><div class="huge num">${fmt(tot)}</div>
    <div class="kv mt">${P.map(x=>`<div><div class="lbl">${x.k}</div><div class="v num">${fmt(x.v)}</div></div>`).join('')}</div>
    </div>
-  <div class="grp"><div class="list">${P.map(row).join('')}</div></div>
+  <div class="grp"><div class="list" id="mktList">${P.map(row).join('')}</div></div>
 `}}
+async function mktSaveOrder(order){S.settings.mktOrder=order;S.settings.u=Date.now();await saveKV('settings');render(true)}
+let mktDrag=null;
+document.addEventListener('click',e=>{if(e.target.closest('.mk-h'))e.stopPropagation()},true);
+document.addEventListener('pointerdown',e=>{const h=e.target.closest('.mk-h');if(!h)return;e.preventDefault();const row=h.closest('.li');const box=row.parentElement;
+  mktDrag={row,box,id:e.pointerId};row.classList.add('drag');try{h.setPointerCapture(e.pointerId)}catch(_){}});
+document.addEventListener('pointermove',e=>{if(!mktDrag||e.pointerId!==mktDrag.id)return;e.preventDefault();const rows=[...mktDrag.box.children].filter(r=>r!==mktDrag.row);
+  let before=null;for(const r of rows){const b=r.getBoundingClientRect();if(e.clientY<b.top+b.height/2){before=r;break}}
+  if(before!==mktDrag.row.nextSibling)mktDrag.box.insertBefore(mktDrag.row,before)},{passive:false});
+['pointerup','pointercancel'].forEach(t=>document.addEventListener(t,e=>{if(!mktDrag||e.pointerId!==mktDrag.id)return;mktDrag.row.classList.remove('drag');const box=mktDrag.box;mktDrag=null;
+  if(box&&box.id==='mktList')mktSaveOrder([...box.children].map(r=>r.dataset.mk))}));
 function pageFx(){const fx=fxList();const tot=fx.reduce((t,x)=>t+x.v,0);const by=new Map();for(const x of fx){const o=by.get(x.a.cur)||{cur:x.a.cur,b:0,v:0,L:[]};o.b+=x.b;o.v+=x.v;o.L.push(x);by.set(x.a.cur,o)}
   const C=[...by.values()].sort((a,b)=>b.v-a.v);
   return{back:1,head:`<h1>外匯</h1><button class="ibtn" data-act="px-refresh" aria-label="更新">${IC.sync||'↻'}</button>`,body:`
@@ -3240,19 +3254,36 @@ function pageFx(){const fx=fxList();const tot=fx.reduce((t,x)=>t+x.v,0);const by
    <div class="hint mt">外幣帳戶正餘額 × 臺灣銀行現金買入匯率（不含信用卡），已含在「帳戶」頁淨資產內。</div></div>
   ${C.map(c=>`<div class="grp"><div class="grph"><span>${c.cur} · ${money(c.b,c.cur)} × ${S.rates.r[c.cur]||'?'}</span><span class="num">${money(c.v)}</span></div><div class="list">${c.L.map(x=>`<button class="li" data-act="push" data-p="acct" data-id="${x.a.id}"><div class="grow"><div>${esc(x.a.name)}</div><small class="num">${money(x.b,x.a.cur)}</small></div><div class="r num">${money(x.v)}</div><span class="chev">${IC.chev}</span></button>`).join('')}</div></div>`).join('')||'<div class="empty">沒有外幣餘額</div>'}`}}
 const PF_OPEN=new Set();   // 股票市值頁：展開中的組合（預設全部收合）
+const HOLD_SORTS={custom:'自訂（可拖曳）',mv:'市值排序',code:'代碼排序'};
+function holdSorted(rs,mode){if(mode==='mv')return[...rs].sort((a,b)=>b.v-a.v);if(mode==='code')return[...rs].sort((a,b)=>String(a.h.code||'').localeCompare(String(b.h.code||''),'zh-Hant-u-co-numeric'));return rs}
 function pageInvest(){const H=S.settings.hold||[];const mvOf=h=>(+h.px||0)*(+h.sh||0)*rateOf(h.cu||'TWD');const tot=H.reduce((t,h)=>t+mvOf(h),0);
   const pd=H.filter(h=>h.pxd&&!h.pxManual&&(h.cu||'TWD')==='TWD').map(h=>h.pxd).sort().pop();
-  const pfs=pfList().map(pf=>{const rs=H.map((h,i)=>({h,i})).filter(x=>(x.h.pf||'我的')===pf);const t=rs.reduce((s,x)=>s+mvOf(x.h),0);
-    const op=PF_OPEN.has(pf);return`<div class="grp"><button class="grph pfh" data-act="pf-tog" data-pf="${esc(pf)}"><span>${op?'▾':'▸'} ${esc(pf)} · ${rs.length} 檔</span><span class="num">${money(Math.round(t))}</span></button>${op?`<div class="list">${rs.map(({h,i})=>{const cu=h.cu||'TWD';return`<button class="li" data-act="hd-edit" data-i="${i}"><div class="grow"><div>${esc(holdName(h))} <small class="num">${esc(h.code)}</small></div>
-      <small class="num">${(+h.sh||0).toLocaleString('zh-TW',{maximumFractionDigits:5})} 股 × ${h.px?(cu!=='TWD'?cu+' ':'')+(+h.px).toLocaleString('zh-TW',{maximumFractionDigits:2}):'尚無價格'}${h.pxManual?'（手動）':h.pxd?' · '+h.pxd.slice(5).replace('-','/'):''}</small></div><div class="r num">${h.px?money(Math.round(mvOf(h))):'—'}</div></button>`}).join('')}</div>`:''}</div>`}).join('');
+  const mode=HOLD_SORTS[S.settings.holdSort]?S.settings.holdSort:'custom';
+  const pfs=pfList().map(pf=>{let rs=H.map((h,i)=>({h,i,v:mvOf(h)})).filter(x=>(x.h.pf||'我的')===pf);const t=rs.reduce((s,x)=>s+x.v,0);rs=holdSorted(rs,mode);
+    const op=PF_OPEN.has(pf);return`<div class="grp"><button class="grph pfh" data-act="pf-tog" data-pf="${esc(pf)}"><span>${op?'▾':'▸'} ${esc(pf)} · ${rs.length} 檔</span><span class="num">${money(Math.round(t))}</span></button>${op?`<div class="list hdList" data-pf="${esc(pf)}">${rs.map(({h,i,v})=>{const cu=h.cu||'TWD';return`<div class="li" role="button" tabindex="0" data-act="hd-edit" data-i="${i}" data-hid="${esc(h.id)}">${mode==='custom'?`<span class="hd-h" aria-label="拖曳排序">≡</span>`:''}<div class="grow"><div>${esc(holdName(h))} <small class="num">${esc(h.code)}</small></div>
+      <small class="num">${(+h.sh||0).toLocaleString('zh-TW',{maximumFractionDigits:5})} 股 × ${h.px?(cu!=='TWD'?cu+' ':'')+(+h.px).toLocaleString('zh-TW',{maximumFractionDigits:2}):'尚無價格'}${h.pxManual?'（手動）':h.pxd?' · '+h.pxd.slice(5).replace('-','/'):''}</small></div><div class="r num">${h.px?money(Math.round(v)):'—'}</div></div>`}).join('')}</div>`:''}</div>`}).join('');
   return{back:1,head:`<h1>股票市值</h1><button class="ibtn" data-act="px-refresh" aria-label="更新股價">${IC.sync||'↻'}</button>`,body:`
   <div class="sum"><div class="lbl">持股市值（TWD）${pd?' · 台股 '+pd.slice(5).replace('-','/')+' 收盤':''}</div><div class="huge num">${fmt(Math.round(tot))}</div>
    ${pfList().length>1?`<div class="kv mt">${pfList().map(pf=>`<div><div class="lbl">${esc(pf)}</div><div class="v num">${fmt(Math.round(H.filter(h=>(h.pf||'我的')===pf).reduce((s,h)=>s+mvOf(h),0)))}</div></div>`).join('')}</div>`:''}
-   <div class="hint mt">市值＝股數 × 前一交易日收盤價，外幣以臺銀現金買入匯率換算，不計入「帳戶」頁的淨資產。點持股可改股數。</div></div>
+   <div class="hint mt">市值＝股數 × 前一交易日收盤價，外幣以臺銀現金買入匯率換算，不計入「帳戶」頁的淨資產。點持股可改股數。</div>
+   <div class="seg mt">${Object.entries(HOLD_SORTS).map(([m,lbl])=>`<button class="${mode===m?'on':''}" data-act="hd-sort" data-m="${m}">${lbl}</button>`).join('')}</div></div>
   ${pfs||'<div class="empty">尚未加入持股</div>'}
   <div class="card stack"><div class="lbl">新增持股</div><div class="grid3"><label class="field"><span>組合</span><input class="in" id="hd-pf" list="hd-pfl" value="${esc(pfList()[0]||'我的')}"><datalist id="hd-pfl">${pfList().map(p=>`<option value="${esc(p)}">`).join('')}</datalist></label><label class="field"><span>代號</span><input class="in" id="hd-code" placeholder="2884、NVDA" autocomplete="off"></label><label class="field"><span>股數</span><input class="in num" id="hd-sh" inputmode="decimal" placeholder="1000"></label></div>
    <button class="btn pri" data-act="hd-add">加入</button></div>
   <details class="card"><summary class="lbl" style="cursor:pointer">批次貼上持股</summary><div class="stack" style="margin-top:8px"><div class="hint">每行一檔：<code>組合, 代號, 股數</code>。同組合同代號會覆蓋股數。美股代號（英文）自動當成美元計價。</div><textarea class="in" id="hd-bulk" rows="6" placeholder="我的, 0050, 1000&#10;我的, AAPL, 2.5"></textarea><button class="btn" data-act="hd-bulk">匯入</button></div></details>`}}
+async function holdSaveOrder(pf,order){const H=S.settings.hold||[];let inserted=false;const out=[];
+  for(const h of H){if((h.pf||'我的')===pf){if(!inserted){for(const id of order){const x=H.find(y=>y.id===id);if(x)out.push(x)}inserted=true}}else out.push(h)}
+  if(!inserted)for(const id of order){const x=H.find(y=>y.id===id);if(x)out.push(x)}
+  S.settings.hold=out;S.settings.u=Date.now();await saveKV('settings');render(true)}
+let hdDrag=null;
+document.addEventListener('click',e=>{if(e.target.closest('.hd-h'))e.stopPropagation()},true);
+document.addEventListener('pointerdown',e=>{const h=e.target.closest('.hd-h');if(!h)return;e.preventDefault();const row=h.closest('.li');const box=row.parentElement;
+  hdDrag={row,box,id:e.pointerId};row.classList.add('drag');try{h.setPointerCapture(e.pointerId)}catch(_){}});
+document.addEventListener('pointermove',e=>{if(!hdDrag||e.pointerId!==hdDrag.id)return;e.preventDefault();const rows=[...hdDrag.box.children].filter(r=>r!==hdDrag.row);
+  let before=null;for(const r of rows){const b=r.getBoundingClientRect();if(e.clientY<b.top+b.height/2){before=r;break}}
+  if(before!==hdDrag.row.nextSibling)hdDrag.box.insertBefore(hdDrag.row,before)},{passive:false});
+['pointerup','pointercancel'].forEach(t=>document.addEventListener(t,e=>{if(!hdDrag||e.pointerId!==hdDrag.id)return;hdDrag.row.classList.remove('drag');const box=hdDrag.box;hdDrag=null;
+  if(box&&box.classList.contains('hdList')){const pf=box.dataset.pf;if(pf)holdSaveOrder(pf,[...box.children].map(r=>r.dataset.hid))}}));
 function holdEditSheet(i){const h=(S.settings.hold||[])[i];if(!h)return;
   openSheet(holdName(h)+' '+h.code,`<div class="grid2"><label class="field"><span>股數</span><input class="in num" id="he-sh" inputmode="decimal" value="${esc(h.sh)}"></label><label class="field"><span>組合</span><input class="in" id="he-pf" value="${esc(h.pf||'我的')}"></label></div>
   <label class="field"><span>名稱</span><input class="in" id="he-nm" value="${esc(holdName(h))}"></label>
@@ -3333,6 +3364,7 @@ Object.assign(ACT,{
   'sub-ign':async el=>{const c=(window._subs||[])[+el.dataset.i];if(!c)return;S.settings.subIgn=[...(S.settings.subIgn||[]),c.key];await saveKV('settings');render(true)},
   'gd-save':async()=>{const q=evalAmt($('#gd-q').value);const u=$('#gd-u').value;if(!(q>=0))return toast('請輸入數量');S.settings.gold={...(S.settings.gold||{}),q,u};await saveKV('settings');await loadPrices(true);render(true);toast('已儲存黃金 '+q+' '+u)},
   'px-refresh':async()=>{toast('更新價格中…');const ok=await loadPrices(true);render(true);toast(ok?'已更新到 '+(PX?.d||'').slice(5).replace('-','/')+' 收盤價':'目前抓不到股價資料（prices.json 尚未建立或網路問題）')},
+  'hd-sort':async el=>{S.settings.holdSort=el.dataset.m;S.settings.u=Date.now();await saveKV('settings');render(true)},
   'hd-add':async()=>{const code=($('#hd-code').value||'').trim();const sh=evalAmt($('#hd-sh').value);if(!code)return toast('請輸入代號');if(!(sh>0))return toast('請輸入股數');
     holdUpsert($('#hd-pf').value,code,sh,0);await saveKV('settings');await loadPrices(true);render(true);toast('已加入')},
   'hd-bulk':async()=>{let n=0;for(const line of($('#hd-bulk').value||'').split(/\n/)){const c=line.split(/[,，\t]/).map(x=>x.trim());if(c.length<3)continue;const sh=evalAmt(c[2].replace(/,/g,''));if(!c[1]||!(sh>0))continue;holdUpsert(c[0],c[1],sh,0,'');n++}
