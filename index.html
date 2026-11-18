@@ -575,7 +575,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.82';
+window.APP_VER='v2.0.83';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1188,6 +1188,11 @@ function pageWelcome(){
   <div class="feat"><div><b>多帳戶 · 多幣別</b>現金、銀行、信用卡、電子票證與外幣帳戶，依匯率換算淨資產。</div><div><b>信用卡帳單</b>結帳日、繳款日、本期消費與待繳金額，到期前提醒。</div><div><b>預算與專案</b>月預算、分類預算、每日可用額度；專案追蹤旅遊或車輛支出。</div><div><b>週期 · 分期 · 範本</b>固定扣款自動入帳，分期本息均攤，常用記錄一鍵帶入。</div><div><b>應收應付</b>借出、代墊、借入、還款，依對象結算。</div><div><b>統計圖表</b>分類占比、月趨勢、淨資產走勢，支援排除特定分類。</div></div></div>`};
 }
 function acctBal(a){return D.bal.get(a.id)||0}
+function balAt(acctId,dt,tm){   // 帳戶在 dt/tm（含）當下的餘額；tm 空字串＝整個 dt 當天都算進去（對齊 acctBal() 用日期計算的既有行為）
+  const t=tm||'23:59';let b=(D.acct.get(acctId)||{}).init||0;
+  for(const r of D.live){if(r.a!==acctId)continue;if(r.dt<dt||(r.dt===dt&&(r.tm||'00:00')<=t))b+=val(r)}
+  return r2(b)
+}
 
 function comboChart(labels,exp,inc,nw){
   const W=640,H=230,L=50,R=68,T=14,B=26;const bmax=Math.max(1,...exp,...inc);const step=niceStep(bmax);const top=Math.max(step,Math.ceil(bmax/step)*step);
@@ -1979,14 +1984,17 @@ Object.assign(ACT,{
    修改週期：kind='updrule' n="週期名稱" wk('prev'|'next'|'' 遇假日提前/延後/不調整)，未入帳記錄會依新設定重算；刪除週期：kind='delrule' n="週期名稱1,名稱2"（只刪由 Claude 建立的週期及未到期記錄）；分期（單筆合併，不拆本金／利息）：kind='inst' n=名稱 amt=每期金額 cnt=總期數 sno=本次第一筆的期數 dt=該期日期 tot=分期總額(顯示用) rate=年利率(顯示用) a c s；週期可加 sp(JSON 字串 [{n,s,amt,c?}]) 做成一個大項含多個細項
    分項（同一張收據）：sp=JSON 字串 [{c,s,amt,n}]（2 項以上），n 為整張的名稱可留空，fee 只算在第一項
    修改／刪除單筆：kind='edit'|'del' 用 dt(必填) n(原名稱,必填) tm a(選填) 找記錄，必須剛好 1 筆才動作；edit 可改 nn(新名稱) amt c s sh p fee na(新帳戶) ndt ntm
-   週期（選填）：rep('D'|'W'|'M'|'Y') iv(間隔,預設1) md(每月指定日,如 "4,8,12") cnt(總次數,0=無限) sno(起始期數,預設1，例如接續舊週期填 8) wk('prev'|'next'遇假日) ；有 rep 時 dt 為起始日，建立週期規則而非單筆                    */
+   週期（選填）：rep('D'|'W'|'M'|'Y') iv(間隔,預設1) md(每月指定日,如 "4,8,12") cnt(總次數,0=無限) sno(起始期數,預設1，例如接續舊週期填 8) wk('prev'|'next'遇假日) ；有 rep 時 dt 為起始日，建立週期規則而非單筆
+   調整餘額：kind='bal' a(必填,帳戶名稱或id) amt(必填,目標餘額,帳戶幣別) dt tm(選填,預設現在) n(選填,預設「餘額調整」)；
+   App 端用 balAt() 算出該帳戶在 dt/tm 當下的實際餘額，與 amt 的差額記成一筆「餘額調整」（跟帳戶頁「調整餘額」按鈕同樣的記法），差額為 0 就不記；
+   機器人帳號讀不到任何餘額，差額必須由 App 端計算，收件匣只能傳「目標餘額」，不能直接傳差額                    */
 let inboxBusy=Promise.resolve();
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&typeof Cloud!=='undefined'&&Cloud.user)Cloud.pollInbox()});
 const inboxSeen=new Set();   // 同一份指令可能同時由 onSnapshot 與 pollInbox 送來，只處理一次（失敗時移除以便重試）
 function processInbox(docs){let mine=[];inboxBusy=inboxBusy.then(async()=>{
   if(!Cloud.decided){await new Promise(r=>{const t=setInterval(()=>{if(Cloud.decided){clearInterval(t);r()}},300)})}
   const sk=d=>(Cloud.user?Cloud.user.uid:'')+'/'+d.id;docs=docs.filter(d=>!inboxSeen.has(sk(d)));mine=docs.map(sk);mine.forEach(i=>inboxSeen.add(i));if(!docs.length)return;
-  const add=[],dels=[],newRules=[],delNames=[],upds=[],insts=[],eds=[],rups=[];
+  const add=[],dels=[],newRules=[],delNames=[],upds=[],insts=[],eds=[],rups=[],balMsgs=[];
   let apN=0,apDup=0,apUnk=0,pxN=0;const mvq=[];
   for(const d of docs){const x=d.data()||{};const id='ib_'+d.id;
     if(x.src==='ap'){if(!S.byId.has(id)){const o=apRecord(x,id);if(o.r){add.push(o.r);apN++;if(!o.sure)apUnk++}else if(o.skip==='dup')apDup++}dels.push(d.ref);continue}
@@ -2010,6 +2018,16 @@ function processInbox(docs){let mine=[];inboxBusy=inboxBusy.then(async()=>{
       else{const sh=parseFloat(x.sh);if(code&&sh>=0){holdUpsert(pf,code,sh,0,x.cu||'');await saveKV('settings');toast('持股：'+pf+' '+code+' '+sh+' 股')}}
       dels.push(d.ref);continue}
     if(x.kind==='gold'){const q=parseFloat(x.q);if(q>=0){S.settings.gold={...(S.settings.gold||{}),q,u:GOLD_U[x.u]?x.u:'錢'};await saveKV('settings');toast('黃金：'+q+' '+S.settings.gold.u)}dels.push(d.ref);continue}
+    if(x.kind==='bal'){const acct=S.accts.find(a=>a.id===x.a||a.name===x.a);
+      if(!acct){balMsgs.push('找不到帳戶：'+String(x.a||''));dels.push(d.ref);continue}
+      const dt=/^\d{4}-\d{2}-\d{2}$/.test(x.dt||'')?x.dt:TODAY();const tm=/^\d{2}:\d{2}$/.test(x.tm||'')?x.tm:'';
+      const target=+x.amt;
+      if(!isFinite(target)){balMsgs.push(acct.name+'：金額格式錯誤');dels.push(d.ref);continue}
+      const b=balAt(acct.id,dt,tm);const diff=r2(target-b);
+      if(diff&&!S.byId.has(id)){add.push({id,a:acct.id,t:'餘額調整',c:'餘額調整',s:'餘額調整',m:diff,f:0,d:0,n:String(x.n||'').slice(0,80),sh:'',dt,tm:tm||NOWTM(),p:'',ds:'',tg:'claude',w:'',k:'',g:'',o:Date.now()});
+        balMsgs.push(acct.name+'：'+fmt(b,acct.cur)+' → '+fmt(target,acct.cur))}
+      else if(!diff)balMsgs.push(acct.name+'：餘額已經是 '+fmt(target,acct.cur)+'，不需調整')
+      dels.push(d.ref);continue}
     if(x.kind==='osshop'){const L=new Set(S.settings.osShops||[]);const rm=x.rm==='1';String(x.n||'').split(/[,、，]/).map(t=>t.trim()).filter(Boolean).forEach(t=>rm?L.delete(t):L.add(t));S.settings.osShops=[...L];await saveKV('settings');toast('海外店家：'+(rm?'移除 ':'加入 ')+String(x.n||''));dels.push(d.ref);continue}
     if(x.kind==='updrule'&&(x.nn!=null||x.p!=null)){rups.push(x);dels.push(d.ref);continue}
     if(x.kind==='updrule'){upds.push({n:String(x.n||'').trim(),wk:x.wk});dels.push(d.ref);continue}
@@ -2042,7 +2060,7 @@ function processInbox(docs){let mine=[];inboxBusy=inboxBusy.then(async()=>{
     if(gone.length){const ids=S.recs.filter(r=>!r.x&&r.dt>td&&/_\d+_\d+$/.test(r.id)&&gone.some(q=>r.id.startsWith(q.id+'_'))).map(r=>r.id);
       S.rules=S.rules.filter(q=>!gone.includes(q));await saveKV('rules');if(ids.length)await mutate([],ids);scheduleRender();toast('Claude 幫你刪除了 '+gone.length+' 個週期')}}
   if(apN||apDup||pxN)await saveKV('settings');if(pxN)scheduleRender();
-  if(add.length){Cloud.inboxN=(Cloud.inboxN||0)+add.length;await mutate(add);await fixOsGroups().catch(()=>{});scheduleRender();const cl=add.filter(r=>r.tg!=='ap');
+  if(add.length){Cloud.inboxN=(Cloud.inboxN||0)+add.length;await mutate(add);await fixOsGroups().catch(()=>{});scheduleRender();const cl=add.filter(r=>r.tg!=='ap'&&r.t!=='餘額調整');
     toast([cl.length?'Claude 幫你記了 '+cl.length+' 筆：'+cl.slice(0,3).map(r=>(r.n||r.s)+' '+fmt(Math.abs(r.m))).join('、'):'',apN?'Apple Pay 自動記了 '+apN+' 筆'+(apUnk?'（'+apUnk+' 筆卡片未設定對應帳戶）':''):''].filter(Boolean).join('；')+(apDup?'；略過重複 '+apDup+' 筆':''))}
   else if(apDup)toast('Apple Pay：略過 '+apDup+' 筆已記過的交易')
   if(rups.length){const up=[],okN=[],bad=[];let ch=false;
@@ -2079,6 +2097,7 @@ function processInbox(docs){let mine=[];inboxBusy=inboxBusy.then(async()=>{
       up.push(o);okN.push(nm+(o.n!==nm?' → '+o.n:''))}
     if(up.length||rm.length){await mutate(up,rm);scheduleRender()}
     toast([okN.length?'Claude 幫你修改了：'+okN.slice(0,3).join('、'):'',bad.length?'沒有修改：'+bad.slice(0,3).join('、'):''].filter(Boolean).join('；'))}
+  if(balMsgs.length)toast(balMsgs.join('；'))
   const dr=await Promise.allSettled(dels.map(ref=>ref.delete()));   /* 刪除失敗：移出 inboxSeen，下次查收件匣再處理（各指令皆可重複執行） */
   const bad=dels.filter((ref,i)=>dr[i].status==='rejected');if(bad.length){bad.forEach(ref=>inboxSeen.delete((Cloud.user?Cloud.user.uid:'')+'/'+ref.id));Cloud.inboxErr='收件匣刪除失敗 '+bad.length+' 筆，稍後重試'}
 }).catch(e=>{mine.forEach(i=>inboxSeen.delete(i));Cloud.inboxErr='處理失敗：'+(e&&e.message||e)})}
