@@ -41,6 +41,8 @@ html{overflow-x:clip}
 body{font:15px/1.5 var(--sans);-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--bg)}
 button,input,select,textarea{font:inherit;color:inherit}
+*{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}   /* 全站禁止選取／長按選單；輸入框下面個別開放 */
+input,textarea,code{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}   /* code：Firestore 網址／UID／API 範例等給使用者複製的參考文字 */
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .num{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
@@ -573,7 +575,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.81';
+window.APP_VER='v2.0.82';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
