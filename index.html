@@ -2210,13 +2210,15 @@ function inboxInvalidReason(x){
 function processInbox(docs){
   const uid=Cloud.user?.uid;
   let mine=[];
-  inboxBusy=inboxBusy.then(async()=>{
+  const process=async()=>{
   if(!uid||Cloud.user?.uid!==uid)return;
   if(DB.mem)throw new LocalWriteError('IndexedDB 無法使用，已保留收件匣指令');
   if(!Cloud.decided)return; // pollInbox 會在同步就緒後重新讀取。
   const sk=d=>uid+'/'+d.id;
   const receiptKey='inboxReceipts/'+uid;
   const receipts=new Set(await DB.getKV(receiptKey)||[]);
+  const appliedKey='inboxApplied/'+uid;
+  const applied=await DB.getKV(appliedKey)||{};
   for(const doc of docs){
     const key=sk(doc);
     if(receipts.has(doc.id)&&(!inboxSeen.has(key)||inboxDeletePending.has(key))){
@@ -2226,8 +2228,15 @@ function processInbox(docs){
     }
   }
   const pending=docs.filter(d=>!receipts.has(d.id)&&inboxDeletePending.has(sk(d)));
-  if(pending.length&&!await finishInbox(uid,receiptKey,receipts,pending.map(d=>d.ref)))return;
-  docs=docs.filter(d=>!inboxSeen.has(sk(d)));mine=docs.map(sk);mine.forEach(i=>inboxSeen.add(i));if(!docs.length)return;
+  if(pending.length&&!await finishInbox(uid,receiptKey,receipts,appliedKey,applied,pending.map(d=>d.ref)))return;
+  docs=docs.filter(d=>{
+    if(inboxSeen.has(sk(d))||receipts.has(d.id))return false;
+    if(Object.hasOwn(applied,d.id)){
+      Cloud.inboxErr='本機已執行，但上次雲端確認中斷；已保留指令供核對';
+      return false;
+    }
+    return true;
+  });mine=docs.map(sk);mine.forEach(i=>inboxSeen.add(i));if(!docs.length)return;
   const add=[],dels=[],newRules=[],delNames=[],upds=[],insts=[],eds=[],rups=[],balMsgs=[];
   let apN=0,apDup=0,apUnk=0,pxN=0;const mvq=[];
   let invalid='';
@@ -2351,9 +2360,18 @@ function processInbox(docs){
   if(Cloud.user?.uid!==uid)throw new Error('登入狀態已變更');
   if(invalid)Cloud.inboxErr='已保留待檢查的指令：'+invalid;
   for(const ref of dels)inboxDeletePending.add(uid+'/'+ref.id);
-  if(dels.length)await finishInbox(uid,receiptKey,receipts,dels);
-}).catch(e=>{mine.forEach(i=>inboxSeen.delete(i));Cloud.inboxErr='處理失敗：'+(e&&e.message||e)})}
-async function finishInbox(uid,receiptKey,receipts,refs){
+  if(dels.length)await finishInbox(uid,receiptKey,receipts,appliedKey,applied,dels);
+  };
+  inboxBusy=inboxBusy.then(()=>{
+    const locks=window.navigator?.locks;
+    return uid&&locks?locks.request('ledger-inbox/'+uid,process):process();
+  }).catch(e=>{mine.forEach(i=>inboxSeen.delete(i));Cloud.inboxErr='處理失敗：'+(e&&e.message||e)});
+}
+async function finishInbox(uid,receiptKey,receipts,appliedKey,applied,refs){
+  // 在等待網路前留下保護紀錄，重開分頁時保留未確認的指令。
+  for(const ref of refs)Object.defineProperty(applied,ref.id,{value:true,writable:true,enumerable:true,configurable:true});
+  try{await DB.putKV(appliedKey,applied)}
+  catch(e){Cloud.inboxErr='無法記錄本機處理進度，已保留指令';return false}
   if(!await Cloud.waitForInboxSync(uid)){
     Cloud.inboxErr='雲端尚未確認，已保留收件匣指令';
     return false;
@@ -2363,6 +2381,9 @@ async function finishInbox(uid,receiptKey,receipts,refs){
   try{await DB.putKV(receiptKey,[...receipts].slice(-512))}
   catch(e){Cloud.inboxErr='本機完成紀錄寫入失敗，已保留收件匣指令';return false}
   if(Cloud.user?.uid!==uid)return false;
+  for(const ref of refs)delete applied[ref.id];
+  // 已有完成憑證，清除保護紀錄失敗時仍可安全重試刪除。
+  await DB.putKV(appliedKey,applied).catch(()=>{});
   await Promise.all(refs.map(ref=>deleteInboxDoc(ref,uid+'/'+ref.id)));
   return true;
 }

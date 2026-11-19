@@ -11,9 +11,8 @@ function section(start, end) {
   return html.slice(offset, stop);
 }
 
-function fixture() {
+function fixture(storage = {kv: new Map()}) {
   const rec = new Map();
-  let kv = new Map();
   const S = {recs: [], byId: new Map(), settings: {}, kvu: {}, rules: [],
     accts: [{id: 'cash', name: '現金'}], tpls: [],
     cats: {exp: [{n:'生活',subs:['舊分類']}], inc: []}};
@@ -28,13 +27,13 @@ function fixture() {
       if(this.failRec)throw new Error('mock record abort');
       for(const row of rows)rec.set(row.id, structuredClone(row));
     },
-    async getKV(key) {return kv.get(key)},
+    async getKV(key) {return storage.kv.get(key)},
     async putKV(key, value) {
       if(this.failKV)throw new Error('mock KV abort');
-      kv.set(key, structuredClone(value));
+      storage.kv.set(key, structuredClone(value));
     },
     async run(stores, callback) {
-      const writes = new Map(kv), requests = [];
+      const writes = new Map(storage.kv), requests = [];
       const store = {
         get(key) {const request = {result: writes.get(key)};requests.push(request);return request},
         put(value, key) {writes.set(key, structuredClone(value))}
@@ -42,7 +41,7 @@ function fixture() {
       callback({objectStore: () => store});
       requests.forEach(r => r.onsuccess());
       if(this.failKV)throw new Error('mock KV abort');
-      kv = writes;
+      storage.kv = writes;
     }
   };
   const context = vm.createContext({
@@ -61,7 +60,7 @@ function fixture() {
     section('const inboxSeen=', 'function processInbox(docs)'),
     section('function processInbox(docs)', "ACT['copy-uid']")
   ].join('\n'), context);
-  return {context, S, Cloud, DB, rec, get kv() {return kv},
+  return {context, S, Cloud, DB, rec, get kv() {return storage.kv},
     run(code) {return vm.runInContext(code, context)}};
 }
 
@@ -208,4 +207,35 @@ test('子類別改名寫入一半後可重試儲存分類，不會再改一次�
   assert.equal(doc.ref.deletes, 1);
   assert.deepEqual(f.kv.get('cats').exp[0].subs, ['新分類']);
   assert.equal(f.Cloud.writes.filter(row => row.id).length, 2);
+});
+
+test('本機已寫入但雲端確認中斷，重開時保留指令供核對', async () => {
+  const storage = {kv:new Map()};
+  const first = fixture(storage);
+  const doc = command({kind:'gold',q:3});
+  first.Cloud.canSync = false;
+  await process(first, doc);
+  assert.equal(first.Cloud.writes.length, 1);
+  const reopened = fixture(storage);
+  await process(reopened, doc);
+  assert.equal(doc.ref.deletes, 0);
+  assert.equal(reopened.Cloud.writes.length, 0);
+  assert.match(reopened.Cloud.inboxErr, /上次雲端確認中斷/);
+});
+
+test('支援 Web Locks 時，同瀏覽器的兩個分頁共用收件匣鎖', async () => {
+  const storage = {kv:new Map()};
+  const a = fixture(storage), b = fixture(storage);
+  const doc = command({kind:'gold',q:3});
+  let tail = Promise.resolve();
+  const locks = {request(key, callback) {
+    assert.equal(key, 'ledger-inbox/example-user');
+    const pending = tail.then(callback);
+    tail = pending.catch(() => {});
+    return pending;
+  }};
+  a.context.window.navigator = b.context.window.navigator = {locks};
+  await Promise.all([process(a,doc),process(b,doc)]);
+  assert.equal(a.Cloud.writes.length + b.Cloud.writes.length, 1);
+  assert.ok(storage.kv.get('inboxReceipts/example-user').includes(doc.id));
 });
