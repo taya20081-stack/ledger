@@ -72,7 +72,7 @@ Claude 自己讀不到使用者的任何記錄或餘額，只能把「指令」�
 
 ### 通知中的記帳來源
 
-Claude 與 ChatGPT 沿用同一個 Firestore 收件匣。通知分別列出兩者的待處理指令與最近同步確認的帳目，並單獨顯示 App 與 Firestore 收件匣的連線狀態。最近入帳時間來自已同步的記錄，可在重開 App 後查看。
+Claude 與 ChatGPT 沿用同一個 Firestore 收件匣。通知保留兩個來源名稱，顯示 App 與共用收件匣的連線狀態。
 
 ChatGPT 的文件 ID 採用 `chatgpt_` 加 36 位小寫十六進位字元。新入帳記錄的來源標記為 `chatgpt`。舊版已入帳的 ChatGPT 指令仍可透過記錄 ID 識別，現有記錄無須修改。Apple Pay 和股價更新不列入兩者的狀態。
 
