@@ -14,7 +14,7 @@ function section(start, end) {
 function fixture(storage = {kv: new Map()}) {
   const rec = new Map();
   const S = {recs: [], byId: new Map(), settings: {}, kvu: {}, rules: [],
-    accts: [{id: 'cash', name: '現金'}], tpls: [],
+    accts: [{id: 'cash', name: '現金', cur: 'TWD'}], tpls: [],
     cats: {exp: [{n:'生活',subs:['舊分類']}], inc: []}};
   const D = {live: [], acct: new Map(S.accts.map(a => [a.id, a]))};
   const Cloud = {user: {uid: 'example-user'}, decided: true,
@@ -45,9 +45,9 @@ function fixture(storage = {kv: new Map()}) {
     }
   };
   const context = vm.createContext({
-    DB, S, D, Cloud, crypto: require('node:crypto').webcrypto, firebase: {firestore:{FieldValue:{serverTimestamp:()=>0}}}, GOLD_U: {}, window: {Cloud, addEventListener() {}}, structuredClone, setTimeout, clearTimeout,
+    DB, S, D, Cloud, crypto: require('node:crypto').webcrypto, firebase: {firestore:{FieldValue:{serverTimestamp:()=>0}}}, GOLD_U: {}, CURS:['TWD'], window: {Cloud, addEventListener() {}}, structuredClone, setTimeout, clearTimeout,
     toast() {}, ensureCats() {}, recompute() {D.live = S.recs.filter(r => !r.x)}, scheduleRender() {},
-    async fixOsGroups() {}, r2: n => n, fmt: String, TODAY: () => '2026-01-01', NOWTM: () => '12:00',
+    isOsShop: () => false, async fixOsGroups() {}, r2: n => n, fmt: String, TODAY: () => '2026-01-01', NOWTM: () => '12:00',
     balAt: () => D.live.reduce((sum,r) => sum + r.m, 0),
     addMonths(date, months) {return '2026-' + String(1 + months).padStart(2, '0') + '-01'}
   });
@@ -61,13 +61,13 @@ function fixture(storage = {kv: new Map()}) {
     section('const inboxAwaitingCloud=', 'function processInbox(docs)'),
     section('function processInbox(docs)', "ACT['copy-uid']")
   ].join('\n'), context);
-  return {context, S, Cloud, DB, rec, get kv() {return storage.kv},
+  return {context, S, D, Cloud, DB, rec, get kv() {return storage.kv},
     run(code) {return vm.runInContext(code, context)}};
 }
 
-function command(data) {
+function command(data, id='example-command') {
   let current={...data};
-  const doc = {id:'example-command', data:()=>current};
+  const doc = {id, data:()=>current};
   doc.ref = {id:doc.id, path:'users/example-user/inbox/'+doc.id, deletes:0, fail:false, async delete(){
     this.deletes++;
     if(this.fail)throw new Error('mock Firestore delete failure');
@@ -320,4 +320,77 @@ test('投資市值摘要與清單依市值遞減，同額保留原順序', () =>
   assert.deepEqual(Array.from(page.body.matchAll(/class="grow"><div>(黃金|股票|外匯)</g), m => m[1]), order);
   assert.doesNotMatch(page.body, /拖曳|mk-h/);
   assert.match(page.body, /data-act="push" data-p="invest"/);
+});
+
+
+test('ChatGPT 收據分項共享一組、同步後維持同組、完成憑證可去重', async () => {
+  const f=fixture();
+  f.S.cats.exp[0].subs.push('飲料','點心');
+  const id='chatgpt_'+'b'.repeat(36);
+  const lines=[{c:'生活',s:'飲料',n:'示例飲品',amt:11},{c:'生活',s:'點心',n:'示例點心*2',amt:24},{c:'生活',s:'舊分類',n:'示例商品',amt:0}];
+  const data={spv:1,kind:'exp',a:'cash',cu:'TWD',dt:'2026-01-01',tm:'12:00',amt:35,n:'示例收據',sp:JSON.stringify(lines)};
+  const doc=command(data,id);
+  await process(f,doc);
+  assert.equal(doc.data()._ledgerInbox.state,'completed');
+  assert.equal(doc.ref.deletes,0);
+  assert.equal(f.rec.size,3);
+  const records=[...f.rec.values()];
+  assert.equal(new Set(records.map(r=>r.g)).size,1);
+  assert.equal(records.reduce((sum,r)=>sum+r.m,0),-35);
+  assert.deepEqual(records.map(r=>[r.s,Math.abs(r.m)]),[['飲料',11],['點心',24],['舊分類',0]]);
+  assert.equal(f.Cloud.writes.length,3);
+  await process(f,doc);
+  assert.equal(f.Cloud.writes.length,3);
+  const other=fixture();
+  other.S.recs.push(...structuredClone(f.Cloud.writes));
+  other.S.recs.forEach(r=>other.S.byId.set(r.id,r));
+  assert.equal(new Set(other.S.recs.map(r=>r.g)).size,1);
+  const view=vm.runInNewContext(section('function gkey(', 'function grpSheet(')+'\nhomeItems(records)', {
+    records:other.S.recs, S:{search:{selMode:false}}, D:{acct:new Map()}, raw:r=>r.m, curOf:()=> 'TWD',
+    homeRow:()=>{throw Error('收據不得拆為獨立列')}, grpName:()=> '示例收據', aggTxt:()=>'', ruleTag:()=>'', esc:String,
+    hbadge:()=>'', money:String, projPill:()=>''
+  });
+  assert.equal((view.match(/data-act="grp-toggle"/g)||[]).length,1);
+  assert.match(view,/>35<\/span>/);
+  const wrong=command({...data,amt:36},'chatgpt_'+'c'.repeat(36));
+  await process(f,wrong);
+  assert.equal(wrong.data()._ledgerInbox.state,'invalid');
+  assert.equal(f.Cloud.writes.length,3);
+  const probe=command({...data,kind:'split_probe'},'chatgpt_'+'d'.repeat(36));
+  await process(f,probe);
+  assert.equal(probe.data()._ledgerInbox.state,'completed');
+  assert.equal(f.Cloud.writes.length,3);
+  await f.run('mutate([],S.recs.map(r=>r.id))');
+  await process(f,command(data,id));
+  assert.equal(f.D.live.length,0);
+  assert.equal(f.rec.size,3);
+});
+
+test('Claude 舊版 sp 保留，既有單分類照常入帳', async () => {
+  const f=fixture();
+  const base={kind:'exp',amt:30,a:'cash',c:'生活',s:'舊分類',dt:'2026-01-01',n:'範例'};
+  await process(f,command(base,'legacy-single'));
+  await process(f,command({...base,sp:JSON.stringify([{c:'生活',s:'舊分類',n:'甲',amt:10},{c:'生活',s:'舊分類',n:'乙',amt:20}])},'legacy-split'));
+  assert.equal(f.D.live.length,3);
+  assert.equal(f.D.live.filter(r=>r.g).length,2);
+  assert.equal(f.D.live.reduce((sum,r)=>sum+r.m,0),-60);
+});
+
+test('多分類編輯沿用群組與發票，增刪分項後重新合計', () => {
+  const context=vm.createContext({
+    uid:(()=>{let i=0;return()=> 'row'+i++;})(),evalAmt:Number,
+    form:{_edit:true,_receipt:{g:'stable',inv:'TEST',tg:'chatgpt'},kind:'inc',a:'cash',n:'測試收據',dt:'2026-01-01',
+      splits:[{c:'生活',s:'飲料',n:'甲',amt:'0'},{c:'生活',s:'點心',n:'乙',amt:'9'}]}
+  });
+  vm.runInContext(section('function spMerge(', 'let _rcK='),context);
+  vm.runInContext(section('function buildRecords0(', 'function recordToForm('),context);
+  const read=()=>vm.runInContext('buildRecords0(form)',context);
+  assert.equal(read().reduce((s,r)=>s+r.m,0),9);
+  assert.equal(read().length,2);
+  context.form.splits.splice(0,1,{c:'生活',s:'飲料',n:'丙',amt:'6'});
+  assert.equal(read().reduce((s,r)=>s+r.m,0),15);
+  context.form.splits.pop();
+  assert.equal(read().length,1);
+  assert.equal(read()[0].g,'stable');
+  assert.equal(read()[0].inv,'TEST');
 });
