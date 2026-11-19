@@ -5,14 +5,18 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
-concurrency: push-reminder
+concurrency:
+  group: push-reminder-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   send:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - run: pip install -q pywebpush
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - run: python3 -m pip install -q -r scripts/requirements-push.txt
       - name: 發送到期的提醒
+        id: send
         env:
           API_KEY: AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo   # 與網站 index.html 內相同，本來就是公開的
           PROJECT: money-app-54e0d
@@ -23,6 +27,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, os, hashlib, datetime, urllib.request
+          from pathlib import Path
           from pywebpush import webpush, WebPushException
           E = os.environ
           if not all(E.get(k) for k in ('OWNER_UID', 'BOT_EMAIL', 'BOT_PASSWORD', 'VAPID_PRIVATE')):
@@ -42,8 +47,12 @@ jobs:
           f = doc.get('fields', {})
           subs = json.loads(f.get('subs', {}).get('stringValue', '[]'))
           items = json.loads(f.get('items', {}).get('stringValue', '[]'))
-          path = 'push-sent.json'
-          sent = json.load(open(path)) if os.path.exists(path) else {}
+          path = Path('push-sent.json')
+          sent = json.loads(path.read_text()) if path.exists() else {}
+          def checkpoint():
+              temp = path.with_suffix('.tmp')
+              temp.write_text(json.dumps(sent, separators=(',', ':')))
+              temp.replace(path)
           cut = (now - datetime.timedelta(days=40)).strftime('%Y-%m-%d')
           sent = {k: v for k, v in sent.items() if v >= cut}
           due = []
@@ -54,31 +63,44 @@ jobs:
                   due.append((h, it))
           print('裝置', len(subs), '台，排程', len(items), '則，到期', len(due), '則')
           dev = lambda s: hashlib.sha256(s['endpoint'].encode()).hexdigest()[:8]
+          errors = 0
           for h, it in due:   # 逐台裝置記錄：成功的不再重送，失敗的下次排程補送
               for s in subs:
-                  k = h + '.' + dev(s)
+                  try:
+                      k = h + '.' + dev(s)
+                  except (KeyError, TypeError, AttributeError):
+                      errors += 1
+                      print('  裝置訂閱格式錯誤')
+                      continue
                   if k in sent: continue
                   try:
                       webpush(subscription_info={'endpoint': s['endpoint'], 'keys': s['keys']},
                               data=json.dumps({'title': it['t'], 'body': it['b'], 'tag': it['id']}, ensure_ascii=False),
-                              vapid_private_key=E['VAPID_PRIVATE'], vapid_claims={'sub': 'mailto:' + E.get('VAPID_SUB', 'noreply@example.com')}, ttl=43200)
-                      sent[k] = now.strftime('%Y-%m-%d'); print('  已送出 1 台')
+                              vapid_private_key=E['VAPID_PRIVATE'], vapid_claims={'sub': 'mailto:' + E.get('VAPID_SUB', 'noreply@example.com')}, ttl=43200, timeout=20)
+                      sent[k] = now.date().isoformat()
+                      checkpoint()
+                      print('  已送出 1 台')
                   except WebPushException as e:
-                      code = getattr(e.response, 'status_code', '')
-                      print('  發送失敗', code, str(e)[:120])
-                      if code in (404, 410): sent[k] = now.strftime('%Y-%m-%d')   # 裝置已取消訂閱，不再重試
-              json.dump(sent, open(path, 'w'), separators=(',', ':'))   # 每則送完就寫檔，中途失敗也保留已送記錄
-          json.dump(sent, open(path, 'w'), separators=(',', ':'))
+                      code = getattr(e.response, 'status_code', None)
+                      print('  推播服務回應失敗', code or '無狀態碼')
+                      if code in (404, 410):
+                          sent[k] = now.date().isoformat()
+                          checkpoint()
+                      else:
+                          errors += 1
+                  except OSError as e:
+                      # 檔案寫入錯誤終止作業，避免繼續送出無法留存的推播。
+                      if k in sent:
+                          raise SystemExit('已發送，但無法寫入本機推播紀錄')
+                      errors += 1
+                      print('  裝置連線失敗', type(e).__name__)
+                  except Exception as e:
+                      errors += 1
+                      print('  裝置發送失敗', type(e).__name__)
+          checkpoint()
+          if errors:
+              raise SystemExit('部分裝置發送失敗，下次排程會重試')
           PY
-      - name: 記錄已送出的提醒（只存雜湊，不含內容）
-        run: |
-          git config user.name 'github-actions'; git config user.email 'actions@users.noreply.github.com'
-          git add push-sent.json
-          git diff --cached --quiet && exit 0
-          git commit -m "push log"
-          for i in 1 2 3 4; do   # 推不上去下次會重送推播，所以要確實推上去：rebase 重試，最後失敗明確報錯
-            git push && exit 0
-            git pull --rebase -q || { git rebase --abort || true; }
-            sleep $((i * 5))
-          done
-          echo "::error::push-sent.json 推送失敗，下次排程可能重複推播"; exit 1
+      - name: 記錄已送出的提醒（只存雜湊）
+        if: ${{ !cancelled() && (steps.send.outcome == 'success' || steps.send.outcome == 'failure') }}
+        run: bash scripts/push_generated.sh push-sent.json "更新推播發送紀錄"

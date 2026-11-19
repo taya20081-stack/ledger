@@ -10,36 +10,43 @@ on:
 permissions:
   contents: write
 concurrency:   # 外部排程與 GitHub 排程同時觸發時排隊執行，避免互相覆蓋 prices.json
-  group: prices
+  group: prices-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   fetch:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: 抓取上市、上櫃收盤價
         run: |
           python3 - <<'PY'
-          import json, os, re, urllib.request, datetime
+          import json, os, re, urllib.request, datetime, math
           TW = datetime.timezone(datetime.timedelta(hours=8))
           HDR = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36', 'Accept': 'application/json,text/csv,*/*'}
           def get(url):
               with urllib.request.urlopen(urllib.request.Request(url, headers=HDR), timeout=40) as r:
                   return r.read().decode('utf-8-sig', 'ignore')
           def num(v):
-              try: return float(str(v).replace(',', '').strip())
+              try:
+                  value = float(str(v).replace(',', '').strip())
+                  return value if math.isfinite(value) else 0.0
               except Exception: return 0.0
           def roc(d):   # 1151111 → 2026-11-11
               d = re.sub(r'\D', '', str(d))
-              if len(d) == 7: return '%04d-%s-%s' % (int(d[:3]) + 1911, d[3:5], d[5:7])
-              if len(d) == 8: return '%s-%s-%s' % (d[:4], d[4:6], d[6:8])
-              return ''
+              if len(d) == 7:
+                  d = str(int(d[:3]) + 1911) + d[3:]
+              try:
+                  return datetime.datetime.strptime(d, '%Y%m%d').date().isoformat() if len(d) == 8 else ''
+              except ValueError:
+                  return ''
           old = json.load(open('prices.json', encoding='utf-8')) if os.path.exists('prices.json') else {'d': '', 'p': {}}
           p = {k: v for k, v in old.get('p', {}).items() if not (len(v) > 2 and v[2] == 'USD')}; day = ''
           today = datetime.datetime.now(TW).strftime('%Y-%m-%d')
           def mi_index(d):   # 證交所「每日收盤行情」，收盤後約 14:30 就有當天資料
               j = json.loads(get('https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?response=json&date=%s&type=ALLBUT0999' % d.replace('-', '')))
               out = {}
+              if j.get('stat') != 'OK' or roc(j.get('date')) != d:
+                  return out
               for t in j.get('tables', []) or []:
                   if '每日收盤行情' not in (t.get('title') or ''): continue
                   f = t.get('fields') or []
@@ -53,6 +60,9 @@ jobs:
               j = json.loads(get('https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes?date=%s%%2F%s%%2F%s&id=&response=json' % (y, m, dd)))
               out = {}
               for t in j.get('tables', []) or []:
+                  # 櫃買的資料日期可能是西元或民國，必須和請求日吻合。
+                  if roc(t.get('date') or j.get('date')) != d:
+                      continue
                   f = t.get('fields') or []
                   if '代號' not in f or '收盤' not in f: continue
                   ic, iname, iv = f.index('代號'), f.index('名稱'), f.index('收盤')
@@ -61,31 +71,22 @@ jobs:
                       if r[ic] and v > 0: out[str(r[ic]).strip()] = [str(r[iname]).strip(), v]
               return out
           def openapi_twse():
-              rows = json.loads(get('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL')); d = ''; out = {}
+              rows = json.loads(get('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL')); dates = set(); out = {}
               for r in rows:
                   c, v = r.get('Code', ''), num(r.get('ClosingPrice'))
                   if c and v > 0: out[c] = [r.get('Name', ''), v]
-                  d = d or roc(r.get('Date', ''))
-              return d, out
+                  dates.add(roc(r.get('Date', '')))
+              return (dates.pop(), out) if len(dates) == 1 and '' not in dates else ('', {})
           def openapi_tpex():
-              rows = json.loads(get('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes')); d = ''; out = {}
+              rows = json.loads(get('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes')); dates = set(); out = {}
               for r in rows:
                   c = r.get('SecuritiesCompanyCode') or r.get('Code') or ''
                   v = num(r.get('Close') or r.get('ClosingPrice'))
                   if c and v > 0: out[c] = [r.get('CompanyName') or r.get('Name', ''), v]
-                  d = d or roc(r.get('Date', ''))
-              return d, out
+                  dates.add(roc(r.get('Date', '')))
+              return (dates.pop(), out) if len(dates) == 1 and '' not in dates else ('', {})
           # 上市：先抓當天（MI_INDEX），沒有才用 openapi（openapi 通常晚一天才更新）
           tw_d, tw = '', {}
-          now = datetime.datetime.now(TW)
-          if now.weekday() < 5 and '13:30' <= now.strftime('%H:%M') < '15:00':   # 外部排程 14:25 觸發：今天行情還沒出來就每 2 分鐘再試，最多等 25 分鐘
-              import time
-              for i in range(13):
-                  try:
-                      x = mi_index(today)
-                      if len(x) > 500: tw_d, tw = today, x; print('今天行情已公布（第', i + 1, '次）'); break
-                  except Exception as e: print('MI_INDEX 今天', '失敗', repr(e)[:120])
-                  if i < 12: print('今天行情尚未公布，2 分鐘後重試'); time.sleep(120)
           for back in range(0, 6):
               if tw_d: break
               d = (datetime.datetime.now(TW) - datetime.timedelta(days=back)).strftime('%Y-%m-%d')
@@ -96,7 +97,7 @@ jobs:
               except Exception as e: print('MI_INDEX', d, '失敗', repr(e)[:120])
           try:
               od, ox = openapi_twse()
-              if od > tw_d and len(ox) > 500: tw_d, tw = od, ox
+              if tw_d < od <= today and len(ox) > 500: tw_d, tw = od, ox
           except Exception as e: print('openapi 上市失敗', repr(e)[:120])
           print('上市', len(tw), '檔', tw_d)
           # 上櫃
@@ -110,10 +111,14 @@ jobs:
               try: ot_d, ot = openapi_tpex()
               except Exception as e: print('openapi 上櫃失敗', repr(e)[:120])
           print('上櫃', len(ot), '檔', ot_d)
-          day = max(tw_d, ot_d)
-          if day and day < (old.get('d') or ''):
-              print('抓到的資料比現有的舊，不更新'); raise SystemExit(0)
-          p.update(ot); p.update(tw)
+          if not (tw_d and tw_d == ot_d and old.get('d', '') <= tw_d <= today and len(tw) > 500 and len(ot) > 200):
+              print('上市與上櫃需有同一交易日的完整資料，保留現有股價')
+              raise SystemExit(0)
+          day = tw_d
+          # 未成交或暫停交易的舊值保留原始日期，市場共用 d 只代表本次共同交易日。
+          p = {code: value if code == 'GOLD' or len(value) > 3 else [*value[:2], 'TWD', old.get('d', '')]
+               for code, value in p.items()}
+          p.update({code: [*value, 'TWD', day] for code, value in {**ot, **tw}.items()})
           out = {'d': day or old.get('d', ''), 'u': datetime.datetime.now(TW).strftime('%Y-%m-%d %H:%M'), 'p': p}
           if out['p'] != old.get('p') or out['d'] != old.get('d'):
               json.dump(out, open('prices.json', 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
@@ -121,13 +126,16 @@ jobs:
           else: print('沒有變動')
           PY
       - name: 美股收盤價（只寫進你的私人收件匣，不公開）
+        if: github.ref == 'refs/heads/main'
+        continue-on-error: true
         env:
           OWNER_UID: ${{ secrets.OWNER_UID }}
           BOT_EMAIL: ${{ secrets.BOT_EMAIL }}
           BOT_PASSWORD: ${{ secrets.BOT_PASSWORD }}
         run: |
           python3 - <<'PY'
-          import json, os, re, datetime, urllib.request
+          import json, os, re, datetime, math, urllib.request
+          from zoneinfo import ZoneInfo
           E = os.environ
           if not (E.get('OWNER_UID') and E.get('BOT_EMAIL') and E.get('BOT_PASSWORD')):
               print('尚未設定記帳助理密鑰，略過美股'); raise SystemExit(0)
@@ -150,86 +158,32 @@ jobs:
               try:
                   m = json.loads(req('https://query1.finance.yahoo.com/v8/finance/chart/%s?range=5d&interval=1d' % t))['chart']['result'][0]['meta']
                   v = float(m.get('regularMarketPrice') or 0)
-                  d = datetime.datetime.fromtimestamp(m.get('regularMarketTime', 0), datetime.timezone(datetime.timedelta(hours=-5))).strftime('%Y-%m-%d')
+                  d = datetime.datetime.fromtimestamp(m.get('regularMarketTime', 0), ZoneInfo('America/New_York')).strftime('%Y-%m-%d')
               except Exception: pass
               if v <= 0:
                   try:
                       c = req('https://stooq.com/q/l/?s=%s.us&f=sd2t2c&h&e=csv' % t.lower()).splitlines()[1].split(',')
                       v = float(c[3]); d = c[1]
                   except Exception: pass
-              if v > 0: p[t] = [t, v, 'USD', d]; day = max(day, d)
+              try:
+                  date = datetime.date.fromisoformat(d)
+                  today = datetime.datetime.now(ZoneInfo('America/New_York')).date()
+                  if math.isfinite(v) and v > 0 and 0 <= (today - date).days <= 7:
+                      p[t] = [t, v, 'USD', d]; day = max(day, d)
+              except (ValueError, TypeError):
+                  pass
           print('取得', len(p), '檔')
           if p:
               req(BASE + '/inbox', {'fields': {'kind': {'stringValue': 'px'}, 'd': {'stringValue': day}, 'p': {'stringValue': json.dumps(p)}}}, A)
               print('已寫入收件匣')
           PY
-      - name: 安裝 Playwright（用 runner 內建的 Google Chrome，不另外下載瀏覽器）
-        run: pip install -q playwright
+      - name: 安裝 Playwright（使用 runner 內建的 Chrome）
+        continue-on-error: true
+        run: python3 -m pip install -q playwright==1.51.0 pyee==12.1.1 greenlet==3.1.1 typing-extensions==4.12.2
       - name: 黃金牌價（臺灣銀行黃金存摺・本行買進・每公克）
-        run: |
-          python3 - <<'PY'
-          import json, os, re, urllib.request, datetime
-          TW = datetime.timezone(datetime.timedelta(hours=8))
-          HDR = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36', 'Accept-Language': 'zh-TW,zh;q=0.9'}
-          def get(url):
-              with urllib.request.urlopen(urllib.request.Request(url, headers=HDR), timeout=40) as r:
-                  return r.read().decode('utf-8-sig', 'ignore')
-          data = json.load(open('prices.json', encoding='utf-8')) if os.path.exists('prices.json') else {'d': '', 'p': {}}
-          old = data.get('p', {}).get('GOLD')
-          v, d, src = 0.0, '', ''
-          URL = 'https://rate.bot.com.tw/gold?Lang=zh-TW'
-          N = r'(\d{1,2},\d{3}|\d{4,5})(?!\d)'
-          def parse(html):   # 只認「1 公克 黃金存摺」那一列：本行賣出 X … 本行買進 Y，且 Y < X；回傳 (本行買進每公克, 掛牌日期)
-              t = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', html))
-              m = re.search(r'1 ?公克 ?黃金存摺.{0,20}?本行賣出 ?' + N + r'.{0,20}?本行買進 ?' + N, t)
-              if not m: print('找不到黃金存摺列：', t[:120]); return 0.0, ''
-              print('抓到的位置', t[m.start():m.end() + 10])
-              sell, buy = float(m.group(1).replace(',', '')), float(m.group(2).replace(',', ''))
-              if not (1000 < buy < sell < buy * 1.05): print('買賣價不合理', sell, buy); return 0.0, ''
-              m = re.search(r'(\d{4})/(\d{2})/(\d{2})\s+\d{2}:\d{2}', t)
-              return buy, ('%s-%s-%s' % m.groups() if m else '')
-          try:   # 來源 1：臺灣銀行黃金牌價網頁（一般請求）
-              v, d = parse(get(URL)); src = '臺銀'
-          except Exception as e: print('臺銀黃金失敗', repr(e)[:120])
-          if not (1000 < v < 30000):   # 來源 1b：臺銀有 JS 驗證頁擋爬蟲，改用真的瀏覽器開（runner 內建 Google Chrome）
-              try:
-                  from playwright.sync_api import sync_playwright
-                  with sync_playwright() as pw:
-                      b = pw.chromium.launch(channel='chrome', headless=True)
-                      try:
-                          # 預設 UA 含 HeadlessChrome 會被臺銀擋；改用「實際 Chrome 版本」的一般桌面 UA
-                          ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/%s.0.0.0 Safari/537.36' % b.version.split('.')[0]
-                          pg = b.new_page(locale='zh-TW', user_agent=ua)
-                          pg.goto(URL, wait_until='domcontentloaded', timeout=60000)
-                          for _ in range(15):   # 驗證頁會自己 reload；直到「黃金存摺」那列解析成功才算載入完成
-                              try: v, d = parse(pg.content())
-                              except Exception: v = 0.0   # 頁面正在 reload
-                              if 1000 < v < 30000: src = '臺銀'; break
-                              pg.wait_for_timeout(2000)
-                      finally: b.close()
-              except Exception as e: print('瀏覽器開臺銀失敗', repr(e)[:160])
-          if not (1000 < v < 30000) and old and len(old) > 3 and '臺銀' in old[0] and old[3] >= (datetime.datetime.now(TW) - datetime.timedelta(days=4)).strftime('%Y-%m-%d'):
-              print('臺銀這次抓不到，保留上一筆臺銀牌價', old); raise SystemExit(0)   # 不用國際估算價覆蓋近期的正式牌價
-          if not (1000 < v < 30000):   # 來源 2：國際金價 × 美元匯率 換算每公克（臺銀抓不到時備援）
-              v = 0.0
-              try:
-                  g = json.loads(get('https://query1.finance.yahoo.com/v8/finance/chart/GC=F?range=5d&interval=1d'))['chart']['result'][0]['meta']
-                  x = json.loads(get('https://query1.finance.yahoo.com/v8/finance/chart/TWD=X?range=5d&interval=1d'))['chart']['result'][0]['meta']
-                  v = round(float(g['regularMarketPrice']) * float(x['regularMarketPrice']) / 31.1035)
-                  d = datetime.datetime.fromtimestamp(g.get('regularMarketTime', 0), TW).strftime('%Y-%m-%d'); src = '國際'
-              except Exception as e: print('國際金價失敗', repr(e)[:120])
-          if not (1000 < v < 30000): print('抓不到金價，不更新'); raise SystemExit(0)
-          d = d or datetime.datetime.now(TW).strftime('%Y-%m-%d')
-          if old and len(old) > 3 and old[3] > d: print('現有金價較新，不更新'); raise SystemExit(0)
-          data.setdefault('p', {})['GOLD'] = ['黃金（' + src + '每公克）', v, 'TWD', d]
-          json.dump(data, open('prices.json', 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
-          print('金價', v, d, src)
-          PY
+        run: python3 scripts/bank_gold.py
       - name: 提交
-        run: |
-          git config user.name 'github-actions'; git config user.email 'actions@users.noreply.github.com'
-          git add prices.json
-          git diff --cached --quiet || (git commit -m "股價 $(date +%F)" && (git push || (git pull --rebase && git push)))
+        run: bash scripts/push_generated.sh prices.json "更新股票與黃金牌價"
   rates:   # 股價、金價存好之後接著更新匯率，同一個排程就能更新三項（股價失敗也照樣更新匯率，被取消則不跑）
     needs: fetch
     if: ${{ !cancelled() }}

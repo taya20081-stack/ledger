@@ -26,11 +26,15 @@
 python3 -c "import re;s=open('index.html',encoding='utf-8').read();open('/tmp/app.js','w').write('\n;\n'.join(re.findall(r'<script(?![^>]*src)[^>]*>(.*?)</script>',s,re.S)))" && node --check /tmp/app.js
 ```
 
+本機寫入與收件匣測試使用記憶體模擬資料，可執行 `node --test tests/local-writes.test.cjs`。牌價、匯率與 Git 推送測試可執行 `python3 -m unittest discover -s tests -p "test_*.py"`。
+
+若已安裝 Playwright 與 Chromium，可執行 `python3 tests/browser_upgrade.py`，在僅使用測試資料的本機網站驗證快取升級與 IndexedDB 交易中止。
+
 每次改版請見 `CLAUDE.md` 的「Release convention」。架構細節（state、cloud sync、GitHub Actions）也都寫在 `CLAUDE.md`。
 
 ## Claude 收件匣（`users/{uid}/inbox/{id}`）
 
-Claude 自己讀不到使用者的任何記錄或餘額，只能把「指令」寫成一份 Firestore 文件到收件匣；App 開啟時會讀取、執行、然後刪除該文件。欄位用 `stringValue`／`doubleValue`。
+Claude 自己讀不到使用者的任何記錄或餘額，只能把「指令」寫成一份 Firestore 文件到收件匣；App 會在本機寫入完成且雲端同步確認後，嘗試刪除已處理的文件。欄位用 `stringValue`／`doubleValue`。
 
 ### 共同欄位
 `kind` 決定指令種類；其餘欄位視 `kind` 而定，詳見下表。
@@ -59,6 +63,17 @@ Claude 自己讀不到使用者的任何記錄或餘額，只能把「指令」�
 
 ### 給 Claude 的注意事項
 - inbox 對機器人是只寫不讀，無法回讀；是否成功以 HTTP 200 與使用者 App 畫面為準。
-- 文件 id 會變成記錄 id（`ib_<docId>`），同一份文件重複送達會被擋掉（去重鍵含使用者 uid），刪除收件匣文件失敗時也會自動重試，所以同一份指令最終只會生效一次。
+- 新增記錄由文件 ID 衍生，分期各期使用 `ib_<docId>_i<期數>`。每筆新指令使用新文件 ID。
+- 執行前先用 Firestore 交易將指令標為 `processing`。確認雲端同步後標為 `completed`，再嘗試刪除。已知無效的指令標為 `invalid`，寫入結果不明的指令標為 `review` 或保留 `processing`。
+- 若 App 在結果確認前中斷，其他裝置會保留原指令供核對。核對時先確認雲端與原裝置有哪些資料已寫入，再處理缺漏部分。原指令的保護標記應保留到核對完成。
 - 分類、帳戶只能從 `kv/botinfo` 讀到的清單裡選，不可自創。
 - 不要把使用者的持股、金額寫進公開位置（這個 repo 的任何檔案）。
+
+
+### 收件匣規則與升級順序
+
+以 [收件匣規則測試範例](tests/firebase/inbox.test.rules) 的 `validInboxTransition()` 為草案，將擁有者的狀態更新規則合併到現行 Firestore 規則。保留目前已核准的指令建立者，並在每個建立路徑禁止自帶 `_ledgerInbox`。檢查是否有其他重疊的 `allow update` 規則會放寬這項限制。測試範例包含假帳號，僅用於 Emulator。
+
+上線前暫停送入收件匣指令，在測試專案驗證合併後的規則，再安排正式規則與 App 的升級。正式恢復收件匣前，確認會收件的裝置都已升級，並關閉舊版分頁。舊版 App 會直接執行指令，因此混用版本時無法靠新標記阻止重跑。
+
+可在已啟動的 Firestore Emulator 執行 `node tests/firebase/inbox-rules.cjs`。測試需要 `@firebase/rules-unit-testing` 與 Firebase JS SDK，並透過 `FIRESTORE_EMULATOR_HOST` 指向本機。測試專案 ID 為 `demo-ledger-inbox`。
