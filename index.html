@@ -575,7 +575,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.87';
+window.APP_VER='v2.0.88';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1983,7 +1983,7 @@ const FB_VER='10.12.2';
 const SYNC_KV=['accts','cats','budgets','rules','tpls','rates','settings','sellers'];
 const LOCAL_SETTINGS=['theme','lastA','lastBackup','sample'];
 const MCOL='mon';   // 每月一份文件，每筆記錄存成一個 JSON 字串欄位
-const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],firstM:false,firstK:false,cloudU:new Map(),srv:new Set(),q:new Map(),qBusy:false,kvPending:new Map(),remoteKV:{},lastSync:0,writing:0,wTot:0,wDone:0,online:navigator.onLine,decided:false,inboxDocs:[],
+const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],firstM:false,firstK:false,cloudU:new Map(),srv:new Set(),q:new Map(),qBusy:false,kvPending:new Map(),remoteKV:{},lastSync:0,writing:0,wTot:0,wDone:0,online:navigator.onLine,decided:false,inboxConnectionError:false,
   available(){return!window.__ARTIFACT__},
   async init(){
     if(!this.available()){this.state='na';return}
@@ -2013,17 +2013,14 @@ const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],fi
       if(!snap.empty)processInbox(snap.docs);
     }catch(e){
       if(this.user?.uid!==uid||this.db!==db||this.q!==queue)return;
+      this.inboxConnectionError=true;
       this.inboxErr=(e&&(e.code||e.message))||'unknown';
       refreshInboxUI();
     }
   },
   observeInbox(snap){
     if(snap.metadata.fromCache)return;
-    this.inboxErr='';this.inboxOk=Date.now();
-    this.inboxDocs=snap.docs.filter(doc=>!doc.metadata.hasPendingWrites).map(doc=>{
-      const data=doc.data();
-      return {source:inboxCommandSource(doc.id,data),state:data._ledgerInbox?.state};
-    });
+    this.inboxErr='';this.inboxOk=Date.now();this.inboxConnectionError=false;
     refreshInboxUI();
   },
   start(){
@@ -2038,7 +2035,7 @@ const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],fi
       if(changed.length){recompute();scheduleRender()}
       this.touch(snap);
     },onErr));
-    this.unsub.push(this.base().collection('inbox').onSnapshot(snap=>{if(snap.metadata.fromCache)return;this.observeInbox(snap);const docs=[];snap.docChanges().forEach(ch=>{if(ch.type==='added'&&!ch.doc.metadata.hasPendingWrites)docs.push(ch.doc)});if(docs.length)processInbox(docs)},e=>{this.inboxErr=(e&&(e.code||e.message))||'unknown';refreshCloudUI()}));
+    this.unsub.push(this.base().collection('inbox').onSnapshot(snap=>{if(snap.metadata.fromCache)return;this.observeInbox(snap);const docs=[];snap.docChanges().forEach(ch=>{if(ch.type==='added'&&!ch.doc.metadata.hasPendingWrites)docs.push(ch.doc)});if(docs.length)processInbox(docs)},e=>{this.inboxConnectionError=true;this.inboxErr=(e&&(e.code||e.message))||'unknown';refreshCloudUI()}));
     const inboxTimer=setInterval(()=>{if(document.visibilityState==='visible'&&this.decided)this.pollInbox()},60000);
     this.unsub.push(()=>clearInterval(inboxTimer));
     this.unsub.push(this.base().collection(MCOL).onSnapshot(async snap=>{
@@ -2075,7 +2072,7 @@ const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],fi
     if(push.length&&mode!=='cloud')toast('已排入雲端上傳 '+push.length.toLocaleString()+' 筆');
     this.pollInbox();
   },
-  stop(){this.unsub.forEach(f=>{try{f()}catch(e){}});this.unsub=[];this.inboxDocs=[];this.inboxOk=0;this.inboxErr=''},
+  stop(){this.unsub.forEach(f=>{try{f()}catch(e){}});this.unsub=[];this.inboxOk=0;this.inboxConnectionError=false;this.inboxErr=''},
   pushRecs(list){
     if(!this.user||!this.decided||!list.length)return;
     for(const r of list){if(!/^\d{4}-\d{2}/.test(r.dt||''))continue;const key=r.dt.slice(0,7)+'/'+r.id;if(!this.q.has(key))this.wTot++;this.q.set(key,JSON.stringify(r));this.cloudU.set(r.id,r.u||0)}
@@ -2213,34 +2210,21 @@ function inboxRecordSource(r){
   if(r.tg==='chatgpt'||/^ib_chatgpt_[a-f0-9]{36}(?:_|$)/.test(r.id))return 'chatgpt';
   return r.tg==='claude'?'claude':'';
 }
-function inboxSourceStatus(source,cloud,records){
+function inboxConnectionStatus(cloud){
   if(!cloud.user)return '尚未登入';
-  const commands=cloud.inboxDocs.filter(doc=>doc.source===source);
-  const review=commands.filter(doc=>doc.state==='review'||doc.state==='invalid').length;
-  const pending=commands.filter(doc=>!doc.state||doc.state==='processing').length;
-  if(review||pending)return [pending&&'已收件，'+pending+' 筆待入帳',review&&review+' 筆待核對'].filter(Boolean).join(' · ');
-  const last=records.reduce((stamp,r)=>!r.x&&cloud.srv.has(r.id)&&inboxRecordSource(r)===source
-    ?Math.max(stamp,r.o||r.u||0):stamp,0);
-  if(last){
-    const date=new Date(last).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
-    return '最近入帳 '+date;
-  }
-  return commands.some(doc=>doc.state==='completed')?'已入帳，等待同步至本機':'尚無入帳紀錄';
+  if(!cloud.online)return '離線';
+  if(cloud.inboxConnectionError)return '連線異常';
+  return cloud.inboxOk?'連線正常':'檢查中';
 }
 function inboxSharedStatus(){
-  if(!Cloud.user)return '尚未登入';
-  if(!Cloud.online)return '離線中';
-  if(Cloud.inboxErr)return '錯誤 '+Cloud.inboxErr;
-  return Cloud.inboxOk?'已連線（'+new Date(Cloud.inboxOk).toTimeString().slice(0,5)+' 檢查）':'等待連線';
+  return Cloud.user&&Cloud.inboxErr?'異常 '+Cloud.inboxErr:inboxConnectionStatus(Cloud);
 }
 function refreshInboxUI(){
   const status=document.getElementById('notif-inbox-status');
   if(!status)return;
   status.querySelector('[data-inbox-shared]').textContent=inboxSharedStatus();
   status.querySelector('[data-inbox-cloud]').textContent=Cloud.label();
-  for(const source of Object.keys(INBOX_SOURCES)){
-    status.querySelector('[data-inbox-source="'+source+'"]').textContent=inboxSourceStatus(source,Cloud,S.recs);
-  }
+  for(const row of status.querySelectorAll('[data-inbox-source]'))row.textContent=inboxConnectionStatus(Cloud);
 }
 
 let inboxBusy=Promise.resolve();
@@ -3265,8 +3249,8 @@ Object.assign(ACT,{
     openSheet('首頁顯示',`<div class="list">${['',...projs].map(p=>`<button class="li" data-act="home-proj-set" data-p="${esc(p)}" style="width:100%;text-align:left;border:0;background:none"><div class="grow">${p?esc(p):'全部記錄'}</div>${p===cur?IC.check.replace('<svg','<svg width="18" height="18" style="stroke:var(--accent);fill:none;stroke-width:2"'):''}</button>`).join('')}</div>${cur?`<button class="btn mt" data-act="home-proj-stat" data-p="${esc(cur)}">查看「${esc(cur)}」統計</button>`:''}`)},
   'home-proj-set':async el=>{S.settings.homeProj=el.dataset.p;await saveKV('settings');closeSheet();render(true)},
   'home-proj-stat':el=>{closeSheet();push('project',el.dataset.p)},
-  notif:()=>{const h=reminders();const cl=!window.__ARTIFACT__?`<div class="note" id="notif-inbox-status"><div class="grow">雲端同步：<span data-inbox-cloud>${esc(Cloud.label())}</span><br><small style="display:block">Firestore 收件匣：<span data-inbox-shared>${esc(inboxSharedStatus())}</span></small>${Object.entries(INBOX_SOURCES).map(([source,label])=>`<small style="display:block">${label}：<span data-inbox-source="${source}">${esc(inboxSourceStatus(source,Cloud,S.recs))}</span></small>`).join('')}</div><button class="btn sm" data-act="notif-cloud">設定</button></div>`:'';
-    const ph=pendHTML();openSheet('通知',`<div class="stack">${ph}${h||(ph?'':'<div class="empty" style="padding:20px 0">目前沒有待辦提醒</div>')}${cl}</div>`)},
+  notif:()=>{const h=reminders();const cl=!window.__ARTIFACT__?`<div class="note" id="notif-inbox-status"><div class="grow">雲端同步：<span data-inbox-cloud>${esc(Cloud.label())}</span><br><small style="display:block">共用 Firestore 收件匣：<span data-inbox-shared>${esc(inboxSharedStatus())}</span></small>${Object.entries(INBOX_SOURCES).map(([source,label])=>`<small style="display:block">${label}：<span data-inbox-source="${source}">${esc(inboxConnectionStatus(Cloud))}</span></small>`).join('')}</div><button class="btn sm" data-act="notif-cloud">設定</button></div>`:'';
+    const ph=pendHTML();openSheet('通知',`<div class="stack">${ph}${h||(ph?'':'<div class="empty" style="padding:20px 0">目前沒有待辦提醒</div>')}${cl}</div>`);if(cl&&Cloud.online)Cloud.pollInbox()},
   'notif-cloud':()=>{closeSheet();push('cloud')}
 });
 function calMove(d){if(S.calCol){setDay(addDays(S.day,7*d));return}

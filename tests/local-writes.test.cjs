@@ -274,22 +274,32 @@ test('Firestore 不允許領取時，沒有任何本機寫入', async () => {
 });
 
 
-test('通知用各自的收件證據區分 Claude 與 ChatGPT', () => {
+test('ChatGPT 來源保留，舊版記錄可從 ID 識別', () => {
   const f = fixture();
   const chatgptId = 'chatgpt_' + 'a'.repeat(36);
-  const oldChatGPT = {id: 'ib_' + chatgptId, tg: 'claude', o: Date.UTC(2026, 10, 19, 9, 10)};
   f.context.chatgptId = chatgptId;
-  f.Cloud.inboxDocs = [{source: 'chatgpt'}, {source: 'claude', state: 'review'}];
-  f.Cloud.srv = new Set();
-  f.S.recs.push(oldChatGPT);
   assert.equal(f.run("inboxCommandSource(chatgptId, {kind:'exp'})"), 'chatgpt');
   assert.equal(f.run("inboxCommandSource('legacy', {kind:'px'})"), '');
   assert.equal(f.run("inboxCommandSource('legacy', {src:'ap'})"), '');
-  assert.equal(f.run("inboxSourceStatus('chatgpt',Cloud,S.recs)"), '已收件，1 筆待入帳');
-  assert.equal(f.run("inboxSourceStatus('claude',Cloud,S.recs)"), '1 筆待核對');
-  f.Cloud.inboxDocs = [];
-  assert.equal(f.run("inboxSourceStatus('chatgpt',Cloud,S.recs)"), '尚無入帳紀錄');
-  f.Cloud.srv.add(oldChatGPT.id);
-  assert.match(f.run("inboxSourceStatus('chatgpt',Cloud,S.recs)"), /^最近入帳 .*17:10/);
-  assert.equal(f.run("inboxSourceStatus('claude',Cloud,S.recs)"), '尚無入帳紀錄');
+  assert.equal(f.run("inboxRecordSource({id:'ib_'+chatgptId,tg:'claude'})"), 'chatgpt');
+});
+
+test('通知依實際收件匣連線顯示狀態', () => {
+  const f = fixture();
+  f.Cloud.online = true;
+  const status = () => f.run('inboxConnectionStatus(Cloud)');
+  assert.equal(status(), '檢查中');
+  f.Cloud.inboxOk = Date.now();
+  assert.equal(status(), '連線正常');
+  f.Cloud.inboxErr = '指令待核對';
+  assert.equal(status(), '連線正常');
+  f.Cloud.inboxConnectionError = true;
+  assert.equal(status(), '連線異常');
+  f.Cloud.online = false;
+  assert.equal(status(), '離線');
+  f.Cloud.user = null;
+  assert.equal(status(), '尚未登入');
+  const notification = section('  notif:()=>', "  'notif-cloud':");
+  assert.match(notification, /inboxConnectionStatus/);
+  assert.doesNotMatch(notification, /最近入帳|inboxSourceStatus/);
 });
