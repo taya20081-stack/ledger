@@ -394,3 +394,13 @@ test('多分類編輯沿用群組與發票，增刪分項後重新合計', () =>
   assert.equal(read()[0].g,'stable');
   assert.equal(read()[0].inv,'TEST');
 });
+
+test('展開收據時同時顯示商品名稱與分類', () => {
+  const view=vm.runInNewContext(section('function homeRow(', 'const homeProjOk=')+'\nhomeRow(record,"測試商品")',{
+    record:{id:'line',rv:1,n:'測試商品',c:'生活',s:'飲料',t:'支出',dt:'2026-01-01',m:-20},
+    TODAY:()=> '2026-01-01', curOf:()=> 'TWD', raw:r=>r.m, D:{acct:new Map()}, S:{search:{selMode:false}},
+    ruleTag:()=>'', hbadge:()=>'', money:String, esc:String
+  });
+  assert.match(view,/>測試商品<\/div>/);
+  assert.match(view,/>生活／飲料<\/div>/);
+});
