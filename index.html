@@ -574,7 +574,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.90';
+window.APP_VER='v2.0.91';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -3218,10 +3218,11 @@ function homeRow(r,noShop){
     var trl=`<div class="trl"><span class="apill">${esc(D.acct.get(o.a)?.name||'—')}</span><span class="arr">→</span><span class="apill">${esc(p&&D.acct.get(p.a)?.name||'—')}</span></div>`;acct=''}
   else{var trl='';amt=`<span class="num ${v<0?'neg':v>0?'pos':''}">${money(Math.abs(v),cur)}</span>`;
     var sub=[];const rt=ruleTag(r);if(rt)sub.push(rt);if(r.t!=='支出'&&r.t!=='收入')sub.push(r.t+(r.w?' @'+r.w:''))}
+  if(noShop&&r.rv===1)sub.push([r.c,r.s].filter(Boolean).join('／'));
   if(r.sh&&!noShop&&!isTr)sub.push(r.sh);const shop='';
   const conv=cur!=='TWD'&&!isTr?`<small class="num">≈ ${money(Math.round(Math.abs(val(r))*rateOf(curOf(r))),'TWD')}</small>`:'';
   const fut=r.dt>td;const sel=S.search.selMode&&S.search.sel.has(r.id);
-  return`<button class="row hrow${fut?' future':''}${sel?' sel':''}" data-act="${S.search.selMode?'sel-toggle':'edit-rec'}" data-id="${r.id}">${hbadge(r)}<div style="min-width:0"><div class="t">${esc(noShop?((r.n&&r.n!==noShop?r.n:'')||r.s||r.c||titleOf(r)):titleOf(r))}</div>${sub.length||fut?`<div class="s">${fut?'<span class="pill warn" style="margin:0 6px 0 0">未入帳</span>':''}${esc(sub.join('・'))}</div>`:''}${shop?`<div class="s shp">🏪 ${esc(shop)}</div>`:''}</div><div class="amt">${amt}${conv}${(acct||(!isTr&&r.p))?`<span class="pills">${isTr?'':projPill(r.p)}${acct?`<span class="apill">${esc(acct)}</span>`:''}</span>`:''}</div>${trl}</button>`;
+  return`<button class="row hrow${fut?' future':''}${sel?' sel':''}" data-act="${S.search.selMode?'sel-toggle':'edit-rec'}" data-id="${r.id}">${hbadge(r)}<div style="min-width:0"><div class="t">${esc(noShop?((r.n&&(r.rv===1||r.n!==noShop)?r.n:'')||r.s||r.c||titleOf(r)):titleOf(r))}</div>${sub.length||fut?`<div class="s">${fut?'<span class="pill warn" style="margin:0 6px 0 0">未入帳</span>':''}${esc(sub.join('・'))}</div>`:''}${shop?`<div class="s shp">🏪 ${esc(shop)}</div>`:''}</div><div class="amt">${amt}${conv}${(acct||(!isTr&&r.p))?`<span class="pills">${isTr?'':projPill(r.p)}${acct?`<span class="apill">${esc(acct)}</span>`:''}</span>`:''}</div>${trl}</button>`;
 }
 const homeProjOk=r=>!S.settings.homeProj||r.p===S.settings.homeProj;
 function calCells(){
