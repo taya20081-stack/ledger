@@ -328,7 +328,7 @@ test('ChatGPT 收據分項共享一組、同步後維持同組、完成憑證可
   f.S.cats.exp[0].subs.push('飲料','點心');
   const id='chatgpt_'+'b'.repeat(36);
   const lines=[{c:'生活',s:'飲料',n:'示例飲品',amt:11},{c:'生活',s:'點心',n:'示例點心*2',amt:24},{c:'生活',s:'舊分類',n:'示例商品',amt:0}];
-  const data={spv:1,kind:'exp',a:'cash',cu:'TWD',dt:'2026-01-01',tm:'12:00',amt:35,n:'示例收據',sp:JSON.stringify(lines)};
+  const data={spv:1,kind:'exp',a:'cash',cu:'TWD',dt:'2026-01-01',tm:'12:00',amt:35,n:'示例收據',p:'測試專案',sh:'測試商店',sp:JSON.stringify(lines)};
   const doc=command(data,id);
   await process(f,doc);
   assert.equal(doc.data()._ledgerInbox.state,'completed');
@@ -336,6 +336,7 @@ test('ChatGPT 收據分項共享一組、同步後維持同組、完成憑證可
   assert.equal(f.rec.size,3);
   const records=[...f.rec.values()];
   assert.equal(new Set(records.map(r=>r.g)).size,1);
+  assert.ok(records.every(r=>r.p==='測試專案'&&r.sh==='測試商店'));
   assert.equal(records.reduce((sum,r)=>sum+r.m,0),-35);
   assert.deepEqual(records.map(r=>[r.s,Math.abs(r.m)]),[['飲料',11],['點心',24],['舊分類',0]]);
   assert.equal(f.Cloud.writes.length,3);
