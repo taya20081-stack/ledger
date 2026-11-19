@@ -575,7 +575,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.86';
+window.APP_VER='v2.0.85';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -3853,20 +3853,8 @@ if(CALC_TOUCH){
 // 減號在輸入框顯示「−」，算式解析時當成一般減號
 const _evalAmtC=evalAmt;evalAmt=function(src){return _evalAmtC(String(src??'').replace(/−/g,'-'))};
 
-// 自然語言記帳只進入原本編輯表單；未確認前絕不寫入資料庫。
-window.__ledger.quickBlank=kind=>blankForm(kind);
-window.__ledger.quickOpen=form=>openEditor(form);
-const _nlPageHome=PAGES.home;
-PAGES.home=function(){
-  const page=_nlPageHome();
-  if(S.accts.length)page.body='<div style="margin:8px 0 14px"><button class="btn pri" data-act="nl-open" style="width:100%">🎤 自然語言／語音記帳</button></div>'+page.body;
-  return page;
-};
-ACT['nl-open']=()=>{if(window.NaturalLedger)window.NaturalLedger.open();else toast('語音記帳模組尚未載入，請重新開啟 App')};
-
 boot();
 </script>
-<script src="./natural-ledger.js"></script>
 <script>
 if('serviceWorker' in navigator && location.protocol!=='file:'){
   window.addEventListener('load',()=>{
