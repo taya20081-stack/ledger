@@ -303,3 +303,21 @@ test('通知依實際收件匣連線顯示狀態', () => {
   assert.match(notification, /inboxConnectionStatus/);
   assert.doesNotMatch(notification, /最近入帳|inboxSourceStatus/);
 });
+
+
+test('投資市值摘要與清單依市值遞減，同額保留原順序', () => {
+  const context = vm.createContext({
+    mktParts: () => [
+      {k: '股票', p: 'invest', v: 30, sub: ''},
+      {k: '黃金', p: 'gold', v: 50, sub: ''},
+      {k: '外匯', p: 'fx', v: 30, sub: ''}
+    ],
+    mktDate: () => '—', esc: String, fmt: String, money: String, IC: {}
+  });
+  const page = vm.runInContext(section('function pageMarket()', 'function pageFx()') + '\npageMarket()', context);
+  const order = ['黃金', '股票', '外匯'];
+  assert.deepEqual(Array.from(page.body.matchAll(/class="lbl">(黃金|股票|外匯)</g), m => m[1]), order);
+  assert.deepEqual(Array.from(page.body.matchAll(/class="grow"><div>(黃金|股票|外匯)</g), m => m[1]), order);
+  assert.doesNotMatch(page.body, /拖曳|mk-h/);
+  assert.match(page.body, /data-act="push" data-p="invest"/);
+});
