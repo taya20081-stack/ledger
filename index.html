@@ -338,7 +338,6 @@ input[type=date].in,input[type=time].in{min-width:0;width:100%;display:block;-we
 .srt{display:grid;gap:6px;margin-top:10px}
 #projList .li{touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}#projList .li.drag{box-shadow:var(--shadow);position:relative;z-index:2;background:var(--paper)}.proj-h{font-size:20px;line-height:1;color:var(--muted);padding:4px 2px 4px 0;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;flex:none}
 #catList .catcard{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}#catList .catcard.drag{box-shadow:var(--shadow);position:relative;z-index:2}
-#mktList .li{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}#mktList .li.drag{box-shadow:var(--shadow);position:relative;z-index:2;background:var(--paper)}.mk-h{font-size:20px;line-height:1;color:var(--muted);padding:4px 2px 4px 0;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;flex:none}
 .hdList .li{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}.hdList .li.drag{box-shadow:var(--shadow);position:relative;z-index:2;background:var(--paper)}.hd-h{font-size:20px;line-height:1;color:var(--muted);padding:4px 2px 4px 0;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;flex:none}.cat-h{font-size:20px;line-height:1;color:var(--muted);padding:4px 6px 4px 0;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;flex:none}
 .subrow{cursor:pointer}.subrow.drag{box-shadow:var(--shadow);position:relative;z-index:2;background:var(--paper)}.sub-h{font-size:16px;line-height:1;color:var(--muted);padding:2px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;flex:none}
 .srt-row{-webkit-user-select:none;user-select:none;display:flex;align-items:center;gap:8px;background:var(--paper);border:1px solid var(--rule);border-radius:12px;padding:6px 8px}
@@ -575,7 +574,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.88';
+window.APP_VER='v2.0.89';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -3663,27 +3662,16 @@ function mktParts(){const H=S.settings.hold||[];const g=S.settings.gold;const fx
     {k:'外匯',p:'fx',v:fx.reduce((t,x)=>t+x.v,0),d:S.rates.at||'',sub:fx.length?new Set(fx.map(x=>x.a.cur)).size+' 種幣別':'沒有外幣餘額'}]}
 function mktTotal(){return mktParts().reduce((t,x)=>t+x.v,0)}
 function mktDate(){return mktParts().map(x=>x.d).filter(Boolean).sort().pop()||'—'}
-function pageMarket(){let P=mktParts();const tot=P.reduce((t,x)=>t+x.v,0);const fx=fxList();
-  const mo=S.settings.mktOrder||[];P=P.map((x,i)=>({x,i})).sort((a,b)=>{const ia=mo.indexOf(a.x.k),ib=mo.indexOf(b.x.k);if(ia<0&&ib<0)return a.i-b.i;if(ia<0)return 1;if(ib<0)return-1;return ia-ib}).map(y=>y.x);
-  const row=x=>{const h=`<span class="mk-h" aria-label="拖曳排序">≡</span>`,body=`<div class="grow"><div>${x.k}</div><small>${esc(x.sub)}${x.d?' · 更新：'+x.d:''}</small></div><div class="r num">${x.v?money(x.v):'—'}</div>`;
-    return x.p?`<div class="li" role="button" tabindex="0" data-act="push" data-p="${x.p}" data-mk="${esc(x.k)}">${h}${body}<span class="chev">${IC.chev}</span></div>`
-      :`<div class="li" data-mk="${esc(x.k)}">${h}${body}</div>`};
+function pageMarket(){
+  const P=mktParts().sort((a,b)=>b.v-a.v);
+  const tot=P.reduce((t,x)=>t+x.v,0);
+  const row=x=>`<button class="li" data-act="push" data-p="${x.p}"><div class="grow"><div>${x.k}</div><small>${esc(x.sub)}${x.d?' · 更新：'+x.d:''}</small></div><div class="r num">${x.v?money(x.v):'—'}</div><span class="chev">${IC.chev}</span></button>`;
   return{back:1,head:`<h1>投資市值</h1><button class="ibtn" data-act="px-refresh" aria-label="更新價格">${IC.sync||'↻'}</button>`,body:`
   <div class="sum"><div class="lbl">投資市值（TWD） · 更新：${esc(mktDate())}</div><div class="huge num">${fmt(tot)}</div>
    <div class="kv mt">${P.map(x=>`<div><div class="lbl">${x.k}</div><div class="v num">${fmt(x.v)}</div></div>`).join('')}</div>
    </div>
-  <div class="grp"><div class="list" id="mktList">${P.map(row).join('')}</div></div>
+  <div class="grp"><div class="list">${P.map(row).join('')}</div></div>
 `}}
-async function mktSaveOrder(order){S.settings.mktOrder=order;S.settings.u=Date.now();await saveKV('settings');render(true)}
-let mktDrag=null;
-document.addEventListener('click',e=>{if(e.target.closest('.mk-h'))e.stopPropagation()},true);
-document.addEventListener('pointerdown',e=>{const h=e.target.closest('.mk-h');if(!h)return;e.preventDefault();const row=h.closest('.li');const box=row.parentElement;
-  mktDrag={row,box,id:e.pointerId};row.classList.add('drag');try{h.setPointerCapture(e.pointerId)}catch(_){}});
-document.addEventListener('pointermove',e=>{if(!mktDrag||e.pointerId!==mktDrag.id)return;e.preventDefault();const rows=[...mktDrag.box.children].filter(r=>r!==mktDrag.row);
-  let before=null;for(const r of rows){const b=r.getBoundingClientRect();if(e.clientY<b.top+b.height/2){before=r;break}}
-  if(before!==mktDrag.row.nextSibling)mktDrag.box.insertBefore(mktDrag.row,before)},{passive:false});
-['pointerup','pointercancel'].forEach(t=>document.addEventListener(t,e=>{if(!mktDrag||e.pointerId!==mktDrag.id)return;mktDrag.row.classList.remove('drag');const box=mktDrag.box;mktDrag=null;
-  if(box&&box.id==='mktList')mktSaveOrder([...box.children].map(r=>r.dataset.mk)).catch(onActionError)}));
 function pageFx(){const fx=fxList();const tot=fx.reduce((t,x)=>t+x.v,0);const by=new Map();for(const x of fx){const o=by.get(x.a.cur)||{cur:x.a.cur,b:0,v:0,L:[]};o.b+=x.b;o.v+=x.v;o.L.push(x);by.set(x.a.cur,o)}
   const C=[...by.values()].sort((a,b)=>b.v-a.v);
   return{back:1,head:`<h1>外匯</h1><button class="ibtn" data-act="px-refresh" aria-label="更新">${IC.sync||'↻'}</button>`,body:`
