@@ -582,7 +582,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.92';
+window.APP_VER='v2.0.93';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -2408,7 +2408,7 @@ async function executeInbox(docs){
       const currency=x.cu&&x.cu!==acct.cur?{cu:x.cu,xr:+(fxOn(x.cu,x.dt)/fxOn(acct.cur,x.dt)).toPrecision(6)}:{};
       const stamp=Date.now();
       add.push(...lines.map((q,i)=>({id:id+'_'+i,a:acct.id,t:expense?'支出':'收入',c:q.c,s:q.s,m:expense?-q.amt:q.amt,
-        f:0,d:0,n:q.n,gn:x.n,sh:x.sh||'',dt:x.dt,tm:x.tm,p:'',ds:'',tg:'chatgpt',w:'',k:'',g,o:stamp+i,rv:1,inv:x.inv||'',...currency})));
+        f:0,d:0,n:q.n,gn:x.n,sh:x.sh||'',dt:x.dt,tm:x.tm,p:String(x.p||'').slice(0,60),ds:'',tg:'chatgpt',w:'',k:'',g,o:stamp+i,rv:1,inv:x.inv||'',...currency})));
       dels.push(d.ref);continue;
     }
 
