@@ -15,7 +15,9 @@ function fixture() {
   const rec = new Map();
   let kv = new Map();
   const S = {recs: [], byId: new Map(), settings: {}, kvu: {}, rules: [],
-    accts: [{id: 'cash', name: '現金'}]};
+    accts: [{id: 'cash', name: '現金'}], tpls: [],
+    cats: {exp: [{n:'生活',subs:['舊分類']}], inc: []}};
+  const D = {live: [], acct: new Map(S.accts.map(a => [a.id, a]))};
   const Cloud = {user: {uid: 'example-user'}, decided: true,
     writes: [], canSync: true, pushRecs(rows) {this.writes.push(...rows)},
     pushKV(key, value, stamp) {this.writes.push({key, value, stamp})},
@@ -25,6 +27,11 @@ function fixture() {
     async putRecs(rows) {
       if(this.failRec)throw new Error('mock record abort');
       for(const row of rows)rec.set(row.id, structuredClone(row));
+    },
+    async getKV(key) {return kv.get(key)},
+    async putKV(key, value) {
+      if(this.failKV)throw new Error('mock KV abort');
+      kv.set(key, structuredClone(value));
     },
     async run(stores, callback) {
       const writes = new Map(kv), requests = [];
@@ -39,13 +46,17 @@ function fixture() {
     }
   };
   const context = vm.createContext({
-    DB, S, Cloud, GOLD_U: {}, window: {Cloud, addEventListener() {}}, structuredClone,
-    toast() {}, ensureCats() {}, recompute() {}, scheduleRender() {},
+    DB, S, D, Cloud, GOLD_U: {}, window: {Cloud, addEventListener() {}}, structuredClone, setTimeout, clearTimeout,
+    toast() {}, ensureCats() {}, recompute() {D.live = S.recs.filter(r => !r.x)}, scheduleRender() {},
+    async fixOsGroups() {}, r2: n => n, fmt: String, TODAY: () => '2026-01-01', NOWTM: () => '12:00',
+    balAt: () => D.live.reduce((sum,r) => sum + r.m, 0),
     addMonths(date, months) {return '2026-' + String(1 + months).padStart(2, '0') + '-01'}
   });
   vm.runInContext([
     section('class LocalWriteError', 'function rateOf'),
     section('let recordWrites', '/* ================= recurring'),
+    section('async function renProj(', 'function ruleName('),
+    section('async function renameSub(', '/* ================= record building'),
     'let inboxBusy=Promise.resolve();',
     section('const inboxSeen=', 'function processInbox(docs)'),
     section('function processInbox(docs)', "ACT['copy-uid']")
@@ -135,6 +146,19 @@ test('同步未確認或刪除失敗時，重送不重跑已寫入的同分頁�
   assert.equal(f.Cloud.writes.length, 1);
 });
 
+test('刪除失敗後重開分頁可以查到已確認的完成憑證', async () => {
+  const first = fixture();
+  const doc = command({kind:'gold',q:5});
+  doc.ref.fail = true;
+  await process(first, doc);
+  const second = fixture();
+  await second.DB.putKV('inboxReceipts/example-user', first.kv.get('inboxReceipts/example-user'));
+  doc.ref.fail = false;
+  await process(second, doc);
+  assert.equal(doc.ref.deletes, 2);
+  assert.equal(second.Cloud.writes.length, 0);
+});
+
 test('無效 JSON 與找不到目標的編輯指令會保留', async () => {
   const f = fixture();
   f.context.D = {live: [], acct: new Map()};
@@ -144,4 +168,44 @@ test('無效 JSON 與找不到目標的編輯指令會保留', async () => {
     assert.equal(doc.ref.deletes, 0);
     assert.match(f.Cloud.inboxErr, /已保留待檢查的指令/);
   }
+});
+
+test('edit、del、bal、rensub、renproj、mvproj 重送時不重複寫入', async () => {
+  for (const [data, expected] of [
+    [{kind:'edit', dt:'2026-01-01', n:'測試記錄', nn:'已改名'}, row => row.n === '已改名'],
+    [{kind:'del', dt:'2026-01-01', n:'測試記錄'}, row => row.x === 1],
+    [{kind:'bal', dt:'2026-01-01', a:'cash', amt:100}, (_, f) => f.rec.get('ib_example-command')?.m === 90],
+    [{kind:'rensub', k:'exp', c:'生活', s:'舊分類', ns:'新分類'}, row => row.s === '新分類'],
+    [{kind:'renproj', o:'舊專案', nv:'新專案'}, row => row.p === '新專案'],
+    [{kind:'mvproj', o:'舊專案', nv:'新專案', d1:'2026-01-01'}, row => row.p === '新專案'],
+  ]) {
+    const f = fixture();
+    await f.run("mutate([{id:'r1', a:'cash', t:'支出', c:'生活', s:'舊分類', p:'舊專案', n:'測試記錄', dt:'2026-01-01', m:10}])");
+    const doc = command(data);
+    doc.ref.fail = true;
+    await process(f, doc);
+    assert.equal(doc.ref.deletes, 1, data.kind);
+    assert.ok(expected(f.rec.get('r1'), f), data.kind);
+    const writes = f.Cloud.writes.length;
+    doc.ref.fail = false;
+    await process(f, doc);
+    assert.equal(f.Cloud.writes.length, writes, data.kind);
+    assert.equal(doc.ref.deletes, 2, data.kind);
+  }
+});
+
+test('子類別改名寫入一半後可重試儲存分類，不會再改一次記錄', async () => {
+  const f = fixture();
+  await f.run("mutate([{id:'r1', t:'支出', c:'生活', s:'舊分類',dt:'2026-01-01'}])");
+  const doc = command({kind:'rensub', k:'exp', c:'生活', s:'舊分類', ns:'新分類'});
+  f.DB.failKV = true;
+  await process(f, doc);
+  assert.equal(doc.ref.deletes, 0);
+  assert.equal(f.rec.get('r1').s, '新分類');
+  assert.deepEqual(f.S.cats.exp[0].subs, ['舊分類']);
+  f.DB.failKV = false;
+  await process(f, doc);
+  assert.equal(doc.ref.deletes, 1);
+  assert.deepEqual(f.kv.get('cats').exp[0].subs, ['新分類']);
+  assert.equal(f.Cloud.writes.filter(row => row.id).length, 2);
 });

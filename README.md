@@ -26,7 +26,9 @@
 python3 -c "import re;s=open('index.html',encoding='utf-8').read();open('/tmp/app.js','w').write('\n;\n'.join(re.findall(r'<script(?![^>]*src)[^>]*>(.*?)</script>',s,re.S)))" && node --check /tmp/app.js
 ```
 
-本機寫入與收件匣測試使用記憶體模擬資料，可執行 `node --test tests/local-writes.test.cjs`。
+本機寫入與收件匣測試使用記憶體模擬資料，可執行 `node --test tests/local-writes.test.cjs`。牌價、匯率與 Git 推送測試可執行 `python3 -m unittest discover -s tests -p "test_*.py"`。
+
+若已安裝 Playwright 與 Chromium，可執行 `python3 tests/browser_upgrade.py`，在僅使用測試資料的本機網站驗證快取升級與 IndexedDB 交易中止。
 
 每次改版請見 `CLAUDE.md` 的「Release convention」。架構細節（state、cloud sync、GitHub Actions）也都寫在 `CLAUDE.md`。
 
@@ -62,6 +64,6 @@ Claude 自己讀不到使用者的任何記錄或餘額，只能把「指令」�
 ### 給 Claude 的注意事項
 - inbox 對機器人是只寫不讀，無法回讀；是否成功以 HTTP 200 與使用者 App 畫面為準。
 - 新增記錄由文件 ID 衍生，分期各期使用 `ib_<docId>_i<期數>`。同一分頁會以 UID 和文件 ID 去除重複送達，雲端確認或刪除失敗時會保留指令。
-- 重新載入或多裝置同時執行仍可能重試同一份指令。修改與刪除指令找不到唯一目標時會保留原文件，並在雲端同步畫面顯示原因。
+- 完成雲端確認後，本機會儲存最近 512 個完成憑證。若在確認前關閉 App，或多裝置同時執行，仍有重試同一份指令的可能。修改與刪除指令找不到唯一目標時會保留原文件，並在雲端同步畫面顯示原因。
 - 分類、帳戶只能從 `kv/botinfo` 讀到的清單裡選，不可自創。
 - 不要把使用者的持股、金額寫進公開位置（這個 repo 的任何檔案）。

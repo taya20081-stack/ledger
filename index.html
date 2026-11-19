@@ -648,6 +648,7 @@ const DB={db:null,mem:false,
   })},
   putRecs(arr){return this.run(['rec'],t=>{const s=t.objectStore('rec');arr.forEach(r=>s.put(r))})},
   putKV(k,v){return this.run(['kv'],t=>t.objectStore('kv').put(v,k))},
+  getKV(k){return this.req(this.db.transaction('kv').objectStore('kv').get(k))},
   clear(){return this.run(['rec','kv'],t=>{t.objectStore('rec').clear();t.objectStore('kv').clear()})}
 };
 
@@ -674,9 +675,9 @@ function localWrite(write, message){
   return pending;
 }
 
-function saveKV(k){
+function saveKV(k,replacement){
   const syncedKey=SYNC_KEYS.includes(k);
-  const value=structuredClone(S[k]);
+  const value=structuredClone(replacement===undefined?S[k]:replacement);
   let u;
   const saved=localWrite(()=>DB.run(['kv'],tx=>{
       const store=tx.objectStore('kv');
@@ -690,6 +691,7 @@ function saveKV(k){
       }
     }),'設定未能儲存到此裝置');
   const pending=saved.then(()=>{
+    if(replacement!==undefined)S[k]=replacement;
     if(syncedKey){
       S.kvu[k]=u;
       if(window.Cloud)Cloud.pushKV(k,value,u);
@@ -697,6 +699,14 @@ function saveKV(k){
   });
   pending.catch(()=>{});
   return pending;
+}
+function onActionError(error){
+  if(error instanceof LocalWriteError)return; // 已經顯示儲存失敗訊息。
+  console.error(error);
+  toast('操作未能完成');
+}
+function asyncAction(handler){
+  return (...args)=>Promise.resolve().then(()=>handler(...args)).catch(onActionError);
 }
 window.addEventListener('unhandledrejection',e=>{
   // DOM 的非同步事件處理函式沒有 Promise 呼叫端。localWrite 已顯示原因。
@@ -802,10 +812,34 @@ function wkAdj(d,wk){if(!wk)return d;let g=0;while(isOffDay(d)&&g++<15)d=addDays
 const RULE_AHEAD=62;   // 週期記錄預先產生到未來幾天（未到期的顯示「未入帳」，不計入餘額）
 /* 週期名稱：名稱 > 分項名稱 > 分項小類（分項記錄頂層的 c/s 只是預設值，不能拿來當名稱） > 小類 */
 /* 專案改名／合併：記錄、週期與範本（含分項）、完成／開啟狀態一起搬 */
-async function renProj(old,nv){const merge=D.live.some(r=>r.p===nv);const rs=D.live.filter(r=>r.p===old).map(r=>({...r,p:nv}));if(rs.length)await mutate(rs);
-  const fix=f=>{let h=false;if(f&&f.p===old){f.p=nv;h=true}if(f&&Array.isArray(f.splits))f.splits.forEach(x=>{if(x.p===old){x.p=nv;h=true}});return h};
-  let nr=0;for(const r of S.rules){if(fix(r.fs)){r.u=Date.now();nr++}}if(nr)await saveKV('rules');let nt=0;for(const t of S.tpls||[]){if(fix(t.fs)){t.u=Date.now();nt++}}if(nt)await saveKV('tpls');
-  for(const k of['projDone','projOpen']){const m={...(S.settings[k]||{})};if(old in m){if(!(nv in m))m[nv]=m[old];delete m[old];S.settings[k]=m}}await saveKV('settings');return{recs:rs.length,rules:nr,merge}}
+async function renProj(old,nv){
+  const merge=D.live.some(r=>r.p===nv);
+  const rs=D.live.filter(r=>r.p===old).map(r=>({...r,p:nv}));
+  if(rs.length)await mutate(rs);
+  const fix=f=>{
+    let hit=false;
+    if(f?.p===old){f.p=nv;hit=true}
+    for(const x of f?.splits||[]){if(x.p===old){x.p=nv;hit=true}}
+    return hit;
+  };
+  const update=async key=>{
+    const items=structuredClone(S[key]);
+    let count=0;
+    for(const item of items){if(fix(item.fs)){item.u=Date.now();count++}}
+    if(count)await saveKV(key,items);
+    return count;
+  };
+  const nr=await update('rules');
+  await update('tpls');
+  const settings={...S.settings};
+  let changed=false;
+  for(const k of ['projDone','projOpen']){
+    const m={...(settings[k]||{})};
+    if(Object.hasOwn(m,old)){if(!Object.hasOwn(m,nv))m[nv]=m[old];delete m[old];settings[k]=m;changed=true}
+  }
+  if(changed)await saveKV('settings',settings);
+  return {recs:rs.length,rules:nr,merge};
+}
 function ruleName(f,fb){if(!f)return fb||'';if(f.n&&String(f.n).trim())return String(f.n).trim();const sp=Array.isArray(f.splits)&&f.splits.length?f.splits:null;if(sp){const x=sp.find(y=>y.n&&String(y.n).trim())||sp[0];return String(x.n||'').trim()||x.s||x.c||fb||''}return f.s||fb||''}
 function rLabel(r){if(!r)return'';if(r.fq==='I')return r.name||'';const f=r.fs||{};return(Array.isArray(f.splits)&&f.splits.length&&!(f.n&&String(f.n).trim()))?ruleName(f,r.name):(r.name||ruleName(f))}
 function ruleOf(r){const m=/^(.+)_(\d+)_\d+$/.exec(r&&r.id||'');if(!m)return null;const rule=S.rules.find(x=>x.id===m[1]&&x.fq!=='I');return rule?{rule,k:+m[2]}:null}
@@ -858,12 +892,39 @@ function amortize(total,n,ratePct){
 }
 
 /* 子類別改名：分類清單、記錄、週期規則一起更新 */
-async function renameSub(k,cn,old,nv){const c=S.cats[k].find(q=>q.n===cn);if(!c)return 0;const j=c.subs.indexOf(old);if(j<0)return 0;
-  if(c.subs.includes(nv))c.subs.splice(j,1);else c.subs[j]=nv;S.cats.u=Date.now();await saveKV('cats');
-  const ic=(S.settings.icons||{})[cn+'|'+old];if(ic){const m={...S.settings.icons};delete m[cn+'|'+old];m[cn+'|'+nv]=ic;S.settings.icons=m;await saveKV('settings')}
-  const t=k==='exp'?'支出':'收入';const rs=D.live.filter(r=>r.t===t&&r.c===cn&&r.s===old).map(r=>({...r,s:nv}));if(rs.length)await mutate(rs);
-  let rc=0;for(const r of S.rules){const f=r.fs;if(!f)continue;let hit=false;if(f.c===cn&&f.s===old){f.s=nv;hit=true}if(Array.isArray(f.splits))f.splits.forEach(x=>{if(x.c===cn&&x.s===old){x.s=nv;hit=true}});if(hit){r.u=Date.now();rc++}}
-  if(rc)await saveKV('rules');return rs.length}
+async function renameSub(k,cn,old,nv){
+  const cat=S.cats[k].find(q=>q.n===cn);
+  if(!cat||!cat.subs.includes(old)||old===nv)return 0;
+  const t=k==='exp'?'支出':'收入';
+  const rows=D.live.filter(r=>r.t===t&&r.c===cn&&r.s===old).map(r=>({...r,s:nv}));
+  if(rows.length)await mutate(rows);
+  const icons={...(S.settings.icons||{})};
+  const icon=icons[cn+'|'+old];
+  if(icon){
+    delete icons[cn+'|'+old];
+    icons[cn+'|'+nv]=icon;
+    await saveKV('settings',{...S.settings,icons});
+  }
+  const rules=structuredClone(S.rules);
+  let changed=false;
+  for(const rule of rules){
+    const f=rule.fs;
+    if(!f)continue;
+    const matches=[f,...(f.splits||[])].filter(x=>x.c===cn&&x.s===old);
+    for(const x of matches)x.s=nv;
+    if(matches.length){rule.u=Date.now();changed=true}
+  }
+  if(changed)await saveKV('rules',rules);
+  const cats=structuredClone(S.cats);
+  const subs=cats[k].find(q=>q.n===cn).subs;
+  const at=subs.indexOf(old);
+  if(at>=0){
+    if(subs.includes(nv))subs.splice(at,1);else subs[at]=nv;
+    cats.u=Date.now();
+    await saveKV('cats',cats);
+  }
+  return rows.length;
+}
 /* ================= record building ================= */
 function blankForm(kind='exp'){
   const lastA=S.settings.lastA&&D.acct.has(S.settings.lastA)?S.settings.lastA:(S.accts.find(a=>!a.arch)?.id||'');
@@ -1392,7 +1453,7 @@ document.addEventListener('pointermove',e=>{if(!pjDrag||e.pointerId!==pjDrag.id)
   let before=null;for(const r of rows){const b=r.getBoundingClientRect();if(e.clientY<b.top+b.height/2){before=r;break}}
   if(before!==pjDrag.row.nextSibling)pjDrag.box.insertBefore(pjDrag.row,before)},{passive:false});
 ['pointerup','pointercancel'].forEach(t=>document.addEventListener(t,e=>{if(!pjDrag||e.pointerId!==pjDrag.id)return;pjDrag.row.classList.remove('drag');const box=pjDrag.box;pjDrag=null;
-  if(box&&box.id==='projList')projSaveOrder([...box.children].map(r=>r.dataset.n))}));
+  if(box&&box.id==='projList')projSaveOrder([...box.children].map(r=>r.dataset.n)).catch(onActionError)}));
 function pageProject(name){
   const rs=D.live.filter(r=>r.p===name);const by=new Map();let sp=0,inc=0;
   for(const r of rs){const k=rateOf(curOf(r));const v=spendOf(r)*k;sp+=v;inc+=incomeOf(r)*k;if(v)by.set(r.c,(by.get(r.c)||0)+v)}
@@ -1635,9 +1696,27 @@ async function saveEditor(again){
       rule.fs={...rule.fs,...f,ids:[],rep:'',mode:'',post:'',sno:'',wk:'',dep:'',_edit:false,_scope:'',dt:rule.fs.dt,os:!!rule.fs.os};delete rule.fs._pend;rule.name=ruleName(f,rule.name);rule.u=Date.now();
       for(let q=k+1;q<rule.done;q++){const old=S.recs.filter(r=>!r.x&&r.id.startsWith(rule.id+'_'+q+'_'));if(!old.length)continue;const nw=ruleBuild(rule,q);const keep=new Set(nw.map(r=>r.id));nw.forEach(r=>{const o=S.byId.get(r.id);if(o)r.o=o.o});recs.push(...nw);old.forEach(o=>{if(!keep.has(o.id))del.push(o.id)})}
       await saveKV('rules')}}
-  if(f._pend){S.settings.pend=(S.settings.pend||[]).filter(x=>x.id!==f._pend)}
-  S.settings.lastA=f.a;saveKV('settings');
-  await mutate(recs,del);
+  if(f._pend){
+    // 待入帳項目只在記錄寫入後移除；若設定寫入失敗，重試沿用同一組 ID。
+    for(const [i,r] of recs.entries()){
+      r.id='pend_'+f._pend+'_'+i;
+      if(r.k)r.k='pend_'+f._pend+'_k';
+      if(r.g)r.g='pend_'+f._pend+'_g';
+    }
+    await mutate(recs,del);
+    const previous=S.settings.pend;
+    const remaining=(previous||[]).filter(x=>x.id!==f._pend);
+    S.settings.pend=remaining;
+    S.settings.lastA=f.a;
+    try{await saveKV('settings')}catch(e){
+      if(S.settings.pend===remaining)S.settings.pend=previous;
+      throw e;
+    }
+  }else{
+    S.settings.lastA=f.a;
+    saveKV('settings');
+    await mutate(recs,del);
+  }
   const v=f.kind==='exp'?(f.splits?f.splits.reduce((s,x)=>s+(evalAmt(x.amt)||0),0):evalAmt(f.amt)):evalAmt(f.amt);
   const osr=recs.find(r=>r.n==='海外交易手續費'&&!r.f&&f.os);
   toast((f._edit?'已更新 ':'已記錄 ')+({exp:'支出',inc:'收入',tr:'轉帳',debt:'借貸',sys:f.st}[f.kind])+' '+money(v,D.acct.get(f.a)?.cur)+(osr?'＋海外交易手續費 '+money(-osr.m,D.acct.get(f.a)?.cur):''));
@@ -1658,13 +1737,13 @@ function openAcctEditor(a){
   ${typeof alFields==='function'?alFields(a):''}
   <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="ac-arch" ${a.arch?'checked':''}> 封存（不再顯示於記帳選單，餘額仍保留）</label>
   <div class="btns fill"><button class="btn pri" id="ac-save">儲存</button></div>${isNew?'':used?'<div class="hint">此帳戶已有記錄，無法刪除；不再使用可改為封存。</div>':'<button class="btn danger" id="ac-del">刪除帳戶</button>'}`,{focus:isNew?'#ac-name':null});
-  $('#ac-save').onclick=async()=>{const name=$('#ac-name').value.trim();if(!name)return toast('請輸入帳戶名稱');
+  $('#ac-save').onclick=asyncAction(async()=>{const name=$('#ac-name').value.trim();if(!name)return toast('請輸入帳戶名稱');
     if(S.accts.some(x=>x.name===name&&x.id!==a.id))return toast('已有同名帳戶');
     const alErr=typeof alRead==='function'?alRead(a):null;if(alErr)return toast(alErr);
     Object.assign(a,{name,grp:$('#ac-grp').value,cur:$('#ac-cur').value,init:evalAmt($('#ac-init').value)||0,stmt:parseInt($('#ac-stmt').value)||'',due:parseInt($('#ac-due').value)||'',limit:evalAmt($('#ac-limit').value)||'',arch:$('#ac-arch').checked?1:0,u:Date.now()});
     if(isNew)S.accts.push(a);if(a.cur!=='TWD'&&!S.rates.r[a.cur]){S.rates.r[a.cur]=DEFAULT_RATES[a.cur]||1;saveKV('rates')}
-    await saveKV('accts');recompute();closeSheet();render(true);toast(isNew?'已新增帳戶':'已更新帳戶');if(a.al&&a.al.on)runAutoload().then(n=>{if(n)render(true)})};
-  const del=$('#ac-del');if(del)del.onclick=async()=>{S.accts=S.accts.filter(x=>x.id!==a.id);await saveKV('accts');recompute();closeSheet();S.stack=S.stack.filter(s=>!(s.p==='acct'&&s.id===a.id));render();toast('已刪除帳戶')};
+    await saveKV('accts');recompute();closeSheet();render(true);toast(isNew?'已新增帳戶':'已更新帳戶');if(a.al&&a.al.on)runAutoload().then(n=>{if(n)render(true)}).catch(onActionError)});
+  const del=$('#ac-del');if(del)del.onclick=asyncAction(async()=>{S.accts=S.accts.filter(x=>x.id!==a.id);await saveKV('accts');recompute();closeSheet();S.stack=S.stack.filter(s=>!(s.p==='acct'&&s.id===a.id));render();toast('已刪除帳戶')});
 }
 
 /* ================= installment ================= */
@@ -1678,13 +1757,13 @@ function openInstEditor(){
   <div class="hint" id="in-prev">輸入總金額與期數後顯示每期金額。</div><button class="btn pri" id="in-save">建立分期</button>`,{focus:'#in-n'});
   const prev=()=>{const t=evalAmt($('#in-t').value),k=parseInt($('#in-k').value),r=parseFloat($('#in-r').value)||0;if(!(t>0&&k>0))return;const a=amortize(t,k,r);const ti=a.reduce((s,x)=>s+x.int,0);$('#in-prev').innerHTML=`每期約 <span class="num">${money(a[0].pr+a[0].int)}</span>，總利息 <span class="num">${money(ti)}</span>，最後一期 ${addMonths($('#in-d').value,k-1).replace(/-/g,'/')}`};
   ['#in-t','#in-k','#in-r','#in-d'].forEach(s=>$(s).oninput=prev);
-  $('#in-save').onclick=async()=>{const name=$('#in-n').value.trim()||'分期付款';const t=evalAmt($('#in-t').value),k=parseInt($('#in-k').value),r=parseFloat($('#in-r').value)||0,d0=$('#in-d').value,a=$('#in-a').value;const[c,s]=$('#in-c').value.split('\u0001');
+  $('#in-save').onclick=asyncAction(async()=>{const name=$('#in-n').value.trim()||'分期付款';const t=evalAmt($('#in-t').value),k=parseInt($('#in-k').value),r=parseFloat($('#in-r').value)||0,d0=$('#in-d').value,a=$('#in-a').value;const[c,s]=$('#in-c').value.split('\u0001');
     if(!(t>0&&k>0&&k<=360))return toast('請輸入正確的總金額與期數');if(!d0)return toast('請選擇日期');
     const id=uid();const plan=amortize(t,k,r);const recs=[];const day=+d0.slice(8);const o=Date.now();
     plan.forEach((p,i)=>{const dt=addMonths(d0,i,day);const ds=name+'・第 '+(i+1)+'/'+k+' 期'+(r?'・本息均攤：年利率 '+r+'%':'');
       recs.push({id:uid(),a,t:'支出',c,s,m:-p.pr,f:0,d:0,n:name,sh:'',dt,tm:'10:00',p:'',ds,tg:'',w:'',k:'',g:id,o:o+i*2});
       if(p.int>0)recs.push({id:uid(),a,t:'利息',c:'利息支出',s:'利息支出',m:-p.int,f:0,d:0,n:'分期利息',sh:'',dt,tm:'10:00',p:'',ds,tg:'',w:'',k:'',g:id,o:o+i*2+1})});
-    S.rules.push({id,fq:'I',name,total:t,n:k,rate:r,start:d0,a,u:Date.now()});await saveKV('rules');await mutate(recs);closeSheet();render(true);toast('已建立 '+k+' 期分期')};
+    S.rules.push({id,fq:'I',name,total:t,n:k,rate:r,start:d0,a,u:Date.now()});await saveKV('rules');await mutate(recs);closeSheet();render(true);toast('已建立 '+k+' 期分期')});
 }
 
 /* ================= actions ================= */
@@ -1739,7 +1818,7 @@ const ACT={
   'ef-cback':()=>{EF._cs='';renderEditor()},
   'ef-pcancel':()=>{if(EF._pickNew){EF._pickNew=0;EF._spCat=0;EF._cs='';return ACT['sp-del']()}if(EF._reop){EF.c=EF._reop.c;EF.s=EF._reop.s;EF._reop=0}EF._spCat=0;EF._cs='';renderEditor()},
   'ef-reopen':()=>{EF._reop={c:EF.c,s:EF.s};EF._spCat=1;EF._cs='';renderEditor()},
-  'ef-sub-new':async()=>{const f=EF;const v=await askText('新增子類別','','子類別名稱');if(v&&v.trim()){const m=S.cats[f.kind==='inc'?'inc':'exp'].find(c=>c.n===f.c);if(m&&!m.subs.includes(v.trim())){m.subs.push(v.trim());S.cats.u=Date.now();saveKV('cats')}f.s=v.trim()}openSheet(f._edit?'編輯記錄':'記一筆','');EF=f;renderEditor()},
+  'ef-sub-new':async()=>{const f=EF;const v=await askText('新增子類別','','子類別名稱');if(v&&v.trim()){const m=S.cats[f.kind==='inc'?'inc':'exp'].find(c=>c.n===f.c);if(m&&!m.subs.includes(v.trim())){m.subs.push(v.trim());S.cats.u=Date.now();await saveKV('cats')}f.s=v.trim()}openSheet(f._edit?'編輯記錄':'記一筆','');EF=f;renderEditor()},
   'ef-debt':el=>{EF.act=el.dataset.k;renderEditor()},
   'pend-post':el=>{const x=(S.settings.pend||[]).find(p=>p.id===el.dataset.id);if(!x)return;closeSheet();const f={...blankForm(x.fs.kind||'exp'),...x.fs,_edit:false,_pend:x.id,mode:'',rep:'',post:'',dep:''};if(el.dataset.today)f.dt=TODAY();setTimeout(()=>openEditor(f),250)},
   'pend-del':async el=>{if(el.dataset.armed!=='1'){el.dataset.armed='1';el.textContent='確定刪除';return}S.settings.pend=(S.settings.pend||[]).filter(p=>p.id!==el.dataset.id);await saveKV('settings');closeSheet();render(true);toast('已刪除待入帳項目')},
@@ -1749,7 +1828,7 @@ const ACT={
   'ef-copy':()=>{const f={...EF,ids:[],_edit:false,dt:TODAY(),tm:NOWTM()};EF=f;$('.sheet h2').textContent='記一筆（複製）';renderEditor()},
   'ef-refund':()=>{const f={...EF,ids:[],_edit:false,dt:TODAY(),tm:NOWTM()};const amt=f.splits?f.splits.reduce((s,x)=>s+(evalAmt(x.amt)||0),0):evalAmt(f.amt);
     const r={id:uid(),a:f.a,t:'支出',c:f.splits?f.splits[0].c:f.c,s:f.splits?f.splits[0].s:f.s,m:Math.abs(amt),f:0,d:0,n:'退款：'+(f.n||f.s||f.c),sh:f.sh||'',dt:TODAY(),tm:NOWTM(),p:f.p||'',ds:'',tg:'',w:'',k:'',g:'',o:Date.now()};
-    mutate([r]).then(()=>{closeSheet();render(true);toast('已建立退款 '+money(Math.abs(amt)))})},
+    return mutate([r]).then(()=>{closeSheet();render(true);toast('已建立退款 '+money(Math.abs(amt)))})},
   'ef-tpl':async()=>{const f=EF;const name=await askText('存為範本',f.n||f.s||f.c||'','範本名稱');if(name&&name.trim()){S.tpls.push({id:uid(),name:name.trim(),fs:{...f,ids:[],_edit:false,dt:'',tm:''},u:Date.now()});await saveKV('tpls');toast('已存為範本')}openSheet(f._edit?'編輯記錄':'記一筆','');EF=f;renderEditor()},
   'ef-del':async el=>{const ro=efRule(EF);
     if(ro&&!el.dataset.scope){const box=el.parentElement;box.innerHTML=`<div class="note alert" style="flex-wrap:wrap;width:100%"><div class="grow">這是週期記錄的第 ${ro.k+1+(ro.rule.off||0)} 期，要刪除哪些？</div><div class="btns fill" style="width:100%;margin-top:6px"><button class="btn danger" data-act="ef-del" data-scope="one">只刪這一期</button><button class="btn danger" data-act="ef-del" data-scope="all">終止：這一期和之後都不要</button></div></div>`;return}
@@ -1796,7 +1875,7 @@ const ACT={
   'cat-move':async el=>{const k=S.catTab||'exp';const i=+el.dataset.i,j=i+(+el.dataset.d);const a=S.cats[k];if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];S.cats.u=Date.now();await saveKV('cats');render(true)},
   'cat-color':async el=>{const k=S.catTab||'exp';const c=S.cats[k][+el.dataset.i];c.ci=(c.ci+1)%12;S.cats.u=Date.now();await saveKV('cats');recompute();render(true)},
   'cat-ren':async el=>{const k=S.catTab||'exp';const c=S.cats[k][+el.dataset.i];const v=await askText('重新命名',c.n,'主類別名稱');if(!v||!v.trim()||v.trim()===c.n)return;const old=c.n;c.n=v.trim();S.cats.u=Date.now();const t=k==='exp'?'支出':'收入';
-    const rs=D.live.filter(r=>r.t===t&&r.c===old).map(r=>({...r,c:c.n}));await saveKV('cats');await mutate(rs);if(S.budgets.cats[old]){S.budgets.cats[c.n]=S.budgets.cats[old];delete S.budgets.cats[old];saveKV('budgets')}render(true);toast('已更新 '+rs.length+' 筆')},
+    const rs=D.live.filter(r=>r.t===t&&r.c===old).map(r=>({...r,c:c.n}));await saveKV('cats');await mutate(rs);if(S.budgets.cats[old]){S.budgets.cats[c.n]=S.budgets.cats[old];delete S.budgets.cats[old];await saveKV('budgets')}render(true);toast('已更新 '+rs.length+' 筆')},
   'cat-sub-add':async el=>{const k=S.catTab||'exp';const c=S.cats[k][+el.dataset.i];const v=await askText('新增子類別','','子類別名稱（'+c.n+'）');if(!v||!v.trim()||c.subs.includes(v.trim()))return;c.subs.push(v.trim());S.cats.u=Date.now();await saveKV('cats');render(true)},
   'cat-sub-ren':el=>{const k=S.catTab||'exp';const ci=+el.dataset.i,j=+el.dataset.j;const c=S.cats[k][ci];const old=c.subs[j];const t=k==='exp'?'支出':'收入';const n=D.live.filter(r=>r.t===t&&r.c===c.n&&r.s===old).length;
     const picks=['🍔','🍚','🥩','🍜','🍰','☕','🥤','🍺','🍎','🛒','🏠','🧹','🔧','🛋️','🐠','🪴','🚗','⛽','🅿️','🚇','✈️','🏨','🎁','👕','👟','💄','✂️','💊','🏥','🎮','🎬','📚','🎓','📱','💻','💡','🚰','🔥','📡','🛡️','🏛️','💵','💰','📈','🏦','💳','🧾','🧸','🍼','❓'];
@@ -1832,9 +1911,9 @@ const ACT={
   'batch-del':async()=>{const ids=[...S.search.sel];if(!ids.length)return toast('尚未選取');const all=new Set(ids);ids.forEach(id=>{const r=S.byId.get(id);const p=r&&partner(r);if(p)all.add(p.id)});if(!await askConfirm('刪除 '+all.size+' 筆記錄（含配對的轉帳）？','刪除'))return;await mutate([],[...all]);S.search.sel.clear();render(true);toast('已刪除 '+all.size+' 筆')},
   'batch-cat':()=>{const ids=[...S.search.sel].map(id=>S.byId.get(id)).filter(r=>r&&(r.t==='支出'||r.t==='收入'));if(!ids.length)return toast('請選取支出或收入記錄');const k=ids[0].t==='收入'?'inc':'exp';
     openSheet('批次改分類',`<label class="field"><span>${ids.length} 筆${ids[0].t}記錄改為</span><select class="in" id="bc-c">${catOptions(k)}</select></label><button class="btn pri" id="bc-ok">套用</button>`);
-    $('#bc-ok').onclick=async()=>{const[c,s]=$('#bc-c').value.split('\u0001');await mutate(ids.filter(r=>r.t===(k==='inc'?'收入':'支出')).map(r=>({...r,c,s})));closeSheet();render(true);toast('已更新')}},
+    $('#bc-ok').onclick=asyncAction(async()=>{const[c,s]=$('#bc-c').value.split('\u0001');await mutate(ids.filter(r=>r.t===(k==='inc'?'收入':'支出')).map(r=>({...r,c,s})));closeSheet();render(true);toast('已更新')})},
   'batch-acct':()=>{const ids=[...S.search.sel].map(id=>S.byId.get(id)).filter(Boolean);if(!ids.length)return toast('尚未選取');openSheet('批次改帳戶',`<label class="field"><span>${ids.length} 筆記錄改為</span><select class="in" id="ba-a">${acctOptions()}</select></label><button class="btn pri" id="ba-ok">套用</button>`);
-    $('#ba-ok').onclick=async()=>{const a=$('#ba-a').value;await mutate(ids.map(r=>({...r,a})));closeSheet();render(true);toast('已更新')}},
+    $('#ba-ok').onclick=asyncAction(async()=>{const a=$('#ba-a').value;await mutate(ids.map(r=>({...r,a})));closeSheet();render(true);toast('已更新')})},
   'batch-proj':async()=>{const ids=[...S.search.sel].map(id=>S.byId.get(id)).filter(Boolean);if(!ids.length)return toast('尚未選取');const v=await askText('批次設定專案','','專案名稱（清空＝移除專案）');if(v==null)return;await mutate(ids.map(r=>({...r,p:v.trim()})));render(true);toast('已更新 '+ids.length+' 筆')}
 };
 function defaultCats(){return{exp:DEFAULT_CATS.exp.map(([n,s],i)=>({n,subs:s.slice(),ci:i%11})),inc:DEFAULT_CATS.inc.map(([n,s],i)=>({n,subs:s.slice(),ci:2})),u:Date.now()}}
@@ -1862,10 +1941,10 @@ async function loadSample(){
 function applyTheme(){const t=S.settings.theme==='dark'?'dark':'light';document.documentElement.dataset.app=t;document.documentElement.toggleAttribute('data-swap',S.settings.swapCol!==false);const m=document.querySelector('meta[name=theme-color]');if(m)m.content=t==='dark'?'#0F141B':'#FFF9E0'}
 
 /* ================= events ================= */
-document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const fn=ACT[el.dataset.act];if(fn){e.preventDefault();fn(el,e)}});
+document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const fn=ACT[el.dataset.act];if(fn){e.preventDefault();try{Promise.resolve(fn(el,e)).catch(onActionError)}catch(error){onActionError(error)}}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#sheet')&&!$('#sheet .sh .ibtn')?.dataset.noclose)closeSheet();
   if((e.key==='Enter'||e.key===' ')&&e.target.matches('[role=button][data-act]')){e.preventDefault();e.target.click()}
-  if(e.key==='Enter'&&EF&&e.target.id==='f-amt'){e.preventDefault();saveEditor(false)}});
+  if(e.key==='Enter'&&EF&&e.target.id==='f-amt'){e.preventDefault();saveEditor(false).catch(onActionError)}});
 let sTimer;
 function searchUpd(partial){const w=$('#sresWrap');if(partial&&w){w.innerHTML=searchResHTML();return}render(true)}
 document.addEventListener('compositionend',e=>{const t=e.target;if(!t.dataset||!t.dataset.sf)return;S.search[t.dataset.sf]=t.value;S.search.limit=300;clearTimeout(sTimer);sTimer=setTimeout(()=>searchUpd(true),60)});
@@ -1893,7 +1972,7 @@ async function boot(){
   botRates().then(ok=>{if(ok)render(true)});
   if(window.Cloud)Cloud.init().then(()=>render(true));
   try{if(navigator.storage&&navigator.storage.persist){S.persisted=await navigator.storage.persisted()||await navigator.storage.persist()}}catch(e){}
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.ready){runRules().catch(e=>{if(!(e instanceof LocalWriteError))console.error(e)});recompute();render(true)}});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.ready){runRules().catch(onActionError);recompute();render(true)}});
 }
 window.__ledger={S,D,mozeToData,toMozeCSV,evalAmt,amortize,val,cardCycle};
 
@@ -1937,7 +2016,7 @@ const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],fi
       if(changed.length){recompute();scheduleRender()}
       this.touch(snap);
     },onErr));
-    this.unsub.push(this.base().collection('inbox').onSnapshot(snap=>{this.inboxErr='';this.inboxOk=Date.now();const docs=[];snap.docChanges().forEach(ch=>{if(ch.type==='added'&&!ch.doc.metadata.hasPendingWrites)docs.push(ch.doc)});if(docs.length)processInbox(docs)},e=>{this.inboxErr=(e&&(e.code||e.message))||'unknown';refreshCloudUI()}));
+    this.unsub.push(this.base().collection('inbox').onSnapshot(snap=>{this.inboxErr='';this.inboxOk=Date.now();if(snap.metadata.fromCache)return;const docs=[];snap.docChanges().forEach(ch=>{if(ch.type==='added'&&!ch.doc.metadata.hasPendingWrites)docs.push(ch.doc)});if(docs.length)processInbox(docs)},e=>{this.inboxErr=(e&&(e.code||e.message))||'unknown';refreshCloudUI()}));
     const inboxTimer=setInterval(()=>{if(document.visibilityState==='visible'&&this.decided)this.pollInbox()},60000);
     this.unsub.push(()=>clearInterval(inboxTimer));
     this.unsub.push(this.base().collection(MCOL).onSnapshot(async snap=>{
@@ -2104,10 +2183,11 @@ Object.assign(ACT,{
    機器人帳號讀不到任何餘額，差額必須由 App 端計算，收件匣只能傳「目標餘額」，不能直接傳差額                    */
 let inboxBusy=Promise.resolve();
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&typeof Cloud!=='undefined'&&Cloud.user)Cloud.pollInbox()});
-const inboxSeen=new Set();
+const inboxSeen=new Set(); // 防止同一分頁因 snapshot 和輪詢重複執行。
 const inboxDeletePending=new Set();
 function inboxInvalidReason(x){
   const amt=x.amt!=null&&x.amt!==''&&Number.isFinite(+x.amt);
+  const account=()=>S.accts.some(a=>a.id===x.a||a.name===x.a);
   if(x.src==='ap')return '';
   if(x.sp!=null){try{
     const lines=typeof x.sp==='string'?JSON.parse(x.sp):x.sp;
@@ -2115,9 +2195,9 @@ function inboxInvalidReason(x){
   }catch(e){return '分項 JSON 無效'}}
   switch(x.kind){
     case 'px':try{const prices=JSON.parse(x.p);return prices&&typeof prices==='object'&&!Array.isArray(prices)&&x.d?'':'價格欄位錯誤'}catch(e){return '價格 JSON 無效'}
-    case 'exp':case 'inc':return amt&&+x.amt?'':'金額欄位錯誤';
-    case 'bal':return amt&&S.accts.some(a=>a.id===x.a||a.name===x.a)?'':'餘額或帳戶欄位錯誤';
-    case 'inst':return amt&&+x.amt&&Number.isInteger(+x.cnt)&&+x.cnt>1&&S.accts.some(a=>a.id===x.a||a.name===x.a)&&/^\d{4}-\d{2}-\d{2}$/.test(x.dt||'')?'':'分期欄位錯誤';
+    case 'exp':case 'inc':return amt&&+x.amt&&account()?'':'金額或帳戶欄位錯誤';
+    case 'bal':return amt&&account()?'':'餘額或帳戶欄位錯誤';
+    case 'inst':return amt&&+x.amt&&Number.isInteger(+x.cnt)&&+x.cnt>1&&+x.cnt<=360&&account()&&/^\d{4}-\d{2}-\d{2}$/.test(x.dt||'')?'':'分期欄位錯誤';
     case 'edit':case 'del':return x.n&&x.dt?'':'缺少記錄識別欄位';
     case 'rensub':return x.c&&x.s&&String(x.ns||'').trim()?'':'缺少子類別欄位';
     case 'renproj':case 'mvproj':return String(x.o||'').trim()&&String(x.nv||'').trim()?'':'缺少專案欄位';
@@ -2126,7 +2206,7 @@ function inboxInvalidReason(x){
     case 'hold':return x.rm==='1'||(x.n&&x.sh!=null&&x.sh!==''&&Number.isFinite(+x.sh)&&+x.sh>=0)?'':'持股欄位錯誤';
     default:return '未知指令';
   }
-}   // 同一份指令可能同時由 onSnapshot 與 pollInbox 送來，只處理一次（失敗時移除以便重試）
+}
 function processInbox(docs){
   const uid=Cloud.user?.uid;
   let mine=[];
@@ -2135,11 +2215,18 @@ function processInbox(docs){
   if(DB.mem)throw new LocalWriteError('IndexedDB 無法使用，已保留收件匣指令');
   if(!Cloud.decided)return; // pollInbox 會在同步就緒後重新讀取。
   const sk=d=>uid+'/'+d.id;
-  const pending=docs.filter(d=>inboxDeletePending.has(sk(d)));
-  if(pending.length){
-    if(!await Cloud.waitForInboxSync(uid)){Cloud.inboxErr='雲端尚未確認，已保留收件匣指令';return}
-    for(const d of pending)await deleteInboxDoc(d.ref,sk(d));
+  const receiptKey='inboxReceipts/'+uid;
+  const receipts=new Set(await DB.getKV(receiptKey)||[]);
+  for(const doc of docs){
+    const key=sk(doc);
+    if(receipts.has(doc.id)&&(!inboxSeen.has(key)||inboxDeletePending.has(key))){
+      inboxSeen.add(key);
+      inboxDeletePending.add(key);
+      await deleteInboxDoc(doc.ref,key);
+    }
   }
+  const pending=docs.filter(d=>!receipts.has(d.id)&&inboxDeletePending.has(sk(d)));
+  if(pending.length&&!await finishInbox(uid,receiptKey,receipts,pending.map(d=>d.ref)))return;
   docs=docs.filter(d=>!inboxSeen.has(sk(d)));mine=docs.map(sk);mine.forEach(i=>inboxSeen.add(i));if(!docs.length)return;
   const add=[],dels=[],newRules=[],delNames=[],upds=[],insts=[],eds=[],rups=[],balMsgs=[];
   let apN=0,apDup=0,apUnk=0,pxN=0;const mvq=[];
@@ -2160,7 +2247,10 @@ function processInbox(docs){
         /* 各期記錄用固定 id（ib_<doc>_i<期>）：重試時已寫入的期數會略過、缺的補上，規則已存在就不重建 */
         insts.push({rule:S.rules.some(q=>q.id===id)?null:{id,fq:'I',name:nm,total:Math.abs(+x.tot)||amt*k,n:k,rate:parseFloat(x.rate)||0,start:x.dt,a:acct.id,off:sno-1,u:o},recs,nm})}
       dels.push(d.ref);continue}
-    if(x.kind==='rensub'){const k=x.k==='inc'?'inc':'exp';const n=await renameSub(k,String(x.c||''),String(x.s||''),String(x.ns||'').trim());toast(n||S.cats[k].some(q=>q.n===x.c&&q.subs.includes(String(x.ns||'').trim()))?'Claude 已把「'+x.c+'・'+x.s+'」改名為「'+x.ns+'」（'+n+' 筆記錄）':'找不到子類別：'+x.c+'・'+x.s);dels.push(d.ref);continue}
+    if(x.kind==='rensub'){const k=x.k==='inc'?'inc':'exp';
+      const cat=S.cats[k].find(q=>q.n===x.c);
+      if(!cat||!cat.subs.some(v=>v===x.s||v===String(x.ns||'').trim())){reject(d.ref,'找不到子類別');continue}
+      const n=await renameSub(k,String(x.c||''),String(x.s||''),String(x.ns||'').trim());toast(n||S.cats[k].some(q=>q.n===x.c&&q.subs.includes(String(x.ns||'').trim()))?'Claude 已把「'+x.c+'・'+x.s+'」改名為「'+x.ns+'」（'+n+' 筆記錄）':'找不到子類別：'+x.c+'・'+x.s);dels.push(d.ref);continue}
     if(x.kind==='clrshop'){const pats=String(x.n||'').split(/[,、，]/).map(t=>t.trim()).filter(Boolean).map(t=>new RegExp('^'+t.replace(/[.+?^${}()|[\]\\]/g,'\\$&').replace(/\*/g,'.*')+'$','i'));
       const ch=D.live.filter(r=>r.sh&&pats.some(re=>re.test(r.sh))).map(r=>({...r,sh:''}));const names=[...new Set(D.live.filter(r=>r.sh&&pats.some(re=>re.test(r.sh))).map(r=>r.sh))];
       if(ch.length){S.lastUndo=ch.map(r=>({...S.byId.get(r.id)}));await mutate(ch);scheduleRender();toast('Claude 清除了 '+names.length+' 家商家名稱（'+ch.length+' 筆）：'+names.join('、')+'；可在搜尋頁復原')}else toast('沒有符合的商家：'+String(x.n||''));
@@ -2261,12 +2351,30 @@ function processInbox(docs){
   if(Cloud.user?.uid!==uid)throw new Error('登入狀態已變更');
   if(invalid)Cloud.inboxErr='已保留待檢查的指令：'+invalid;
   for(const ref of dels)inboxDeletePending.add(uid+'/'+ref.id);
-  if(dels.length&&!await Cloud.waitForInboxSync(uid)){Cloud.inboxErr='雲端尚未確認，已保留收件匣指令';return}
-  await Promise.all(dels.map(ref=>deleteInboxDoc(ref,uid+'/'+ref.id)));
+  if(dels.length)await finishInbox(uid,receiptKey,receipts,dels);
 }).catch(e=>{mine.forEach(i=>inboxSeen.delete(i));Cloud.inboxErr='處理失敗：'+(e&&e.message||e)})}
+async function finishInbox(uid,receiptKey,receipts,refs){
+  if(!await Cloud.waitForInboxSync(uid)){
+    Cloud.inboxErr='雲端尚未確認，已保留收件匣指令';
+    return false;
+  }
+  // 先保存完成憑證。若在刪除前關閉 App，重開只需要重試刪除。
+  for(const ref of refs){receipts.delete(ref.id);receipts.add(ref.id)}
+  try{await DB.putKV(receiptKey,[...receipts].slice(-512))}
+  catch(e){Cloud.inboxErr='本機完成紀錄寫入失敗，已保留收件匣指令';return false}
+  if(Cloud.user?.uid!==uid)return false;
+  await Promise.all(refs.map(ref=>deleteInboxDoc(ref,uid+'/'+ref.id)));
+  return true;
+}
 async function deleteInboxDoc(ref,key){
-  try{await ref.delete();inboxDeletePending.delete(key)}
-  catch(e){Cloud.inboxErr='收件匣刪除失敗，稍後重試'}
+  let deadline;
+  try{
+    await Promise.race([ref.delete(),new Promise((_,reject)=>{
+      deadline=setTimeout(()=>reject(new Error('刪除逾時')),15000);
+    })]);
+    inboxDeletePending.delete(key);
+  }catch(e){Cloud.inboxErr='收件匣刪除失敗，稍後重試'}
+  finally{clearTimeout(deadline)}
 }
 ACT['copy-uid']=el=>{const v=Cloud.user?.uid||'';(navigator.clipboard?.writeText(v)||Promise.reject()).then(()=>toast('已複製 UID'),()=>toast('請長按 UID 文字手動複製'))};
 
@@ -2727,9 +2835,9 @@ Object.assign(ACT,{
   'undo-batch':async()=>{const u=S.lastUndo;if(!u)return;S.lastUndo=null;await mutate(u.map(r=>({...r})));render(true);toast('已復原 '+u.length+' 筆')},
   'batch-cat':()=>{const ids=[...S.search.sel].map(id=>S.byId.get(id)).filter(r=>r&&(r.t==='支出'||r.t==='收入'));if(!ids.length)return toast('請選取支出或收入記錄');const k=ids[0].t==='收入'?'inc':'exp';
     openSheet('批次改分類',`<label class="field"><span>${ids.length} 筆${ids[0].t}記錄改為</span><select class="in" id="bc-c">${catOptions(k)}</select></label><button class="btn pri" id="bc-ok">套用</button>`);
-    $('#bc-ok').onclick=async()=>{const[c,s]=$('#bc-c').value.split('\u0001');closeSheet();await batchApply(ids.filter(r=>r.t===(k==='inc'?'收入':'支出')).map(r=>({...r,c,s})),'已改分類');render(true)}},
+    $('#bc-ok').onclick=asyncAction(async()=>{const[c,s]=$('#bc-c').value.split('\u0001');closeSheet();await batchApply(ids.filter(r=>r.t===(k==='inc'?'收入':'支出')).map(r=>({...r,c,s})),'已改分類');render(true)})},
   'batch-acct':()=>{const ids=[...S.search.sel].map(id=>S.byId.get(id)).filter(Boolean);if(!ids.length)return toast('尚未選取');openSheet('批次改帳戶',`<label class="field"><span>${ids.length} 筆記錄改為</span><select class="in" id="ba-a">${acctOptions()}</select></label><button class="btn pri" id="ba-ok">套用</button>`);
-    $('#ba-ok').onclick=async()=>{const a=$('#ba-a').value;closeSheet();await batchApply(ids.map(r=>({...r,a})),'已改帳戶');render(true)}},
+    $('#ba-ok').onclick=asyncAction(async()=>{const a=$('#ba-a').value;closeSheet();await batchApply(ids.map(r=>({...r,a})),'已改帳戶');render(true)})},
   'batch-del':async()=>{const ids=[...S.search.sel];if(!ids.length)return toast('尚未選取');const all=new Set(ids);ids.forEach(id=>{const r=S.byId.get(id);const p=r&&partner(r);if(p)all.add(p.id)});if(!await askConfirm('刪除 '+all.size+' 筆記錄（含配對的轉帳）？可在搜尋頁復原。','刪除'))return;S.lastUndo=[...all].map(id=>({...S.byId.get(id)}));await mutate([],[...all]);S.search.sel.clear();render(true);toast('已刪除 '+all.size+' 筆')}
 });
 
@@ -3024,7 +3132,7 @@ async function srtSave(order){const c=S.cats[SRT.k][SRT.i];c.subs=order;S.cats.u
 Object.assign(ACT,{
   'sub-sort':el=>{SRT={k:S.catTab||'exp',i:+el.dataset.i};const c=S.cats[SRT.k][SRT.i];
     openSheet('「'+c.n+'」子類別排序',`<div class="hint">按住左邊 ≡ 拖曳，或用 ↑ ↓ 調整。順序會立即儲存並同步。</div><div class="srt" id="srt">${srtHTML()}</div><button class="btn pri mt" data-act="srt-done">完成</button>`,{onClose:()=>{SRT=null;render(true)}})},
-  'srt-mv':el=>{if(!SRT)return;const a=[...S.cats[SRT.k][SRT.i].subs];const j=+el.dataset.j;const d=el.dataset.d;const[x]=a.splice(j,1);a.splice(d==='top'?0:Math.max(0,Math.min(a.length,j+(+d))),0,x);srtSave(a)},
+  'srt-mv':el=>{if(!SRT)return;const a=[...S.cats[SRT.k][SRT.i].subs];const j=+el.dataset.j;const d=el.dataset.d;const[x]=a.splice(j,1);a.splice(d==='top'?0:Math.max(0,Math.min(a.length,j+(+d))),0,x);return srtSave(a)},
   'srt-done':()=>{closeSheet()}
 });
 let srtDrag=null;
@@ -3032,7 +3140,7 @@ document.addEventListener('pointerdown',e=>{const h=e.target.closest('.srt-h');i
 document.addEventListener('pointermove',e=>{if(!srtDrag)return;e.preventDefault();const box=$('#srt');const rows=[...box.children].filter(r=>r!==srtDrag.row);
   let before=null;for(const r of rows){const b=r.getBoundingClientRect();if(e.clientY<b.top+b.height/2){before=r;break}}
   if(before!==srtDrag.row.nextSibling)box.insertBefore(srtDrag.row,before)},{passive:false});
-['pointerup','pointercancel'].forEach(t=>document.addEventListener(t,()=>{if(!srtDrag)return;srtDrag.row.classList.remove('drag');srtDrag=null;const box=$('#srt');if(box&&SRT)srtSave([...box.children].map(r=>r.dataset.n))}));
+['pointerup','pointercancel'].forEach(t=>document.addEventListener(t,()=>{if(!srtDrag)return;srtDrag.row.classList.remove('drag');srtDrag=null;const box=$('#srt');if(box&&SRT)srtSave([...box.children].map(r=>r.dataset.n)).catch(onActionError)}));
 
 
 /* 首頁：清單在固定區域內捲動（整頁不被抬起）；往下滑時日曆收成「選取日那一週」，在清單頂端往下拉就展開 */
@@ -3105,7 +3213,7 @@ async function runAutoload(){
   toast('已自動加值 '+add.length/2+' 次');return add.length/2;
 }
 const _mutateAL=mutate;
-mutate=async function(add=[],del=[]){await _mutateAL(add,del);if(!alBusy&&S.accts.some(a=>a.al&&a.al.on)){clearTimeout(alTimer);alTimer=setTimeout(()=>runAutoload().then(n=>{if(n)render(true)}),250)}};
+mutate=async function(add=[],del=[]){await _mutateAL(add,del);if(!alBusy&&S.accts.some(a=>a.al&&a.al.on)){clearTimeout(alTimer);alTimer=setTimeout(()=>runAutoload().then(n=>{if(n)render(true)}).catch(onActionError),250)}};
 function alFields(a){const al=a.al||{};const opts=S.accts.filter(x=>x.id!==a.id&&!x.arch).map(x=>`<option value="${x.id}" ${al.from===x.id?'selected':''}>${esc(x.name)}</option>`).join('');
   return`<div class="card stack" style="gap:8px;margin-top:0"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="al-on" ${al.on?'checked':''}> <b>自動加值</b><span class="hint">（悠遊卡、一卡通等）</span></label>
   <div class="grid3"><label class="field"><span>餘額低於</span><input class="in num" id="al-thr" inputmode="decimal" value="${al.thr??100}"></label><label class="field"><span>自動加值</span><input class="in num" id="al-amt" inputmode="decimal" value="${al.amt??500}"></label><label class="field"><span>扣款帳戶</span><select class="in" id="al-from"><option value="">選擇</option>${opts}</select></label></div>
@@ -3375,7 +3483,7 @@ let PX=null;   // {d, p:{code:[name,close,cur?]}}，只在本機快取
 function pxApply(P){let n=0;for(const h of S.settings.hold||[]){if(h.pxManual)continue;const q=P&&P[h.code];if(q&&(!h.pxd||(q[3]||'')>=h.pxd||!q[3])){h.px=+q[1];if(q[3])h.pxd=q[3];if(!h.name||h.name===h.code)h.name=US_NAMES[String(h.code).toUpperCase()]||(q[0]&&q[0]!==h.code?q[0]:h.code);if(q[2])h.cu=q[2];n++}}return n}
 async function loadPrices(force){const H=S.settings.hold||[];if(!H.length&&!goldG()&&!force)return false;const td=TODAY();if(!force&&S.settings.pxFor===td&&PX)return false;
   try{const res=await fetch(PRICE_URL+'?t='+Date.now(),{cache:'no-store'});if(!res.ok)return false;PX=await res.json();let n=0;
-    for(const h of H){if(h.pxManual)continue;const q=PX.p&&PX.p[h.code];if(q){h.px=+q[1];h.pxd=q[3]||PX.d;if(!h.name)h.name=q[0];if(q[2])h.cu=q[2];n++}}n+=pxApply(S.settings.pxx&&S.settings.pxx.p);if(goldApply())n++;
+    for(const h of H){if(h.pxManual)continue;const q=PX.p&&PX.p[h.code];if(q&&(!h.pxd||(q[3]||PX.d)>=h.pxd)){h.px=+q[1];h.pxd=q[3]||PX.d;if(!h.name)h.name=q[0];if(q[2])h.cu=q[2];n++}}n+=pxApply(S.settings.pxx&&S.settings.pxx.p);if(goldApply())n++;
     S.settings.pxFor=td;await saveKV('settings');return n>0}catch(e){return false}}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.ready){loadPrices().then(ok=>{if(ok)render(true)});holdSyncSoon()}});
 function holdRecs(h){const code=String(h.code||'').trim(),nm=String(h.name||'').trim();const reC=code?new RegExp('(^|[^0-9A-Za-z])'+code.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?![0-9A-Za-z])','i'):null;
@@ -3397,12 +3505,16 @@ function holdName(h){const c=String(h.code||'');if(h.name&&h.name!==c)return h.n
 const GOLD_U={'錢':3.75,'兩':37.5,'克':1};
 function goldG(){const g=S.settings.gold;return g&&+g.q>0?+g.q*(GOLD_U[g.u]||3.75):0}
 function goldMV(){const g=S.settings.gold;return g&&g.px?Math.round(goldG()*g.px):0}
-function goldApply(){const g=S.settings.gold;const q=PX&&PX.p&&PX.p.GOLD;if(!g||!q||!(+q[1]>0))return false;if(g.pxd&&(q[3]||'')<g.pxd)return false;g.px=+q[1];g.pxd=q[3]||PX.d;g.src=/國際/.test(q[0]||'')?'國際金價換算':'臺銀黃金存摺買進價';return true}
+function goldApply(){const g=S.settings.gold;const q=PX&&PX.p&&PX.p.GOLD;if(!g||!q||!(+q[1]>0))return false;const official=/臺銀/.test(q[0]||'');const priorOfficial=/臺銀/.test(g.src||'');
+  if(priorOfficial&&!official)return false;
+  if(g.pxd&&(q[3]||'')<g.pxd&&(!official||priorOfficial))return false;
+  if(official&&priorOfficial&&g.pxt&&(!q[4]||q[4]<g.pxt))return false;
+  g.pxt=q[4]||'';g.px=+q[1];g.pxd=q[3]||PX.d;g.src=/國際/.test(q[0]||'')?'國際金價換算':'臺銀黃金存摺買進價';return true}
 function pageGold(){const g=S.settings.gold||{q:'',u:'錢'};const gr=goldG();
   return{back:1,head:`<h1>黃金市值</h1><button class="ibtn" data-act="px-refresh" aria-label="更新金價">${IC.sync||'↻'}</button>`,body:`
   <div class="sum"><div class="lbl">黃金市值（TWD）${g.pxd?' · '+g.pxd.slice(5).replace('-','/')+' 牌價':''}</div><div class="huge num">${g.px&&gr?fmt(goldMV()):'—'}</div>
    ${g.px?`<div class="kv mt"><div><div class="lbl">每公克</div><div class="v num">${fmt(g.px)}</div></div><div><div class="lbl">每錢</div><div class="v num">${fmt(Math.round(g.px*3.75))}</div></div><div><div class="lbl">持有</div><div class="v num">${gr?(+gr.toFixed(2))+' 克':'—'}</div></div></div>`:''}
-   <div class="hint mt">市值＝持有克數 × 每公克金價${g.src?'（目前來源：'+g.src+'）':''}，每個營業日自動更新。優先用臺灣銀行黃金存摺「本行買進」價，抓不到時改用國際金價 × 美元匯率換算（約比臺銀買進價高 0.5%）；1 錢＝3.75 克、1 兩＝37.5 克。不計入「帳戶」頁的淨資產。</div></div>
+   <div class="hint mt">市值＝持有克數 × 每公克金價${g.src?'（目前來源：'+g.src+'）':''}，每個營業日自動更新。優先用臺灣銀行黃金存摺「本行買進」價，暫時無法取得時保留上次有效牌價；1 錢＝3.75 克、1 兩＝37.5 克。不計入「帳戶」頁的淨資產。</div></div>
   <div class="card stack"><div class="lbl">持有數量</div><div class="grid2"><label class="field"><span>數量</span><input class="in num" id="gd-q" inputmode="decimal" value="${esc(g.q||'')}" placeholder="3"></label><label class="field"><span>單位</span><select class="in" id="gd-u">${Object.keys(GOLD_U).map(u=>`<option${(g.u||'錢')===u?' selected':''}>${u}</option>`).join('')}</select></label></div>
    <button class="btn pri" data-act="gd-save">儲存</button></div>`}}
 /* ---------- 市值總覽：股票＋黃金＋外匯（外匯＝非台幣帳戶的正餘額，依臺銀現金買入匯率換算） ---------- */
@@ -3433,7 +3545,7 @@ document.addEventListener('pointermove',e=>{if(!mktDrag||e.pointerId!==mktDrag.i
   let before=null;for(const r of rows){const b=r.getBoundingClientRect();if(e.clientY<b.top+b.height/2){before=r;break}}
   if(before!==mktDrag.row.nextSibling)mktDrag.box.insertBefore(mktDrag.row,before)},{passive:false});
 ['pointerup','pointercancel'].forEach(t=>document.addEventListener(t,e=>{if(!mktDrag||e.pointerId!==mktDrag.id)return;mktDrag.row.classList.remove('drag');const box=mktDrag.box;mktDrag=null;
-  if(box&&box.id==='mktList')mktSaveOrder([...box.children].map(r=>r.dataset.mk))}));
+  if(box&&box.id==='mktList')mktSaveOrder([...box.children].map(r=>r.dataset.mk)).catch(onActionError)}));
 function pageFx(){const fx=fxList();const tot=fx.reduce((t,x)=>t+x.v,0);const by=new Map();for(const x of fx){const o=by.get(x.a.cur)||{cur:x.a.cur,b:0,v:0,L:[]};o.b+=x.b;o.v+=x.v;o.L.push(x);by.set(x.a.cur,o)}
   const C=[...by.values()].sort((a,b)=>b.v-a.v);
   return{back:1,head:`<h1>外匯</h1><button class="ibtn" data-act="px-refresh" aria-label="更新">${IC.sync||'↻'}</button>`,body:`
@@ -3569,9 +3681,9 @@ Object.assign(ACT,{
   'gl-save':async el=>{const g=(S.settings.goals||[])[+el.dataset.i];if(!g)return;const v=await askText('目前已存金額',String(g.saved||''),g.name,'num');if(v==null)return;const n=evalAmt(v);if(!(n>=0))return toast('金額不正確');g.saved=n;await saveKV('settings');render(true)},
   'gl-del':async el=>{const G=S.settings.goals||[];const g=G[+el.dataset.i];if(!g||!await askConfirm('刪除目標「'+esc(g.name)+'」？','刪除'))return;G.splice(+el.dataset.i,1);await saveKV('settings');render(true)},
 });
-document.addEventListener('change',async e=>{const t=e.target;
+document.addEventListener('change',asyncAction(async e=>{const t=e.target;
   if(t.matches&&t.matches('[data-apmap]')){const m=S.settings.apMap||(S.settings.apMap={});if(t.value)m[t.dataset.apmap]=t.value;else delete m[t.dataset.apmap];await saveKV('settings');toast('已設定')}
-  if(t.id==='rc-file'&&t.files&&t.files[0]){const txt=await readTextFile(t.files[0]);t.value='';rcRun(t.dataset.id,txt)}});
+  if(t.id==='rc-file'&&t.files&&t.files[0]){const txt=await readTextFile(t.files[0]);t.value='';rcRun(t.dataset.id,txt)}}));
 
 /* ---------- 推播提醒：App 把未來 30 天的提醒寫到 kv/notify，GitHub 排程每小時用記帳助理帳號讀取並發送 ---------- */
 const VAPID_PUB='BNRR8U8w982WoTEk56OYHNbsQoQVSy-QuWDQTiQLJ8XUW-X1OttHDlcHIPETchMOL8D4lIuzxDpdajLHoJDVbIU';
@@ -3613,7 +3725,7 @@ PAGES.notify=pageNotify;
 {const _set=PAGES.settings;PAGES.settings=function(){const r=_set();const n=(S.settings.pushSubs||[]).length;
   r.body=`<div class="grp" style="margin-top:0"><div class="list"><button class="li" data-act="push" data-p="notify"><div class="grow"><div>推播提醒</div><small>${n?'已開啟 · '+n+' 台裝置':'繳款日、扣款前一天提醒'}</small></div><span class="chev">${IC.chev}</span></button></div></div>`+r.body.replace('<div class="card stack" style="margin-top:0">','<div class="card stack">');return r}}
 Object.assign(ACT,{'ntf-on':()=>ntfEnable(),'ntf-off':()=>ntfDisable(),'ntf-sync':async()=>{await ntfSync(true);toast('已更新提醒排程')}});
-document.addEventListener('change',async e=>{const t=e.target;if(t.matches&&t.matches('[data-ntf]')){S.settings.ntf={...ntfCfg(),[t.dataset.ntf]:t.checked?1:0};await saveKV('settings');ntfSync(true);render(true)}});
+document.addEventListener('change',asyncAction(async e=>{const t=e.target;if(t.matches&&t.matches('[data-ntf]')){S.settings.ntf={...ntfCfg(),[t.dataset.ntf]:t.checked?1:0};await saveKV('settings');ntfSync(true);render(true)}}));
 
 /* ================= 金額計算機鍵盤：+ − × ÷，觸控裝置取代系統數字鍵盤 ================= */
 const CALC_TOUCH=matchMedia('(pointer:coarse)').matches;
