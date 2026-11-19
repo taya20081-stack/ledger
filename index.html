@@ -529,6 +529,14 @@ body.calc-on #sb{padding-bottom:370px}
 .sheet.ed .mbtn{height:42px}.sheet.ed .mgrid{gap:7px;margin:6px 0}
 .sheet.ed .cgrid{gap:8px 4px}.sheet.ed .cpager .ctile .cbd{width:44px;height:44px;font-size:21px}
 .sheet.ed .cdots{margin:4px 0 6px}.sheet.ed .cstrip{padding:6px}
+.sheet.ed #ef-cat.split-compact{height:auto}
+.sheet.ed .split-compact .cstrip{gap:6px;padding:6px 3px 5px}
+.split-compact .ctile{width:58px;min-width:0;gap:3px;font-size:11px}
+.split-compact .ctile .cbd{width:34px;height:34px;font-size:18px}
+.split-compact .ctile.on .cbd{box-shadow:0 0 0 2px var(--paper),0 0 0 4px var(--bc,var(--accent))}
+.split-compact .ctile .camt{font-size:12px}
+.split-compact .cx{top:-2px;right:-2px;width:22px;height:22px;line-height:22px}
+
 .mbtn.on{background:var(--paper2)}
 .sheet.ed .mbtn.inp{min-height:42px;height:42px;flex-wrap:nowrap}
 .cpager{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;margin:4px 0 0;padding-top:6px;width:100%}
@@ -574,7 +582,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.91';
+window.APP_VER='v2.0.92';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1662,7 +1670,7 @@ function renderEditor(){
   const tabsH=(!ei||showCat)?`<div class="mtabs" role="tablist">${tabs.map(([k,l])=>`<button class="${tabOn(k)?'on':''}" data-act="ef-kind" data-k="${k}">${l}</button>`).join('')}</div>`:'';
   sb.innerHTML=`  ${f.kind==='sys'?`<label class="field"><span>類型</span><select class="in" id="f-st" data-f="st" data-rr="1">${SYS_T.filter(t=>!SYS_HIDE.has(t)||f.st===t).map(t=>`<option ${t===f.st?'selected':''}>${t}</option>`).join('')}</select></label>`:''}
   ${f.kind==='debt'?`<div class="field"><span>動作</span><div class="chips">${Object.entries(DEBT_ACT).map(([k,v])=>`<button class="chip${f.act===k?' on':''}" data-act="ef-debt" data-k="${k}">${v[3]}<small style="opacity:.7">${v[0]==='應收款項'?'應收':'應付'}</small></button>`).join('')}</div></div><label class="field"><span>對象</span><input class="in" id="f-w" data-f="w" list="dl-who" value="${esc(f.w)}" placeholder="例如：家人、同事姓名"></label>`:''}
-  <div id="ef-cat">${tabsH}${showCat?'':strip}${grid}</div>${amtBox}${ei?`<div class="mcard">${nameRow}</div>`:nameRow}
+  <div id="ef-cat"${ei&&f.splits&&!showCat?' class="split-compact"':''}>${tabsH}${showCat?'':strip}${grid}</div>${amtBox}${ei?`<div class="mcard">${nameRow}</div>`:nameRow}
   ${ei?`<div class="mgrid">${acctBtn}${projBtn}${shopBtn}${modeBtn}${dateBtn}${timeBtn}<div class="mbtn inp${evalAmt(f.fee)>0?'':' ph'}"><input id="f-fee" data-f="fee" data-calc inputmode="${CALC_IM}" value="${esc(f.fee)}" placeholder="手續費"></div>${f.kind==='exp'&&!f._edit&&f.mode!=='inst'?`<button class="mbtn${f.os?' on':''}" data-act="ef-os">${f.os?'✓ 海外交易 1.5%':'海外交易'}</button>`:'<div></div>'}${!f._edit&&!(f.mode||f.rep)?`<label class="mbtn sel"><select id="f-post" data-f="post"><option value="">立即入帳</option><option value="m" ${f.post==='m'?'selected':''}>手動確認後入帳</option></select></label><button class="mbtn${f.dep?' on':''}" data-act="ef-deptog">${f.dep?'✓ 訂金尾款':'訂金尾款'}</button>`:''}${f._edit?`<button class="mbtn" data-act="ef-del" id="ef-del" style="color:var(--seal);grid-column:1/-1">刪除</button>`:`<button class="mbtn" data-act="ef-save" data-again="1" style="grid-column:1/-1">儲存並再記一筆</button>`}</div>`:`${acctRow}${projRow}${dateRow}`}
   ${!ei?feeRow+osRow:''}
   ${(!f._edit||(canConv&&f.mode))&&['exp','inc','tr'].includes(f.kind)?(()=>{const md=f.mode||(f.rep?'rep':'');const canI=f.kind==='exp'&&!f.splits;
