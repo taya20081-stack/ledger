@@ -529,7 +529,7 @@ body.calc-on #sb{padding-bottom:370px}
 .sheet.ed .mrow{min-height:44px}.sheet.ed .mrow.amt input{font-size:26px}
 .sheet.ed .mbtn{height:42px}.sheet.ed .mgrid{gap:7px;margin:6px 0}
 .sheet.ed .cgrid{gap:8px 4px}.sheet.ed .cpager .ctile .cbd{width:44px;height:44px;font-size:21px}
-.sheet.ed .cdots{margin:4px 0 6px}.sheet.ed .cstrip{padding:2px 4px 6px}
+.sheet.ed .cdots{margin:4px 0 6px}.sheet.ed .cstrip{padding:6px}
 .mbtn.on{background:var(--paper2)}
 .sheet.ed .mbtn.inp{min-height:42px;height:42px;flex-wrap:nowrap}
 .cpager{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;margin:4px 0 0;padding-top:6px;width:100%}
@@ -2905,7 +2905,7 @@ Object.assign(ACT,{
 /* ================= 名稱自動完成：帶出以前記過的名稱與常用項目 ================= */
 let _nidx=null;
 function nameIndex(){
-  const key=D.live.length+'|'+S.recs.length;if(_nidx&&_nidx.key===key)return _nidx;
+  const key=D.live;if(_nidx&&_nidx.key===key)return _nidx;
   const by={exp:new Map(),inc:new Map()};
   for(const r of D.live){const k=r.t==='支出'?'exp':r.t==='收入'?'inc':null;if(!k||!r.n||r.m>0&&k==='exp')continue;
     const n=r.n.trim();if(!n)continue;let o=by[k].get(n);
@@ -2928,6 +2928,23 @@ function efCatRefresh(){const real=$('#sb');if(!real||!EF)return;real.id='sb-x';
 function autoCat(){if(!EF||!(EF.kind==='exp'||EF.kind==='inc')||(EF.splits&&EF._si===-1))return;if(EF._catT&&!EF._autoC)return;
   const q=(EF.n||'').trim();if(q.length<1)return;const kind=EF.kind;const r=rankCats(q,EF.sh,kind,1).filter(([c])=>S.cats[kind].some(m=>m.n===c))[0];if(!r)return;
   const[c,z]=r;if(c===EF.c&&(z||'')===(EF.s||''))return;EF.c=c;EF.s=z||'';EF._autoC=1;EF._spCat=0;EF._cs='';efCatRefresh()}
+function fitNameSuggestions(){
+  const inp=$('#f-n'),box=$('#f-n-sugg'),body=inp?.closest('.sheet.ed .sb');
+  const viewport=window.visualViewport;
+  if(!body||!box||box.hidden||document.activeElement!==inp)return;
+  const keyboard=viewport&&window.innerHeight-viewport.height>100;
+  if(!keyboard){body.style.maxHeight='';return}
+  const top=body.getBoundingClientRect().top;
+  const bottom=viewport.offsetTop+viewport.height;
+  body.style.maxHeight=Math.max(0,bottom-top)+'px';
+  const first=box.firstElementChild;
+  const limit=first?.nextElementSibling||first;
+  if(limit){
+    const available=body.getBoundingClientRect().bottom-8;
+    const overflow=limit.getBoundingClientRect().bottom-available;
+    if(overflow>0)body.scrollTop+=overflow;
+  }
+}
 function nameSuggest(){
   const box=$('#f-n-sugg');const inp=$('#f-n');if(!box||!inp||!EF)return;
   const kind=EF.kind==='inc'?'inc':EF.kind==='exp'?'exp':null;const q=inp.value.trim();
@@ -2943,16 +2960,26 @@ function nameSuggest(){
       return`<button class="nsi" data-act="ns-pick" data-i="${i}"><span class="nn">${hl}</span><span class="nm">${esc(c||'')}${s?'・'+esc(s):''}${sh?' · '+esc(sh):''}</span><span class="na num">${money(o.amt,o.cu||cur)}<small>${o.cnt} 次</small></span></button>`}).join('')
     +(cats.length?`<div class="nsc"><span class="lbl">可能的項目</span>${cats.map(([c,s])=>`<button class="chip" data-act="ns-cat" data-c="${esc(c)}" data-s="${esc(s)}">${esc(c)}${s?'・'+esc(s):''}</button>`).join('')}</div>`:'');
   box.hidden=false;
+  requestAnimationFrame(fitNameSuggestions);
 }
 document.addEventListener('input',e=>{if(e.target.id==='f-n'){nameSuggest();if(e.isComposing)return;clearTimeout(_acT);_acT=setTimeout(autoCat,250)}});
-document.addEventListener('compositionend',e=>{if(e.target.id==='f-n'){clearTimeout(_acT);_acT=setTimeout(autoCat,250)}});
+document.addEventListener('compositionend',e=>{if(e.target.id==='f-n'){nameSuggest();clearTimeout(_acT);_acT=setTimeout(autoCat,250)}});
 document.addEventListener('focusin',e=>{if(e.target.id==='f-n')nameSuggest()});
-document.addEventListener('focusout',e=>{if(e.target.id==='f-n')setTimeout(()=>{const b=$('#f-n-sugg');if(b&&document.activeElement?.id!=='f-n')b.hidden=true},180)});
+document.addEventListener('focusout',e=>{if(e.target.id==='f-n'){
+  const body=e.target.closest('.sheet.ed .sb');
+  setTimeout(()=>{
+    if(document.activeElement?.id==='f-n')return;
+    const b=$('#f-n-sugg');if(b)b.hidden=true;
+    if(body)body.style.maxHeight='';
+  },180);
+}});
+window.visualViewport?.addEventListener('resize',fitNameSuggestions);
 document.addEventListener('mousedown',e=>{if(e.target.closest('#f-n-sugg'))e.preventDefault()});
 Object.assign(ACT,{
   'ns-pick':el=>{const o=NS[+el.dataset.i];if(!o||!EF)return;EF.n=o.n;const top=topOf(o.cats);
     if(top){const[c,s]=top.split('\u0001');const k=EF.kind==='inc'?'inc':'exp';if(S.cats[k].some(m=>m.n===c)){EF.c=c;EF.s=s}}
     const sh=topOf(o.shops);if(sh&&!EF.sh)EF.sh=sh;if(!EF.amt)EF.amt=String(o.amt);
+    const body=$('#sheet.ed .sb');if(body)body.style.maxHeight='';
     renderEditor();const n=$('#f-n');n&&n.blur()},
   'ns-cat':el=>{if(!EF)return;EF.c=el.dataset.c;EF.s=el.dataset.s;renderEditor()}
 });
