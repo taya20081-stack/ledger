@@ -56,6 +56,7 @@ function fixture(storage = {kv: new Map()}) {
     section('let recordWrites', '/* ================= recurring'),
     section('async function renProj(', 'function ruleName('),
     section('async function renameSub(', '/* ================= record building'),
+    section('const INBOX_SOURCES=', 'function inboxSharedStatus()'),
     'let inboxBusy=Promise.resolve();',
     section('const inboxAwaitingCloud=', 'function processInbox(docs)'),
     section('function processInbox(docs)', "ACT['copy-uid']")
@@ -270,4 +271,25 @@ test('Firestore 不允許領取時，沒有任何本機寫入', async () => {
   assert.equal(f.Cloud.writes.length,0);
   assert.equal(doc.ref.deletes,0);
   assert.match(f.Cloud.inboxErr,/Firestore 規則/);
+});
+
+
+test('通知用各自的收件證據區分 Claude 與 ChatGPT', () => {
+  const f = fixture();
+  const chatgptId = 'chatgpt_' + 'a'.repeat(36);
+  const oldChatGPT = {id: 'ib_' + chatgptId, tg: 'claude', o: Date.UTC(2026, 10, 19, 9, 10)};
+  f.context.chatgptId = chatgptId;
+  f.Cloud.inboxDocs = [{source: 'chatgpt'}, {source: 'claude', state: 'review'}];
+  f.Cloud.srv = new Set();
+  f.S.recs.push(oldChatGPT);
+  assert.equal(f.run("inboxCommandSource(chatgptId, {kind:'exp'})"), 'chatgpt');
+  assert.equal(f.run("inboxCommandSource('legacy', {kind:'px'})"), '');
+  assert.equal(f.run("inboxCommandSource('legacy', {src:'ap'})"), '');
+  assert.equal(f.run("inboxSourceStatus('chatgpt',Cloud,S.recs)"), '已收件，1 筆待入帳');
+  assert.equal(f.run("inboxSourceStatus('claude',Cloud,S.recs)"), '1 筆待核對');
+  f.Cloud.inboxDocs = [];
+  assert.equal(f.run("inboxSourceStatus('chatgpt',Cloud,S.recs)"), '尚無入帳紀錄');
+  f.Cloud.srv.add(oldChatGPT.id);
+  assert.match(f.run("inboxSourceStatus('chatgpt',Cloud,S.recs)"), /^最近入帳 .*17:10/);
+  assert.equal(f.run("inboxSourceStatus('claude',Cloud,S.recs)"), '尚無入帳紀錄');
 });
