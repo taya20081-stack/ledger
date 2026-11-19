@@ -42,7 +42,7 @@
     const account=matches[0];
     let c='',s='',name='';
     const dividend=/股票股利|現金股利|股息|股利|配息/.test(raw);
-    if(dividend){c='投資';s='股票股利'}
+    if(dividend){c='收入';s='股利'}
     else if(/薪資|薪水/.test(raw)){c='收入';s='薪資'}
     else if(/早餐|午餐|晚餐|宵夜/.test(raw)){c='飲食';s=(/早餐|午餐|晚餐|宵夜/.exec(raw)||[])[0]}
     else if(/加油/.test(raw)){c='交通';s='加油'}
@@ -95,9 +95,12 @@
       if(result.error){info.textContent='⚠ '+result.error;return}
       const cats=S.cats[result.kind]||[];
       const rootCat=cats.find(x=>x.n===result.c);
-      const picked=rootCat||cats.find(x=>x.subs&&x.subs.includes(result.s))||cats[0];
+      const dividendCat=result.kind==='inc'&&result.s==='股利'?
+        cats.find(x=>x.subs&&(x.subs.includes('股票股利')||x.subs.includes('股利'))):null;
+      const picked=dividendCat||rootCat||cats.find(x=>x.subs&&x.subs.includes(result.s))||cats[0];
       if(!picked){info.textContent='請先在 App 設定收入或支出分類';return}
-      const sub=picked.subs&&picked.subs.includes(result.s)?result.s:(picked.subs?.[0]||'');
+      const sub=result.s==='股利'&&picked.subs?.includes('股票股利')?'股票股利':
+        picked.subs?.includes(result.s)?result.s:(picked.subs?.[0]||'');
       const f=ledger.quickBlank(result.kind);
       Object.assign(f,{a:result.a,amt:result.amt,c:picked.n,s:sub,n:result.n,dt:result.dt,tm:result.tm});
       close();
