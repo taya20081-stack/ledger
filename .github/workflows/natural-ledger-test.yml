@@ -1,0 +1,24 @@
+name: 自然語言記帳測試
+on:
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'natural-ledger.js'
+      - 'tests/natural-ledger.test.js'
+      - '.github/workflows/natural-ledger-test.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 檢查解析器語法
+        run: node --check natural-ledger.js
+      - name: 執行解析測試
+        run: node --test tests/natural-ledger.test.js
