@@ -45,7 +45,7 @@ function fixture(storage = {kv: new Map()}) {
     }
   };
   const context = vm.createContext({
-    DB, S, D, Cloud, GOLD_U: {}, window: {Cloud, addEventListener() {}}, structuredClone, setTimeout, clearTimeout,
+    DB, S, D, Cloud, crypto: require('node:crypto').webcrypto, firebase: {firestore:{FieldValue:{serverTimestamp:()=>0}}}, GOLD_U: {}, window: {Cloud, addEventListener() {}}, structuredClone, setTimeout, clearTimeout,
     toast() {}, ensureCats() {}, recompute() {D.live = S.recs.filter(r => !r.x)}, scheduleRender() {},
     async fixOsGroups() {}, r2: n => n, fmt: String, TODAY: () => '2026-01-01', NOWTM: () => '12:00',
     balAt: () => D.live.reduce((sum,r) => sum + r.m, 0),
@@ -57,7 +57,7 @@ function fixture(storage = {kv: new Map()}) {
     section('async function renProj(', 'function ruleName('),
     section('async function renameSub(', '/* ================= record building'),
     'let inboxBusy=Promise.resolve();',
-    section('const inboxSeen=', 'function processInbox(docs)'),
+    section('const inboxAwaitingCloud=', 'function processInbox(docs)'),
     section('function processInbox(docs)', "ACT['copy-uid']")
   ].join('\n'), context);
   return {context, S, Cloud, DB, rec, get kv() {return storage.kv},
@@ -65,14 +65,32 @@ function fixture(storage = {kv: new Map()}) {
 }
 
 function command(data) {
-  const doc = {id: 'example-command', data: () => data};
-  doc.ref = {id: doc.id, deletes: 0, fail: false, async delete() {
+  let current={...data};
+  const doc = {id:'example-command', data:()=>current};
+  doc.ref = {id:doc.id, path:'users/example-user/inbox/'+doc.id, deletes:0, fail:false, async delete(){
     this.deletes++;
     if(this.fail)throw new Error('mock Firestore delete failure');
+    current=null;
+  }};
+  let tail=Promise.resolve();
+  doc.db={denied:false,runTransaction(callback){
+    const result=tail.then(async()=>{
+      if(this.denied)throw Object.assign(new Error('permission denied'),{code:'permission-denied'});
+      const writes=[];
+      const value=await callback({
+        get:async()=>({id:doc.id,ref:doc.ref,exists:!!current,data:()=>current}),
+        update:(_,patch)=>writes.push(patch),
+      });
+      for(const patch of writes)current={...current,...patch};
+      return value;
+    });
+    tail=result.catch(()=>{});
+    return result;
   }};
   return doc;
 }
 async function process(f, doc) {
+  f.Cloud.db=doc.db;
   f.context.doc = doc;
   await f.run('processInbox([doc]); inboxBusy');
 }
@@ -112,7 +130,7 @@ test('設定與版本一起提交，失敗時不排入雲端', async () => {
   assert.equal(f.kv.get('kvu').settings, f.Cloud.writes[0].stamp);
 });
 
-test('分期記錄完成但規則寫入中止，重試只補規則', async () => {
+test('分期記錄完成但規則寫入中止，其他裝置保留原指令', async () => {
   const f = fixture();
   const doc = command({kind: 'inst', n: '測試分期', a: 'cash', cnt: 4, sno: 2, amt: 10, dt: '2026-01-01'});
   f.DB.failKV = true;
@@ -120,10 +138,11 @@ test('分期記錄完成但規則寫入中止，重試只補規則', async () =>
   assert.equal(doc.ref.deletes, 0);
   assert.equal(f.S.rules.length, 0);
   assert.deepEqual([...f.rec.keys()], ['ib_example-command_i2','ib_example-command_i3','ib_example-command_i4']);
-  f.DB.failKV = false;
-  await process(f, doc);
-  assert.equal(doc.ref.deletes, 1);
-  assert.equal(f.kv.get('rules').length, 1);
+  const reopened=fixture();
+  await process(reopened, doc);
+  assert.equal(doc.ref.deletes, 0);
+  assert.equal(doc.data()._ledgerInbox.state,'review');
+  assert.equal(reopened.Cloud.writes.length,0);
   assert.equal(f.Cloud.writes.filter(row => row.id).length, 3);
 });
 
@@ -151,7 +170,7 @@ test('刪除失敗後重開分頁可以查到已確認的完成憑證', async ()
   doc.ref.fail = true;
   await process(first, doc);
   const second = fixture();
-  await second.DB.putKV('inboxReceipts/example-user', first.kv.get('inboxReceipts/example-user'));
+  assert.equal(doc.data()._ledgerInbox.state,'completed');
   doc.ref.fail = false;
   await process(second, doc);
   assert.equal(doc.ref.deletes, 2);
@@ -165,7 +184,7 @@ test('無效 JSON 與找不到目標的編輯指令會保留', async () => {
     const doc = command(data);
     await process(f, doc);
     assert.equal(doc.ref.deletes, 0);
-    assert.match(f.Cloud.inboxErr, /已保留待檢查的指令/);
+    assert.equal(doc.data()._ledgerInbox.state,'invalid');
   }
 });
 
@@ -193,7 +212,7 @@ test('edit、del、bal、rensub、renproj、mvproj 重送時不重複寫入', as
   }
 });
 
-test('子類別改名寫入一半後可重試儲存分類，不會再改一次記錄', async () => {
+test('子類別改名寫入一半後保留待核對指令', async () => {
   const f = fixture();
   await f.run("mutate([{id:'r1', t:'支出', c:'生活', s:'舊分類',dt:'2026-01-01'}])");
   const doc = command({kind:'rensub', k:'exp', c:'生活', s:'舊分類', ns:'新分類'});
@@ -204,8 +223,8 @@ test('子類別改名寫入一半後可重試儲存分類，不會再改一次�
   assert.deepEqual(f.S.cats.exp[0].subs, ['舊分類']);
   f.DB.failKV = false;
   await process(f, doc);
-  assert.equal(doc.ref.deletes, 1);
-  assert.deepEqual(f.kv.get('cats').exp[0].subs, ['新分類']);
+  assert.equal(doc.ref.deletes, 0);
+  assert.equal(doc.data()._ledgerInbox.state,'review');
   assert.equal(f.Cloud.writes.filter(row => row.id).length, 2);
 });
 
@@ -220,22 +239,35 @@ test('本機已寫入但雲端確認中斷，重開時保留指令供核對', as
   await process(reopened, doc);
   assert.equal(doc.ref.deletes, 0);
   assert.equal(reopened.Cloud.writes.length, 0);
-  assert.match(reopened.Cloud.inboxErr, /上次雲端確認中斷/);
+  assert.match(reopened.Cloud.inboxErr, /已被領取或待核對/);
 });
 
-test('支援 Web Locks 時，同瀏覽器的兩個分頁共用收件匣鎖', async () => {
-  const storage = {kv:new Map()};
-  const a = fixture(storage), b = fixture(storage);
-  const doc = command({kind:'gold',q:3});
-  let tail = Promise.resolve();
-  const locks = {request(key, callback) {
-    assert.equal(key, 'ledger-inbox/example-user');
-    const pending = tail.then(callback);
-    tail = pending.catch(() => {});
-    return pending;
-  }};
-  a.context.window.navigator = b.context.window.navigator = {locks};
+test('雙裝置使用同一個 Firestore 指令，只有領取成功的裝置寫入', async () => {
+  const a=fixture(), b=fixture();
+  const doc=command({kind:'gold',q:3});
+  a.Cloud.canSync=b.Cloud.canSync=false;
   await Promise.all([process(a,doc),process(b,doc)]);
-  assert.equal(a.Cloud.writes.length + b.Cloud.writes.length, 1);
-  assert.ok(storage.kv.get('inboxReceipts/example-user').includes(doc.id));
+  assert.equal(a.Cloud.writes.length+b.Cloud.writes.length,1);
+  assert.equal(doc.data()._ledgerInbox.state,'processing');
+  assert.equal(doc.ref.deletes,0);
+});
+
+test('交易領取提交後立即中斷，其他裝置保留指令', async () => {
+  const owner=fixture(), reopened=fixture();
+  const doc=command({kind:'gold',q:3});
+  owner.context.doc=doc;
+  await owner.run("claimInbox(doc.db,doc.ref,'terminated-session')");
+  await process(reopened,doc);
+  assert.equal(reopened.Cloud.writes.length,0);
+  assert.equal(doc.ref.deletes,0);
+});
+
+test('Firestore 不允許領取時，沒有任何本機寫入', async () => {
+  const f=fixture();
+  const doc=command({kind:'gold',q:3});
+  doc.db.denied=true;
+  await process(f,doc);
+  assert.equal(f.Cloud.writes.length,0);
+  assert.equal(doc.ref.deletes,0);
+  assert.match(f.Cloud.inboxErr,/Firestore 規則/);
 });

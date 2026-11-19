@@ -2183,8 +2183,7 @@ Object.assign(ACT,{
    機器人帳號讀不到任何餘額，差額必須由 App 端計算，收件匣只能傳「目標餘額」，不能直接傳差額                    */
 let inboxBusy=Promise.resolve();
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&typeof Cloud!=='undefined'&&Cloud.user)Cloud.pollInbox()});
-const inboxSeen=new Set(); // 防止同一分頁因 snapshot 和輪詢重複執行。
-const inboxDeletePending=new Set();
+const inboxAwaitingCloud=new Map();
 function inboxInvalidReason(x){
   const amt=x.amt!=null&&x.amt!==''&&Number.isFinite(+x.amt);
   const account=()=>S.accts.some(a=>a.id===x.a||a.name===x.a);
@@ -2209,45 +2208,103 @@ function inboxInvalidReason(x){
 }
 function processInbox(docs){
   const uid=Cloud.user?.uid;
-  let mine=[];
-  const process=async()=>{
-  if(!uid||Cloud.user?.uid!==uid)return;
-  if(DB.mem)throw new LocalWriteError('IndexedDB 無法使用，已保留收件匣指令');
-  if(!Cloud.decided)return; // pollInbox 會在同步就緒後重新讀取。
-  const sk=d=>uid+'/'+d.id;
-  const receiptKey='inboxReceipts/'+uid;
-  const receipts=new Set(await DB.getKV(receiptKey)||[]);
-  const appliedKey='inboxApplied/'+uid;
-  const applied=await DB.getKV(appliedKey)||{};
-  for(const doc of docs){
-    const key=sk(doc);
-    if(receipts.has(doc.id)&&(!inboxSeen.has(key)||inboxDeletePending.has(key))){
-      inboxSeen.add(key);
-      inboxDeletePending.add(key);
-      await deleteInboxDoc(doc.ref,key);
+  const db=Cloud.db;
+  if(!uid||!db)return;
+  const ordered=[...docs].sort((a,b)=>(a.data()?.kind==='mvproj')-(b.data()?.kind==='mvproj'));
+  inboxBusy=inboxBusy.then(async()=>{
+    for(const doc of ordered){
+      if(Cloud.user?.uid!==uid||Cloud.db!==db||!Cloud.decided)return;
+      if(doc.ref.path!=='users/'+uid+'/inbox/'+doc.id)continue;
+      if(DB.mem){Cloud.inboxErr='IndexedDB 無法使用，已保留收件匣指令';return}
+      const key=doc.ref.path;
+      const pending=inboxAwaitingCloud.get(key);
+      let token;
+      try{
+        if(pending?.db===db){
+          await finishInbox(db,uid,doc.ref,pending);
+          continue;
+        }
+        token=crypto.randomUUID();
+        const claim=await claimInbox(db,doc.ref,token);
+        if(claim.state==='missing')continue;
+        if(claim.state==='completed'){await deleteInboxDoc(doc.ref);continue}
+        if(claim.state!=='claimed'){
+          Cloud.inboxErr=claim.state==='invalid'?'收件匣指令資料有誤，已保留供核對':'收件匣指令已被領取或待核對，已保留原指令';
+          continue;
+        }
+        if(Cloud.user?.uid!==uid||Cloud.db!==db)return;
+        const session={db,token,queue:Cloud.q};
+        const result=await executeInbox([claim.doc]);
+        if(result==='applied'){
+          inboxAwaitingCloud.set(key,session);
+          await finishInbox(db,uid,doc.ref,session);
+        }else{
+          await updateInboxClaim(db,doc.ref,token,'invalid');
+          Cloud.inboxErr='收件匣指令資料有誤，已保留供核對';
+        }
+      }catch(error){
+        if(token&&!inboxAwaitingCloud.has(key)){
+          // 即使無法標記待核對，既有的 processing 狀態也會阻止其他裝置重跑。
+          await updateInboxClaim(db,doc.ref,token,'review').catch(()=>{});
+        }
+        Cloud.inboxErr=error?.code==='permission-denied'?'無法領取或更新收件匣指令，請確認 Firestore 規則':'收件匣處理未完成，已保留指令供核對';
+      }
     }
+  }).catch(()=>{Cloud.inboxErr='收件匣處理未完成，已保留指令供核對'});
+}
+
+async function claimInbox(db,ref,token){
+  try{
+    return await inboxDeadline(db.runTransaction(async tx=>{
+      const doc=await tx.get(ref);
+      if(!doc.exists)return {state:'missing'};
+      const marker=doc.data()._ledgerInbox;
+      if(marker!==undefined)return {state:marker?.state||'review'};
+      tx.update(ref,{_ledgerInbox:{token,state:'processing',at:firebase.firestore.FieldValue.serverTimestamp()}});
+      return {state:'claimed',doc};
+    }));
+  }catch(error){
+    if(error?.code!=='permission-denied')throw error;
+    // 規則可能先拒絕競爭失敗的交易。重新讀伺服器可辨識已被領取的文件。
+    let current;
+    try{current=await inboxDeadline(ref.get({source:'server'}))}catch(e){throw error}
+    if(!current.exists)return {state:'missing'};
+    const marker=current.data()._ledgerInbox;
+    if(marker!==undefined)return {state:marker?.state||'review'};
+    throw error;
   }
-  const pending=docs.filter(d=>!receipts.has(d.id)&&inboxDeletePending.has(sk(d)));
-  if(pending.length&&!await finishInbox(uid,receiptKey,receipts,appliedKey,applied,pending.map(d=>d.ref)))return;
-  docs=docs.filter(d=>{
-    if(inboxSeen.has(sk(d))||receipts.has(d.id))return false;
-    if(Object.hasOwn(applied,d.id)){
-      Cloud.inboxErr='本機已執行，但上次雲端確認中斷；已保留指令供核對';
-      return false;
-    }
-    return true;
-  });mine=docs.map(sk);mine.forEach(i=>inboxSeen.add(i));if(!docs.length)return;
+}
+
+function updateInboxClaim(db,ref,token,state){
+  return inboxDeadline(db.runTransaction(async tx=>{
+    const doc=await tx.get(ref);
+    if(!doc.exists)return 'missing';
+    const marker=doc.data()._ledgerInbox;
+    if(marker?.state==='completed')return 'completed';
+    if(marker?.token!==token||marker.state!=='processing')return 'other';
+    tx.update(ref,{_ledgerInbox:{token,state,at:firebase.firestore.FieldValue.serverTimestamp()}});
+    return state;
+  }));
+}
+
+async function inboxDeadline(promise){
+  let timer;
+  try{
+    return await Promise.race([promise,new Promise((_,reject)=>{
+      timer=setTimeout(()=>reject(new Error('收件匣操作逾時')),15000);
+    })]);
+  }finally{clearTimeout(timer)}
+}
+
+async function executeInbox(docs){
   const add=[],dels=[],newRules=[],delNames=[],upds=[],insts=[],eds=[],rups=[],balMsgs=[];
   let apN=0,apDup=0,apUnk=0,pxN=0;const mvq=[];
   let invalid='';
-  const reject=(ref,reason)=>{
-    invalid=reason;
-    inboxSeen.delete(sk(ref));
-  };
+  const reject=reason=>{invalid=reason};
   for(const d of docs){const x=d.data()||{};const id='ib_'+d.id;
     const reason=inboxInvalidReason(x);
-    if(reason){reject(d.ref,reason);continue}
-    if(x.src==='ap'){if(!S.byId.has(id)){const o=apRecord(x,id);if(o.r){add.push(o.r);apN++;if(!o.sure)apUnk++}else if(o.skip==='dup')apDup++;else{reject(d.ref,'Apple Pay 指令資料不足');continue}}dels.push(d.ref);continue}
+    if(reason){reject(reason);continue}
+    if(x.src==='ap'){if(!S.byId.has(id)){const o=apRecord(x,id);if(o.r){add.push(o.r);apN++;if(!o.sure)apUnk++}else if(o.skip==='dup')apDup++;else{reject('Apple Pay 指令資料不足');continue}}dels.push(d.ref);continue}
     if(x.kind==='px'){try{const q=JSON.parse(x.p||'{}');const cur=S.settings.pxx||{d:'',p:{}};if((x.d||'')>=(cur.d||'')){S.settings.pxx={d:x.d||'',p:{...cur.p,...q}};pxApply(S.settings.pxx.p);pxN++}}catch(e){}dels.push(d.ref);continue}
     if(x.kind==='edit'||x.kind==='del'){eds.push({x,ref:d.ref});continue}
     if(x.kind==='inst'){const amt=Math.abs(+x.amt),k=parseInt(x.cnt)||0,acct=S.accts.find(a=>a.id===x.a||a.name===x.a);
@@ -2258,7 +2315,7 @@ function processInbox(docs){
       dels.push(d.ref);continue}
     if(x.kind==='rensub'){const k=x.k==='inc'?'inc':'exp';
       const cat=S.cats[k].find(q=>q.n===x.c);
-      if(!cat||!cat.subs.some(v=>v===x.s||v===String(x.ns||'').trim())){reject(d.ref,'找不到子類別');continue}
+      if(!cat||!cat.subs.some(v=>v===x.s||v===String(x.ns||'').trim())){reject('找不到子類別');continue}
       const n=await renameSub(k,String(x.c||''),String(x.s||''),String(x.ns||'').trim());toast(n||S.cats[k].some(q=>q.n===x.c&&q.subs.includes(String(x.ns||'').trim()))?'Claude 已把「'+x.c+'・'+x.s+'」改名為「'+x.ns+'」（'+n+' 筆記錄）':'找不到子類別：'+x.c+'・'+x.s);dels.push(d.ref);continue}
     if(x.kind==='clrshop'){const pats=String(x.n||'').split(/[,、，]/).map(t=>t.trim()).filter(Boolean).map(t=>new RegExp('^'+t.replace(/[.+?^${}()|[\]\\]/g,'\\$&').replace(/\*/g,'.*')+'$','i'));
       const ch=D.live.filter(r=>r.sh&&pats.some(re=>re.test(r.sh))).map(r=>({...r,sh:''}));const names=[...new Set(D.live.filter(r=>r.sh&&pats.some(re=>re.test(r.sh))).map(r=>r.sh))];
@@ -2340,9 +2397,9 @@ function processInbox(docs){
     if(ch){await saveKV('rules');if(dd.length)await mutate([],dd);await runRules();scheduleRender();toast('Claude 幫你更新了週期設定')}}
   if(insts.length){await mutate(insts.flatMap(q=>q.recs));const nr=insts.map(q=>q.rule).filter(Boolean);if(nr.length){S.rules.push(...nr);try{await saveKV('rules')}catch(e){S.rules=S.rules.filter(q=>!nr.includes(q));throw e}}scheduleRender();toast('Claude 幫你建了 '+insts.length+' 個分期：'+insts.map(q=>q.nm).join('、'))}
   if(eds.length){const up=[],rm=[],bad=[],okN=[];
-    for(const {x,ref} of eds){const nm=String(x.n||'').trim();const dt=String(x.dt||'');if(!nm||!/^\d{4}-\d{2}-\d{2}$/.test(dt)){bad.push((nm||'?')+'（資料不完整）');reject(ref,'記錄識別欄位錯誤');continue}
+    for(const {x,ref} of eds){const nm=String(x.n||'').trim();const dt=String(x.dt||'');if(!nm||!/^\d{4}-\d{2}-\d{2}$/.test(dt)){bad.push((nm||'?')+'（資料不完整）');reject('記錄識別欄位錯誤');continue}
       const hit=D.live.filter(r=>r.dt===dt&&((r.n||'')===nm||(!r.n&&r.s===nm))&&(!x.tm||r.tm===x.tm)&&(x.oamt==null||Math.abs(Math.abs(r.m)-Math.abs(+x.oamt))<0.5)&&(!x.a||r.a===x.a||D.acct.get(r.a)?.name===x.a));
-      if(hit.length!==1){bad.push(nm+'（找到 '+hit.length+' 筆）');reject(ref,'找不到唯一符合的記錄');continue}const r=hit[0];dels.push(ref);
+      if(hit.length!==1){bad.push(nm+'（找到 '+hit.length+' 筆）');reject('找不到唯一符合的記錄');continue}const r=hit[0];dels.push(ref);
       if(x.kind==='del'){rm.push(r.id);okN.push('刪除 '+nm);continue}
       const o={...r};if(x.nn!=null&&String(x.nn).trim())o.n=String(x.nn).trim().slice(0,80);
       if(x.amt!=null&&isFinite(+x.amt)&&Math.abs(+x.amt)>0)o.m=(r.m<0?-1:1)*Math.abs(+x.amt);
@@ -2357,45 +2414,28 @@ function processInbox(docs){
     toast([okN.length?'Claude 幫你修改了：'+okN.slice(0,3).join('、'):'',bad.length?'沒有修改：'+bad.slice(0,3).join('、'):''].filter(Boolean).join('；'))}
   if(balMsgs.length)toast(balMsgs.join('；'))
   // 等本機交易與雲端確認後再清除指令；本分頁重試時略過已執行的操作。
-  if(Cloud.user?.uid!==uid)throw new Error('登入狀態已變更');
-  if(invalid)Cloud.inboxErr='已保留待檢查的指令：'+invalid;
-  for(const ref of dels)inboxDeletePending.add(uid+'/'+ref.id);
-  if(dels.length)await finishInbox(uid,receiptKey,receipts,appliedKey,applied,dels);
-  };
-  inboxBusy=inboxBusy.then(()=>{
-    const locks=window.navigator?.locks;
-    return uid&&locks?locks.request('ledger-inbox/'+uid,process):process();
-  }).catch(e=>{mine.forEach(i=>inboxSeen.delete(i));Cloud.inboxErr='處理失敗：'+(e&&e.message||e)});
+  return dels.length?'applied':invalid||'invalid';
 }
-async function finishInbox(uid,receiptKey,receipts,appliedKey,applied,refs){
-  // 在等待網路前留下保護紀錄，重開分頁時保留未確認的指令。
-  for(const ref of refs)Object.defineProperty(applied,ref.id,{value:true,writable:true,enumerable:true,configurable:true});
-  try{await DB.putKV(appliedKey,applied)}
-  catch(e){Cloud.inboxErr='無法記錄本機處理進度，已保留指令';return false}
+
+async function finishInbox(db,uid,ref,{token,queue}){
+  if(Cloud.q!==queue){
+    inboxAwaitingCloud.delete(ref.path);
+    Cloud.inboxErr='雲端連線已重啟，已保留指令供核對';
+    return;
+  }
   if(!await Cloud.waitForInboxSync(uid)){
     Cloud.inboxErr='雲端尚未確認，已保留收件匣指令';
-    return false;
+    return;
   }
-  // 先保存完成憑證。若在刪除前關閉 App，重開只需要重試刪除。
-  for(const ref of refs){receipts.delete(ref.id);receipts.add(ref.id)}
-  try{await DB.putKV(receiptKey,[...receipts].slice(-512))}
-  catch(e){Cloud.inboxErr='本機完成紀錄寫入失敗，已保留收件匣指令';return false}
-  if(Cloud.user?.uid!==uid)return false;
-  for(const ref of refs)delete applied[ref.id];
-  // 已有完成憑證，清除保護紀錄失敗時仍可安全重試刪除。
-  await DB.putKV(appliedKey,applied).catch(()=>{});
-  await Promise.all(refs.map(ref=>deleteInboxDoc(ref,uid+'/'+ref.id)));
-  return true;
+  if(Cloud.user?.uid!==uid||Cloud.db!==db||Cloud.q!==queue)return;
+  const state=await updateInboxClaim(db,ref,token,'completed');
+  if(state==='completed')await deleteInboxDoc(ref);
+  inboxAwaitingCloud.delete(ref.path);
 }
-async function deleteInboxDoc(ref,key){
-  let deadline;
-  try{
-    await Promise.race([ref.delete(),new Promise((_,reject)=>{
-      deadline=setTimeout(()=>reject(new Error('刪除逾時')),15000);
-    })]);
-    inboxDeletePending.delete(key);
-  }catch(e){Cloud.inboxErr='收件匣刪除失敗，稍後重試'}
-  finally{clearTimeout(deadline)}
+
+async function deleteInboxDoc(ref){
+  try{await inboxDeadline(ref.delete())}
+  catch(e){Cloud.inboxErr='收件匣刪除失敗，稍後重試'}
 }
 ACT['copy-uid']=el=>{const v=Cloud.user?.uid||'';(navigator.clipboard?.writeText(v)||Promise.reject()).then(()=>toast('已複製 UID'),()=>toast('請長按 UID 文字手動複製'))};
 
