@@ -26,11 +26,13 @@
 python3 -c "import re;s=open('index.html',encoding='utf-8').read();open('/tmp/app.js','w').write('\n;\n'.join(re.findall(r'<script(?![^>]*src)[^>]*>(.*?)</script>',s,re.S)))" && node --check /tmp/app.js
 ```
 
+本機寫入與收件匣測試使用記憶體模擬資料，可執行 `node --test tests/local-writes.test.cjs`。
+
 每次改版請見 `CLAUDE.md` 的「Release convention」。架構細節（state、cloud sync、GitHub Actions）也都寫在 `CLAUDE.md`。
 
 ## Claude 收件匣（`users/{uid}/inbox/{id}`）
 
-Claude 自己讀不到使用者的任何記錄或餘額，只能把「指令」寫成一份 Firestore 文件到收件匣；App 開啟時會讀取、執行、然後刪除該文件。欄位用 `stringValue`／`doubleValue`。
+Claude 自己讀不到使用者的任何記錄或餘額，只能把「指令」寫成一份 Firestore 文件到收件匣；App 會在本機寫入完成且雲端同步確認後，嘗試刪除已處理的文件。欄位用 `stringValue`／`doubleValue`。
 
 ### 共同欄位
 `kind` 決定指令種類；其餘欄位視 `kind` 而定，詳見下表。
@@ -59,6 +61,7 @@ Claude 自己讀不到使用者的任何記錄或餘額，只能把「指令」�
 
 ### 給 Claude 的注意事項
 - inbox 對機器人是只寫不讀，無法回讀；是否成功以 HTTP 200 與使用者 App 畫面為準。
-- 文件 id 會變成記錄 id（`ib_<docId>`），同一份文件重複送達會被擋掉（去重鍵含使用者 uid），刪除收件匣文件失敗時也會自動重試，所以同一份指令最終只會生效一次。
+- 新增記錄由文件 ID 衍生，分期各期使用 `ib_<docId>_i<期數>`。同一分頁會以 UID 和文件 ID 去除重複送達，雲端確認或刪除失敗時會保留指令。
+- 重新載入或多裝置同時執行仍可能重試同一份指令。修改與刪除指令找不到唯一目標時會保留原文件，並在雲端同步畫面顯示原因。
 - 分類、帳戶只能從 `kv/botinfo` 讀到的清單裡選，不可自創。
 - 不要把使用者的持股、金額寫進公開位置（這個 repo 的任何檔案）。

@@ -575,7 +575,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.83';
+window.APP_VER='v2.0.84';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -641,7 +641,11 @@ const DB={db:null,mem:false,
     const t=this.db.transaction(['rec','kv']);const recs=await this.req(t.objectStore('rec').getAll());
     const ks=await this.req(t.objectStore('kv').getAllKeys());const vs=await this.req(t.objectStore('kv').getAll());
     const kv={};ks.forEach((k,i)=>kv[k]=vs[i]);return{recs,kv}},
-  run(stores,fn){if(this.mem)return Promise.resolve();return new Promise((res,rej)=>{const t=this.db.transaction(stores,'readwrite');fn(t);t.oncomplete=()=>res();t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})},
+  run(stores,fn){if(this.mem)return Promise.resolve();return new Promise((res,rej)=>{
+    const t=this.db.transaction(stores,'readwrite');
+    t.oncomplete=()=>res();t.onabort=()=>rej(t.error||new Error('交易已中止'));
+    try{fn(t)}catch(e){t.abort();rej(e)}
+  })},
   putRecs(arr){return this.run(['rec'],t=>{const s=t.objectStore('rec');arr.forEach(r=>s.put(r))})},
   putKV(k,v){return this.run(['kv'],t=>t.objectStore('kv').put(v,k))},
   clear(){return this.run(['rec','kv'],t=>{t.objectStore('rec').clear();t.objectStore('kv').clear()})}
@@ -656,7 +660,48 @@ const S={recs:[],byId:new Map(),accts:[],cats:null,budgets:{total:0,cats:{},u:0}
   search:{q:'',type:'',a:'',from:'',to:'',c:'',p:'',min:'',max:'',sel:new Set(),selMode:false,limit:300},homeLimit:{},acctLimit:300,ready:false};
 const D={live:[],bal:new Map(),acct:new Map(),pairs:new Map(),groups:new Map(),ci:new Map(),whos:[],projs:[]};
 
-function saveKV(k){if(SYNC_KEYS.includes(k)){S.kvu[k]=Date.now();DB.putKV('kvu',S.kvu)}const p=DB.putKV(k,S[k]).catch(e=>toast('儲存失敗：'+e));if(SYNC_KEYS.includes(k)&&window.Cloud)Cloud.pushKV(k);return p}
+class LocalWriteError extends Error {}
+function localWrite(write, message){
+  const pending=Promise.resolve().then(()=>{
+    if(DB.mem)throw new Error('IndexedDB 無法使用');
+    return write();
+  }).catch(cause=>{
+    toast(message);
+    throw new LocalWriteError(message,{cause});
+  });
+  // 部分顯示偏好採背景儲存，await 同一個 Promise 仍會收到失敗。
+  pending.catch(()=>{});
+  return pending;
+}
+
+function saveKV(k){
+  const syncedKey=SYNC_KEYS.includes(k);
+  const value=structuredClone(S[k]);
+  let u;
+  const saved=localWrite(()=>DB.run(['kv'],tx=>{
+      const store=tx.objectStore('kv');
+      store.put(value,k);
+      if(syncedKey){
+        const request=store.get('kvu');
+        request.onsuccess=()=>{
+          u=Math.max(Date.now(),(request.result?.[k]||0)+1,(S.kvu[k]||0)+1);
+          store.put({...request.result,[k]:u},'kvu');
+        };
+      }
+    }),'設定未能儲存到此裝置');
+  const pending=saved.then(()=>{
+    if(syncedKey){
+      S.kvu[k]=u;
+      if(window.Cloud)Cloud.pushKV(k,value,u);
+    }
+  });
+  pending.catch(()=>{});
+  return pending;
+}
+window.addEventListener('unhandledrejection',e=>{
+  // DOM 的非同步事件處理函式沒有 Promise 呼叫端。localWrite 已顯示原因。
+  if(e.reason instanceof LocalWriteError)e.preventDefault();
+});
 const SYNC_KEYS=['accts','cats','budgets','rules','tpls','rates','settings','sellers'];
 function rateOf(cur){return cur==='TWD'||!cur?1:(S.rates.r[cur]||0)}
 function curOf(r){return D.acct.get(r.a)?.cur||'TWD'}
@@ -697,14 +742,39 @@ function catColor(r){
   if(r.t==='收入')return'var(--c'+(D.ci.get('inc:'+r.c)??2)+')';
   return null;
 }
-async function mutate(add=[],del=[]){
-  const now=Date.now();const out=[];
-  const extra=[];
-  for(const r of add){r.u=now;const ex=S.byId.get(r.id);if(ex){if(ex.dt&&r.dt&&ex.dt.slice(0,7)!==r.dt.slice(0,7))extra.push({id:r.id,x:1,u:now-1,dt:ex.dt});Object.keys(ex).forEach(k=>delete ex[k]);Object.assign(ex,r);out.push(ex)}else{S.recs.push(r);S.byId.set(r.id,r);out.push(r)}}
-  for(const id of del){const ex=S.byId.get(id);if(!ex)continue;const dt=ex.dt;Object.keys(ex).forEach(k=>delete ex[k]);Object.assign(ex,{id,x:1,u:now,dt});out.push(ex)}
-  ensureCats();recompute();
-  try{await DB.putRecs(out)}catch(e){toast('寫入失敗：'+e)}
-  if(window.Cloud)Cloud.pushRecs(out.concat(extra));
+let recordWrites=Promise.resolve();
+function mutate(add=[],del=[]){
+  const additions=add.map(r=>({...r}));
+  const deletions=[...del];
+  const pending=recordWrites.then(()=>{
+    const out=new Map(),extra=[];
+    for(const r of additions){
+      const old=S.byId.get(r.id);
+      r.u=Math.max(Date.now(),(old?.u||0)+2);
+      if(old?.dt&&r.dt&&old.dt.slice(0,7)!==r.dt.slice(0,7)){
+        extra.push({id:r.id,x:1,u:r.u-1,dt:old.dt});
+      }
+      out.set(r.id,r);
+    }
+    for(const id of deletions){
+      const old=out.get(id)||S.byId.get(id);
+      if(old)out.set(id,{id,x:1,u:Math.max(Date.now(),(old.u||0)+1),dt:old.dt});
+    }
+    if(!out.size)return;
+    const rows=[...out.values()];
+    return localWrite(()=>DB.putRecs(rows),'記錄未能寫入此裝置').then(()=>{
+      for(const r of rows){
+        const old=S.byId.get(r.id);
+        if(old){Object.keys(old).forEach(k=>delete old[k]);Object.assign(old,r)}
+        else{S.recs.push(r);S.byId.set(r.id,r)}
+      }
+      ensureCats();recompute();
+      // 本機交易已完成。雲端上傳由 Cloud 的佇列另行處理。
+      if(window.Cloud)Cloud.pushRecs(extra.concat(rows));
+    });
+  });
+  recordWrites=pending.catch(()=>{});
+  return pending;
 }
 
 /* ================= recurring & installments ================= */
@@ -743,21 +813,42 @@ function ruleOccDate(rule,k){return wkAdj(occDate(rule,k),rule.wk)}
 function ruleNext(rule){if(!rule.on)return'';const td=TODAY();for(let k=0;k<2000;k++){if(rule.cnt&&k+(rule.off||0)>=rule.cnt)return'';const d=ruleOccDate(rule,k);if(rule.end&&d>rule.end)return'';if(d>td){if(k<rule.done){const x=S.byId.get(rule.id+'_'+k+'_0');if(!x||x.x)continue}return d}}return''}
 function rulePosted(rule){const td=TODAY();let n=0;for(let k=0;k<rule.done;k++){if(ruleOccDate(rule,k)<=td)n++;else break}return n}
 function ruleBuild(rule,k){const d=ruleOccDate(rule,k);const kk=rule.id+'_'+k;const rs=buildRecords({...rule.fs,dt:d,tm:rule.fs.tm||'09:00'});rs.forEach((r,i)=>{r.id=kk+'_'+i;if(r.k)r.k=kk+'_k';if(r.g)r.g=kk+'_g'});return rs}
-async function runRules(){
-  const td=TODAY(),to=addDays(td,RULE_AHEAD);const add=[];let changed=false,due=0;
-  for(const rule of S.rules){
+let ruleWrites=Promise.resolve();
+function runRules(){
+  const pending=ruleWrites.then(postDueRules);
+  ruleWrites=pending.catch(()=>{});
+  return pending;
+}
+async function postDueRules(){
+  const td=TODAY(),to=addDays(td,RULE_AHEAD);const add=[],advances=[];let due=0;
+  for(const current of S.rules){
+    const rule={...current};
     if(rule.fq==='I'||!rule.on)continue;
     let guard=0;
     while(guard++<800){
       if(rule.cnt&&rule.done+(rule.off||0)>=rule.cnt)break;
       const d=ruleOccDate(rule,rule.done);
       if(d>to||(rule.end&&d>rule.end))break;
-      add.push(...ruleBuild(rule,rule.done));if(d<=td)due++;
-      rule.done++;changed=true;
+      add.push(...ruleBuild(rule,rule.done).filter(r=>!S.byId.get(r.id)||S.byId.get(r.id).x));
+      if(d<=td)due++;
+      rule.done++;
     }
-    rule.next=ruleNext(rule);
+    current.next=ruleNext(current);
+    if(rule.done!==current.done)advances.push({current,done:rule.done,next:ruleNext(rule)});
   }
-  if(changed){S.rules.forEach(r=>r.u=Date.now());await saveKV('rules');if(add.length){await mutate(add);if(due)toast('已自動記入 '+due+' 筆週期記錄')}}
+  if(!advances.length)return;
+  if(add.length)await mutate(add);
+  const previousProgress=new Map(advances.map(({current})=>[current,{done:current.done,next:current.next,u:current.u}]));
+  for(const {current,done,next} of advances)Object.assign(current,{done,next,u:Date.now()});
+  try{await saveKV('rules')}catch(e){
+    // 進度可重試，已提交的記錄由固定 ID 辨識。
+    for(const {current,done} of advances){
+      const previous=previousProgress.get(current);
+      if(current.done===done)Object.assign(current,previous);
+    }
+    throw e;
+  }
+  if(add.length&&due)toast('已自動記入 '+due+' 筆週期記錄');
 }
 function amortize(total,n,ratePct){
   const i=ratePct/100/12;const pmt=i?total*i/(1-Math.pow(1+i,-n)):total/n;
@@ -1802,7 +1893,7 @@ async function boot(){
   botRates().then(ok=>{if(ok)render(true)});
   if(window.Cloud)Cloud.init().then(()=>render(true));
   try{if(navigator.storage&&navigator.storage.persist){S.persisted=await navigator.storage.persisted()||await navigator.storage.persist()}}catch(e){}
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.ready){runRules();recompute();render(true)}});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.ready){runRules().catch(e=>{if(!(e instanceof LocalWriteError))console.error(e)});recompute();render(true)}});
 }
 window.__ledger={S,D,mozeToData,toMozeCSV,evalAmt,amortize,val,cardCycle};
 
@@ -1813,7 +1904,7 @@ const FB_VER='10.12.2';
 const SYNC_KV=['accts','cats','budgets','rules','tpls','rates','settings','sellers'];
 const LOCAL_SETTINGS=['theme','lastA','lastBackup','sample'];
 const MCOL='mon';   // 每月一份文件，每筆記錄存成一個 JSON 字串欄位
-const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],firstM:false,firstK:false,cloudU:new Map(),srv:new Set(),q:new Map(),qBusy:false,remoteKV:{},lastSync:0,writing:0,wTot:0,wDone:0,online:navigator.onLine,decided:false,
+const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],firstM:false,firstK:false,cloudU:new Map(),srv:new Set(),q:new Map(),qBusy:false,kvPending:new Map(),remoteKV:{},lastSync:0,writing:0,wTot:0,wDone:0,online:navigator.onLine,decided:false,
   available(){return!window.__ARTIFACT__},
   async init(){
     if(!this.available()){this.state='na';return}
@@ -1835,7 +1926,7 @@ const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],fi
   base(){return this.db.collection('users').doc(this.user.uid)},
   async pollInbox(){if(!this.user||!this.db)return;try{const snap=await this.base().collection('inbox').get({source:'server'});this.inboxErr='';this.inboxOk=Date.now();if(!snap.empty)processInbox(snap.docs)}catch(e){this.inboxErr=(e&&(e.code||e.message))||'unknown'}},
   start(){
-    this.stop();this.state='syncing';this.firstM=this.firstK=false;this.decided=false;this.cloudU=new Map();this.srv=new Set();this.q=new Map();this.wTot=this.wDone=0;refreshCloudUI();
+    this.stop();this.state='syncing';this.firstM=this.firstK=false;this.decided=false;this.cloudU=new Map();this.srv=new Set();this.q=new Map();this.kvPending=new Map();this.wTot=this.wDone=0;refreshCloudUI();
     const onErr=e=>{this.state='error';this.err=e.code==='permission-denied'?'沒有權限：請確認 Firestore 規則已發布':String(e.message||e);refreshCloudUI()};
     this.unsub.push(this.base().collection('kv').onSnapshot(snap=>{
       const changed=[];
@@ -1847,7 +1938,8 @@ const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],fi
       this.touch(snap);
     },onErr));
     this.unsub.push(this.base().collection('inbox').onSnapshot(snap=>{this.inboxErr='';this.inboxOk=Date.now();const docs=[];snap.docChanges().forEach(ch=>{if(ch.type==='added'&&!ch.doc.metadata.hasPendingWrites)docs.push(ch.doc)});if(docs.length)processInbox(docs)},e=>{this.inboxErr=(e&&(e.code||e.message))||'unknown';refreshCloudUI()}));
-    this.pollInbox();
+    const inboxTimer=setInterval(()=>{if(document.visibilityState==='visible'&&this.decided)this.pollInbox()},60000);
+    this.unsub.push(()=>clearInterval(inboxTimer));
     this.unsub.push(this.base().collection(MCOL).onSnapshot(async snap=>{
       const incoming=[];
       snap.docChanges().forEach(ch=>{if(ch.type==='removed'||ch.doc.metadata.hasPendingWrites)return;const r=(ch.doc.data()||{}).r||{};
@@ -1879,34 +1971,56 @@ const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],fi
     if(mode!=='cloud')for(const k of SYNC_KV){if((S.kvu[k]||0)>(this.remoteKV[k]||0)||!(k in this.remoteKV))this.pushKV(k)}
     if(mode!=='cloud')this.track([this.base().collection('kv').doc('botinfo').set(botInfo())]);
     this.state='ok';recompute();render(true);refreshCloudUI();
-    if(push.length&&mode!=='cloud')toast('已上傳 '+push.length.toLocaleString()+' 筆到雲端');
+    if(push.length&&mode!=='cloud')toast('已排入雲端上傳 '+push.length.toLocaleString()+' 筆');
+    this.pollInbox();
   },
   stop(){this.unsub.forEach(f=>{try{f()}catch(e){}});this.unsub=[]},
   pushRecs(list){
     if(!this.user||!this.decided||!list.length)return;
-    for(const r of list){if(!/^\d{4}-\d{2}/.test(r.dt||''))continue;if(!this.q.has(r.id))this.wTot++;this.q.set(r.id,JSON.stringify(r));this.cloudU.set(r.id,r.u||0)}
+    for(const r of list){if(!/^\d{4}-\d{2}/.test(r.dt||''))continue;const key=r.dt.slice(0,7)+'/'+r.id;if(!this.q.has(key))this.wTot++;this.q.set(key,JSON.stringify(r));this.cloudU.set(r.id,r.u||0)}
     refreshCloudUI();this.drain();
   },
   // 依序上傳：每次最多 400 筆，一筆一個欄位（JSON 字串），確認成功才算完成，失敗自動重試
   async drain(){if(this.deleting)return;
+    const queue=this.q,uid=this.user?.uid;
     if(this.qBusy)return;this.qBusy=true;this.writing++;let fail=0;
     try{
-      while(this.q.size&&this.user){
+      while(queue.size&&this.q===queue&&this.user?.uid===uid){
         const take=[...this.q.entries()].slice(0,400);const byM=new Map();
-        for(const[id,js]of take){const ym=JSON.parse(js).dt.slice(0,7);let m=byM.get(ym);if(!m)byM.set(ym,m={});m[id]=js}
+        for(const[,js]of take){const {id,dt}=JSON.parse(js);const ym=dt.slice(0,7);let m=byM.get(ym);if(!m)byM.set(ym,m={});m[id]=js}
         const batch=this.db.batch();const col=this.base().collection(MCOL);
         for(const[ym,m]of byM)batch.set(col.doc(ym),{r:m},{mergeFields:Object.keys(m).map(id=>new firebase.firestore.FieldPath('r',id))});
         try{await Promise.race([batch.commit(),new Promise((_,rj)=>setTimeout(()=>rj(new Error('逾時')),90000))]);
-          for(const[id,js]of take){if(this.q.get(id)===js)this.q.delete(id);this.srv.add(id)}this.wDone+=take.length;this.lastSync=Date.now();fail=0;if(this.state==='error'&&/上傳/.test(this.err)){this.state='ok';this.err=''}refreshCloudUI()}
+          if(this.q!==queue||this.user?.uid!==uid)break;
+          for(const[key,js]of take){if(queue.get(key)===js)queue.delete(key);this.srv.add(JSON.parse(js).id)}this.wDone+=take.length;this.lastSync=Date.now();fail=0;if(this.state==='error'&&/上傳/.test(this.err)){this.state='ok';this.err=''}refreshCloudUI()}
         catch(e){fail++;const c=e&&(e.code||e.message)||'';
           if(c==='permission-denied'){this.err='上傳失敗：沒有權限（請確認 Firestore 規則）';this.state='error';refreshCloudUI();break}
           this.err='上傳暫停，'+Math.min(60,5*fail)+' 秒後重試（'+c+'）';refreshCloudUI();await new Promise(r=>setTimeout(r,Math.min(60,5*fail)*1000))}
       }
     }finally{this.qBusy=false;this.writing--;if(!this.q.size){this.wTot=this.wDone=0;if(/上傳暫停/.test(this.err))this.err=''}refreshCloudUI()}
   },
-  pushKV(k){if(!this.user||!this.decided)return;let v=S[k];if(k==='settings'){v={...v};LOCAL_SETTINGS.forEach(x=>delete v[x])}
-    const u=S.kvu[k]||Date.now();this.remoteKV[k]=u;const w=[this.base().collection('kv').doc(k).set({j:JSON.stringify(v),u})];
+  pushKV(k,v=S[k],u=S.kvu[k]||Date.now()){if(!this.user||!this.decided)return;if(k==='settings'){v={...v};LOCAL_SETTINGS.forEach(x=>delete v[x])}
+    const entry={value:v,u,failed:false};
+    this.kvPending.set(k,entry);
+    const write=this.base().collection('kv').doc(k).set({j:JSON.stringify(v),u});
+    write.then(()=>{
+      if(this.kvPending.get(k)===entry){this.kvPending.delete(k);this.remoteKV[k]=Math.max(this.remoteKV[k]||0,u)}
+    },()=>{entry.failed=true});
+    const w=[write];
     if(k==='cats'||k==='accts'||(k==='settings'&&usCodes()+JSON.stringify(osShops())!==_usLast)){_usLast=usCodes()+JSON.stringify(osShops());w.push(this.base().collection('kv').doc('botinfo').set(botInfo()))}this.track(w)},
+  async waitForInboxSync(uid){
+    const queue=this.q,started=Date.now();
+    for(const [key,entry] of this.kvPending){
+      if(entry.failed)this.pushKV(key,entry.value,entry.u);
+    }
+    if(queue.size)this.drain();
+    while(this.user?.uid===uid&&this.q===queue){
+      if(!queue.size&&!this.kvPending.size)return true;
+      if(Date.now()-started>=15000||[...this.kvPending.values()].some(entry=>entry.failed))return false;
+      await new Promise(r=>setTimeout(r,250));
+    }
+    return false;
+  },
   track(commits,sizes){if(!commits.length)return;this.writing+=commits.length;commits.forEach((c,i)=>{const k=sizes?sizes[i]||0:0;this.wTot+=k;c.then(()=>{this.wDone+=k;refreshCloudUI()},()=>{})});refreshCloudUI();
     Promise.all(commits).then(()=>{this.lastSync=Date.now()}).catch(e=>{this.err='寫入失敗：'+(e.code||e.message);this.state='error'}).finally(()=>{this.writing-=commits.length;if(!this.writing){this.wTot=this.wDone=0}refreshCloudUI()})},
   label(){
@@ -1990,16 +2104,56 @@ Object.assign(ACT,{
    機器人帳號讀不到任何餘額，差額必須由 App 端計算，收件匣只能傳「目標餘額」，不能直接傳差額                    */
 let inboxBusy=Promise.resolve();
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&typeof Cloud!=='undefined'&&Cloud.user)Cloud.pollInbox()});
-const inboxSeen=new Set();   // 同一份指令可能同時由 onSnapshot 與 pollInbox 送來，只處理一次（失敗時移除以便重試）
-function processInbox(docs){let mine=[];inboxBusy=inboxBusy.then(async()=>{
-  if(!Cloud.decided){await new Promise(r=>{const t=setInterval(()=>{if(Cloud.decided){clearInterval(t);r()}},300)})}
-  const sk=d=>(Cloud.user?Cloud.user.uid:'')+'/'+d.id;docs=docs.filter(d=>!inboxSeen.has(sk(d)));mine=docs.map(sk);mine.forEach(i=>inboxSeen.add(i));if(!docs.length)return;
+const inboxSeen=new Set();
+const inboxDeletePending=new Set();
+function inboxInvalidReason(x){
+  const amt=x.amt!=null&&x.amt!==''&&Number.isFinite(+x.amt);
+  if(x.src==='ap')return '';
+  if(x.sp!=null){try{
+    const lines=typeof x.sp==='string'?JSON.parse(x.sp):x.sp;
+    if(!Array.isArray(lines)||!lines.length||lines.some(q=>!q||!Number.isFinite(+q.amt)||!+q.amt))return '分項欄位錯誤';
+  }catch(e){return '分項 JSON 無效'}}
+  switch(x.kind){
+    case 'px':try{const prices=JSON.parse(x.p);return prices&&typeof prices==='object'&&!Array.isArray(prices)&&x.d?'':'價格欄位錯誤'}catch(e){return '價格 JSON 無效'}
+    case 'exp':case 'inc':return amt&&+x.amt?'':'金額欄位錯誤';
+    case 'bal':return amt&&S.accts.some(a=>a.id===x.a||a.name===x.a)?'':'餘額或帳戶欄位錯誤';
+    case 'inst':return amt&&+x.amt&&Number.isInteger(+x.cnt)&&+x.cnt>1&&S.accts.some(a=>a.id===x.a||a.name===x.a)&&/^\d{4}-\d{2}-\d{2}$/.test(x.dt||'')?'':'分期欄位錯誤';
+    case 'edit':case 'del':return x.n&&x.dt?'':'缺少記錄識別欄位';
+    case 'rensub':return x.c&&x.s&&String(x.ns||'').trim()?'':'缺少子類別欄位';
+    case 'renproj':case 'mvproj':return String(x.o||'').trim()&&String(x.nv||'').trim()?'':'缺少專案欄位';
+    case 'updrule':case 'delrule':case 'clrshop':case 'osshop':return String(x.n||'').trim()?'':'缺少名稱';
+    case 'gold':return x.q!=null&&x.q!==''&&Number.isFinite(+x.q)&&+x.q>=0?'':'黃金數量錯誤';
+    case 'hold':return x.rm==='1'||(x.n&&x.sh!=null&&x.sh!==''&&Number.isFinite(+x.sh)&&+x.sh>=0)?'':'持股欄位錯誤';
+    default:return '未知指令';
+  }
+}   // 同一份指令可能同時由 onSnapshot 與 pollInbox 送來，只處理一次（失敗時移除以便重試）
+function processInbox(docs){
+  const uid=Cloud.user?.uid;
+  let mine=[];
+  inboxBusy=inboxBusy.then(async()=>{
+  if(!uid||Cloud.user?.uid!==uid)return;
+  if(DB.mem)throw new LocalWriteError('IndexedDB 無法使用，已保留收件匣指令');
+  if(!Cloud.decided)return; // pollInbox 會在同步就緒後重新讀取。
+  const sk=d=>uid+'/'+d.id;
+  const pending=docs.filter(d=>inboxDeletePending.has(sk(d)));
+  if(pending.length){
+    if(!await Cloud.waitForInboxSync(uid)){Cloud.inboxErr='雲端尚未確認，已保留收件匣指令';return}
+    for(const d of pending)await deleteInboxDoc(d.ref,sk(d));
+  }
+  docs=docs.filter(d=>!inboxSeen.has(sk(d)));mine=docs.map(sk);mine.forEach(i=>inboxSeen.add(i));if(!docs.length)return;
   const add=[],dels=[],newRules=[],delNames=[],upds=[],insts=[],eds=[],rups=[],balMsgs=[];
   let apN=0,apDup=0,apUnk=0,pxN=0;const mvq=[];
+  let invalid='';
+  const reject=(ref,reason)=>{
+    invalid=reason;
+    inboxSeen.delete(sk(ref));
+  };
   for(const d of docs){const x=d.data()||{};const id='ib_'+d.id;
-    if(x.src==='ap'){if(!S.byId.has(id)){const o=apRecord(x,id);if(o.r){add.push(o.r);apN++;if(!o.sure)apUnk++}else if(o.skip==='dup')apDup++}dels.push(d.ref);continue}
+    const reason=inboxInvalidReason(x);
+    if(reason){reject(d.ref,reason);continue}
+    if(x.src==='ap'){if(!S.byId.has(id)){const o=apRecord(x,id);if(o.r){add.push(o.r);apN++;if(!o.sure)apUnk++}else if(o.skip==='dup')apDup++;else{reject(d.ref,'Apple Pay 指令資料不足');continue}}dels.push(d.ref);continue}
     if(x.kind==='px'){try{const q=JSON.parse(x.p||'{}');const cur=S.settings.pxx||{d:'',p:{}};if((x.d||'')>=(cur.d||'')){S.settings.pxx={d:x.d||'',p:{...cur.p,...q}};pxApply(S.settings.pxx.p);pxN++}}catch(e){}dels.push(d.ref);continue}
-    if(x.kind==='edit'||x.kind==='del'){eds.push(x);dels.push(d.ref);continue}
+    if(x.kind==='edit'||x.kind==='del'){eds.push({x,ref:d.ref});continue}
     if(x.kind==='inst'){const amt=Math.abs(+x.amt),k=parseInt(x.cnt)||0,acct=S.accts.find(a=>a.id===x.a||a.name===x.a);
       if(amt>0&&k>1&&acct&&/^\d{4}-\d{2}-\d{2}$/.test(x.dt||'')){const sno=Math.max(1,Math.min(k,parseInt(x.sno)||1));const nm=String(x.n||'分期付款').slice(0,80);const tm=/^\d{2}:\d{2}$/.test(x.tm||'')?x.tm:'00:00';const day=+x.dt.slice(8),o=Date.now();
         const recs=[];for(let i=sno;i<=k;i++){const rid=id+'_i'+i;if(S.byId.has(rid))continue;recs.push({id:rid,a:acct.id,t:'支出',c:x.c||'個人支出',s:x.s||'',m:-amt,f:0,d:0,n:nm,sh:String(x.sh||'').slice(0,60),dt:addMonths(x.dt,i-sno,day),tm,p:String(x.p||'').slice(0,60),ds:nm+'・第 '+i+'/'+k+' 期',tg:'claude',w:'',k:'',g:id,o:o+i})}
@@ -2047,18 +2201,23 @@ function processInbox(docs){let mine=[];inboxBusy=inboxBusy.then(async()=>{
               if(md.length){rule.md=md;const sd=+dt.slice(8),last=daysIn(+dt.slice(0,4),+dt.slice(5,7));rule.m0=md.filter(q=>Math.min(q,last)<sd).length}}
             newRules.push(rule)}
         }else{let sp=null;try{const aa=typeof x.sp==='string'?JSON.parse(x.sp):x.sp;if(Array.isArray(aa)&&aa.length>1)sp=aa}catch(e){}
-          if(sp){const g=uid(),ck=kind==='inc'?'inc':'exp';sp.forEach((q,i)=>{const v=Math.abs(+q.amt)||0;if(!(v>0))return;let qc=q.c||c,qs=q.s||'';const qm=S.cats[ck].find(z=>z.n===qc);if(!qm){qc=c;qs=s||''}else if(!qm.subs.includes(qs))qs=qm.subs[0]||'';
+          if(sp){const g=id+'_split',ck=kind==='inc'?'inc':'exp';sp.forEach((q,i)=>{const v=Math.abs(+q.amt)||0;if(!(v>0)||S.byId.has(id+'_'+i))return;let qc=q.c||c,qs=q.s||'';const qm=S.cats[ck].find(z=>z.n===qc);if(!qm){qc=c;qs=s||''}else if(!qm.subs.includes(qs))qs=qm.subs[0]||'';
             add.push({...r,id:id+'_'+i,c:qc,s:qs,m:kind==='inc'?v:-v,n:String(q.n||'').slice(0,80),...(q.p!=null?{p:q.p}:{}),...((q.a&&(S.accts.find(z=>z.id===q.a||z.name===q.a)))?{a:S.accts.find(z=>z.id===q.a||z.name===q.a).id}:{}),gn:r.n,g,f:i===0?r.f:0})})}
           else add.push(r);
-          if(kind==='exp'&&(x.os===true||x.os==='1'||x.os===1||isOsShop(x.sh))&&x.os!=='0'){const fr=osFeeRec(add.filter(q=>q.id===id||q.id.startsWith(id+'_')));if(fr){fr.id=id+'_os';fr.tg='claude';add.push(fr)}}}}}}
+          if(kind==='exp'&&(x.os===true||x.os==='1'||x.os===1||isOsShop(x.sh))&&x.os!=='0'){const fr=osFeeRec(add.filter(q=>q.id===id||q.id.startsWith(id+'_')));if(fr&&!S.byId.has(id+'_os')){fr.id=id+'_os';fr.tg='claude';add.push(fr)}}}}}}
     dels.push(d.ref)}
   /* 部分搬移專案（依日期區間）：放在整個專案改名之後處理，避免同一批收件匣先後順序錯亂 */
   for(const x of mvq){const o=String(x.o||'').trim(),nv=String(x.nv||'').trim(),d1=x.d1||'0000',d2=x.d2||'9999';if(!o||!nv)continue;
     const rs=D.live.filter(r=>r.p===o&&r.dt>=d1&&r.dt<=d2).map(r=>({...r,p:nv}));if(rs.length){await mutate(rs);toast('已把「'+o+'」中 '+d1+'～'+d2+' 的 '+rs.length+' 筆移到「'+nv+'」')}}
-  if(newRules.length){S.rules.push(...newRules);await saveKV('rules');await runRules();scheduleRender();toast('Claude 幫你建了 '+newRules.length+' 個週期：'+newRules.slice(0,3).map(q=>q.name+'（'+ruleDesc(q)+'）').join('、'))}
+  if(newRules.length){
+    S.rules.push(...newRules);
+    try{await saveKV('rules')}catch(e){S.rules=S.rules.filter(q=>!newRules.includes(q));throw e}
+  }
+  if(docs.some(d=>/^[DWMY]$/.test(d.data()?.rep||'')))await runRules();
+  if(newRules.length){scheduleRender();toast('Claude 幫你建了 '+newRules.length+' 個週期：'+newRules.slice(0,3).map(q=>q.name+'（'+ruleDesc(q)+'）').join('、'))}
   if(delNames.length){const td=TODAY();const gone=S.rules.filter(q=>q.fq!=='I'&&String(q.id).startsWith('ib_')&&delNames.includes(q.name));
     if(gone.length){const ids=S.recs.filter(r=>!r.x&&r.dt>td&&/_\d+_\d+$/.test(r.id)&&gone.some(q=>r.id.startsWith(q.id+'_'))).map(r=>r.id);
-      S.rules=S.rules.filter(q=>!gone.includes(q));await saveKV('rules');if(ids.length)await mutate([],ids);scheduleRender();toast('Claude 幫你刪除了 '+gone.length+' 個週期')}}
+      if(ids.length)await mutate([],ids);const previous=S.rules;S.rules=S.rules.filter(q=>!gone.includes(q));try{await saveKV('rules')}catch(e){S.rules=previous;throw e}scheduleRender();toast('Claude 幫你刪除了 '+gone.length+' 個週期')}}
   if(apN||apDup||pxN)await saveKV('settings');if(pxN)scheduleRender();
   if(add.length){Cloud.inboxN=(Cloud.inboxN||0)+add.length;await mutate(add);await fixOsGroups().catch(()=>{});scheduleRender();const cl=add.filter(r=>r.tg!=='ap'&&r.t!=='餘額調整');
     toast([cl.length?'Claude 幫你記了 '+cl.length+' 筆：'+cl.slice(0,3).map(r=>(r.n||r.s)+' '+fmt(Math.abs(r.m))).join('、'):'',apN?'Apple Pay 自動記了 '+apN+' 筆'+(apUnk?'（'+apUnk+' 筆卡片未設定對應帳戶）':''):''].filter(Boolean).join('；')+(apDup?'；略過重複 '+apDup+' 筆':''))}
@@ -2080,11 +2239,11 @@ function processInbox(docs){let mine=[];inboxBusy=inboxBusy.then(async()=>{
       S.recs.forEach(r=>{if(!r.x&&r.dt>td&&r.id.startsWith(rule.id+'_')&&/_\d+_\d+$/.test(r.id))dd.push(r.id)});
       rule.done=keep;rule.u=Date.now();ch=true}}
     if(ch){await saveKV('rules');if(dd.length)await mutate([],dd);await runRules();scheduleRender();toast('Claude 幫你更新了週期設定')}}
-  if(insts.length){await mutate(insts.flatMap(q=>q.recs));const nr=insts.map(q=>q.rule).filter(Boolean);if(nr.length){S.rules.push(...nr);await saveKV('rules')}scheduleRender();toast('Claude 幫你建了 '+insts.length+' 個分期：'+insts.map(q=>q.nm).join('、'))}
+  if(insts.length){await mutate(insts.flatMap(q=>q.recs));const nr=insts.map(q=>q.rule).filter(Boolean);if(nr.length){S.rules.push(...nr);try{await saveKV('rules')}catch(e){S.rules=S.rules.filter(q=>!nr.includes(q));throw e}}scheduleRender();toast('Claude 幫你建了 '+insts.length+' 個分期：'+insts.map(q=>q.nm).join('、'))}
   if(eds.length){const up=[],rm=[],bad=[],okN=[];
-    for(const x of eds){const nm=String(x.n||'').trim();const dt=String(x.dt||'');if(!nm||!/^\d{4}-\d{2}-\d{2}$/.test(dt)){bad.push((nm||'?')+'（資料不完整）');continue}
+    for(const {x,ref} of eds){const nm=String(x.n||'').trim();const dt=String(x.dt||'');if(!nm||!/^\d{4}-\d{2}-\d{2}$/.test(dt)){bad.push((nm||'?')+'（資料不完整）');reject(ref,'記錄識別欄位錯誤');continue}
       const hit=D.live.filter(r=>r.dt===dt&&((r.n||'')===nm||(!r.n&&r.s===nm))&&(!x.tm||r.tm===x.tm)&&(x.oamt==null||Math.abs(Math.abs(r.m)-Math.abs(+x.oamt))<0.5)&&(!x.a||r.a===x.a||D.acct.get(r.a)?.name===x.a));
-      if(hit.length!==1){bad.push(nm+'（找到 '+hit.length+' 筆）');continue}const r=hit[0];
+      if(hit.length!==1){bad.push(nm+'（找到 '+hit.length+' 筆）');reject(ref,'找不到唯一符合的記錄');continue}const r=hit[0];dels.push(ref);
       if(x.kind==='del'){rm.push(r.id);okN.push('刪除 '+nm);continue}
       const o={...r};if(x.nn!=null&&String(x.nn).trim())o.n=String(x.nn).trim().slice(0,80);
       if(x.amt!=null&&isFinite(+x.amt)&&Math.abs(+x.amt)>0)o.m=(r.m<0?-1:1)*Math.abs(+x.amt);
@@ -2098,9 +2257,17 @@ function processInbox(docs){let mine=[];inboxBusy=inboxBusy.then(async()=>{
     if(up.length||rm.length){await mutate(up,rm);scheduleRender()}
     toast([okN.length?'Claude 幫你修改了：'+okN.slice(0,3).join('、'):'',bad.length?'沒有修改：'+bad.slice(0,3).join('、'):''].filter(Boolean).join('；'))}
   if(balMsgs.length)toast(balMsgs.join('；'))
-  const dr=await Promise.allSettled(dels.map(ref=>ref.delete()));   /* 刪除失敗：移出 inboxSeen，下次查收件匣再處理（各指令皆可重複執行） */
-  const bad=dels.filter((ref,i)=>dr[i].status==='rejected');if(bad.length){bad.forEach(ref=>inboxSeen.delete((Cloud.user?Cloud.user.uid:'')+'/'+ref.id));Cloud.inboxErr='收件匣刪除失敗 '+bad.length+' 筆，稍後重試'}
+  // 等本機交易與雲端確認後再清除指令；本分頁重試時略過已執行的操作。
+  if(Cloud.user?.uid!==uid)throw new Error('登入狀態已變更');
+  if(invalid)Cloud.inboxErr='已保留待檢查的指令：'+invalid;
+  for(const ref of dels)inboxDeletePending.add(uid+'/'+ref.id);
+  if(dels.length&&!await Cloud.waitForInboxSync(uid)){Cloud.inboxErr='雲端尚未確認，已保留收件匣指令';return}
+  await Promise.all(dels.map(ref=>deleteInboxDoc(ref,uid+'/'+ref.id)));
 }).catch(e=>{mine.forEach(i=>inboxSeen.delete(i));Cloud.inboxErr='處理失敗：'+(e&&e.message||e)})}
+async function deleteInboxDoc(ref,key){
+  try{await ref.delete();inboxDeletePending.delete(key)}
+  catch(e){Cloud.inboxErr='收件匣刪除失敗，稍後重試'}
+}
 ACT['copy-uid']=el=>{const v=Cloud.user?.uid||'';(navigator.clipboard?.writeText(v)||Promise.reject()).then(()=>toast('已複製 UID'),()=>toast('請長按 UID 文字手動複製'))};
 
 /* 給 Claude 專用帳號讀的精簡清單：只有分類與帳戶名稱，不含金額 */
