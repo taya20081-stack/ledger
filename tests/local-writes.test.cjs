@@ -459,3 +459,18 @@ test('候選金額指令只修改同日、同帳戶、同分類中唯一匹配�
     assert.equal(f.Cloud.writes.length,writes);
   }
 });
+
+test('模糊搜尋同時比對日期、時間、商家、帳戶、專案與分項', () => {
+  const f=fixture();
+  f.context.query={from:'2026-01-02',to:'2026-01-02',time:'12:00',end_time:'12:59',
+    merchant:'kk day',account:'測試銀行',project:'旅遊',item:'0050',amount:208};
+  const matching={a:'account',dt:'2026-01-02',tm:'12:30',n:'００５０ 元大台灣50',sh:'KKday',p:'國內旅遊',m:-208};
+  f.context.rows=[matching,{...matching,tm:'13:00'},{...matching,p:'居家'},{...matching,n:'2892'},{...matching,a:'other'}];
+  f.context.accounts=new Map([['account',{name:'測試銀行證券',cur:'TWD'}]]);
+  const result=f.run('ledgerSearchRows(query,rows,accounts)');
+  assert.equal(result.total,1);
+  assert.equal(result.rows[0].name,matching.n);
+  assert.equal(result.rows[0].amount,208);
+  assert.equal(result.rows[0].project,matching.p);
+  assert.equal(f.run('ledgerSearchRows(query,Array(13).fill(rows[0]),accounts).rows.length'),12);
+});

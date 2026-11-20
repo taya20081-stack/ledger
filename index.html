@@ -582,7 +582,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.96';
+window.APP_VER='v2.0.97';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -2100,7 +2100,7 @@ const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],fi
     const push=S.recs.filter(r=>(this.cloudU.get(r.id)||0)<(r.u||0)||!this.cloudU.has(r.id));
     if(mode!=='cloud'&&push.length)this.pushRecs(push);
     if(mode!=='cloud')for(const k of SYNC_KV){if((S.kvu[k]||0)>(this.remoteKV[k]||0)||!(k in this.remoteKV))this.pushKV(k)}
-    if(mode!=='cloud')this.track([this.base().collection('kv').doc('botinfo').set(botInfo())]);
+    if(mode!=='cloud')this.track([this.base().collection('kv').doc('botinfo').set(botInfo(),{merge:true})]);
     this.state='ok';recompute();render(true);refreshCloudUI();
     if(push.length&&mode!=='cloud')toast('已排入雲端上傳 '+push.length.toLocaleString()+' 筆');
     this.pollInbox();
@@ -2138,7 +2138,7 @@ const Cloud={cfg:null,user:null,db:null,auth:null,state:'off',err:'',unsub:[],fi
       if(this.kvPending.get(k)===entry){this.kvPending.delete(k);this.remoteKV[k]=Math.max(this.remoteKV[k]||0,u)}
     },()=>{entry.failed=true});
     const w=[write];
-    if(k==='cats'||k==='accts'||(k==='settings'&&usCodes()+JSON.stringify(osShops())!==_usLast)){_usLast=usCodes()+JSON.stringify(osShops());w.push(this.base().collection('kv').doc('botinfo').set(botInfo()))}this.track(w)},
+    if(k==='cats'||k==='accts'||(k==='settings'&&usCodes()+JSON.stringify(osShops())!==_usLast)){_usLast=usCodes()+JSON.stringify(osShops());w.push(this.base().collection('kv').doc('botinfo').set(botInfo(),{merge:true}))}this.track(w)},
   async waitForInboxSync(uid){
     const queue=this.q,started=Date.now();
     for(const [key,entry] of this.kvPending){
@@ -2276,6 +2276,50 @@ function receiptInboxLines(x){
   const units=lines.map(q=>q.amt*scale);
   return Math.abs(x.amt*scale-Math.round(x.amt*scale))<1e-6&&units.every(n=>Math.abs(n-Math.round(n))<1e-6)&&units.reduce((t,n)=>t+Math.round(n),0)===Math.round(x.amt*scale)?lines:null;
 }
+const LEDGER_SEARCH_VERIFY_KEY={"key_ops":["verify"],"ext":true,"kty":"EC","x":"F-wQpjFJgfvVh3n66HKOVzJsQZTjGwAelHHcRnJ5vrk","y":"d0vNknfoGd9g2ALCbnfVYEwXgFIMulCBhbJIscVE1Rk","crv":"P-256"};
+const ledgerSearchDecode=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+const ledgerSearchEncode=bytes=>btoa(String.fromCharCode(...new Uint8Array(bytes)));
+function fuzzyLedgerText(s){return String(s||'').normalize('NFKC').toLowerCase().replace(/[\s\p{P}]+/gu,'')}
+function ledgerSearchRows(q,records,accounts){
+  const fields={name:r=>[r.n,r.gn].filter(Boolean).join(' '),item:r=>r.n,merchant:r=>r.sh,
+    account:r=>accounts.get(r.a)?.name,project:r=>r.p,category:r=>[r.c,r.s].filter(Boolean).join(' '),
+    query:r=>[r.n,r.gn,r.sh,r.p,r.c,r.s,accounts.get(r.a)?.name].filter(Boolean).join(' ')};
+  const filters=Object.entries(fields).filter(([k])=>q[k]).map(([k,get])=>[fuzzyLedgerText(q[k]),get]);
+  const rows=records.filter(r=>(!q.from||r.dt>=q.from)&&(!q.to||r.dt<=q.to)&&
+    (q.end_time?(r.tm||'')>=q.time&&(r.tm||'')<=q.end_time:!q.time||(r.tm||'').startsWith(q.time))&&
+    (q.amount===undefined||Math.abs(r.m)===q.amount)&&filters.every(([term,get])=>fuzzyLedgerText(get(r)).includes(term)));
+  return {total:rows.length,rows:rows.slice(0,12).map(r=>({date:r.dt,time:r.tm||'',name:String(r.n||'').slice(0,100),
+    group_name:String(r.gn||'').slice(0,80),merchant:String(r.sh||'').slice(0,80),account:String(accounts.get(r.a)?.name||'').slice(0,80),
+    project:String(r.p||'').slice(0,80),category:String(r.c||'').slice(0,80),subcategory:String(r.s||'').slice(0,80),
+    amount:Math.abs(r.m),currency:r.cu||accounts.get(r.a)?.cur||'TWD',type:r.t}))};
+}
+async function signedLedgerSearch(doc,owner){
+  const x=doc.data();
+  if(!isChatGPTInboxId(doc.id)||typeof x.body!=='string'||x.body.length>3200||typeof x.sig!=='string'||x.sig.length!==88)return null;
+  const verifyKey=await crypto.subtle.importKey('jwk',LEDGER_SEARCH_VERIFY_KEY,{name:'ECDSA',namedCurve:'P-256'},false,['verify']);
+  const valid=await crypto.subtle.verify({name:'ECDSA',hash:'SHA-256'},verifyKey,ledgerSearchDecode(x.sig),new TextEncoder().encode(x.body));
+  if(!valid)return null;
+  const req=JSON.parse(x.body);
+  if(req.id!==doc.id||req.owner!==owner||req.expires<=Date.now()||req.expires>Date.now()+1800000||
+    typeof req.key!=='string'||req.key.length!==64||!req.query||typeof req.query!=='object')return null;
+  return req;
+}
+async function publishLedgerSearch(db,owner,req,result){
+  const keyBytes=Uint8Array.from(req.key.match(/../g),x=>parseInt(x,16));
+  const key=await crypto.subtle.importKey('raw',keyBytes,'AES-GCM',false,['encrypt']);
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const enc=new TextEncoder();
+  const encrypted=await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:enc.encode(req.id)},key,enc.encode(JSON.stringify(result)));
+  const entry={expires:req.expires,iv:ledgerSearchEncode(iv),data:ledgerSearchEncode(encrypted)};
+  const ref=db.collection('users').doc(owner).collection('kv').doc('botinfo');
+  await inboxDeadline(db.runTransaction(async tx=>{
+    const snap=await tx.get(ref);
+    const prior=Object.entries(snap.data()?.chatgptSearchReplies||{}).filter(([id,v])=>id!==req.id&&v.expires>Date.now());
+    const replies=Object.fromEntries([...prior.slice(-11),[req.id,entry]]);
+    if(snap.exists)tx.update(ref,{chatgptSearchReplies:replies});
+    else tx.set(ref,{...botInfo(),chatgptSearchReplies:replies});
+  }));
+}
 function isRetainedInbox(doc){const x=doc.data();return isChatGPTInboxId(doc.id)&&(x?.spv===1||x?.kind==='edit_match')}
 function inboxEditNames(x){
   let names;try{names=JSON.parse(x.names)}catch{return null}
@@ -2301,6 +2345,7 @@ function inboxInvalidReason(x){
     case 'exp':case 'inc':return amt&&+x.amt&&account()?'':'金額或帳戶欄位錯誤';
     case 'bal':return amt&&account()?'':'餘額或帳戶欄位錯誤';
     case 'inst':return amt&&+x.amt&&Number.isInteger(+x.cnt)&&+x.cnt>1&&+x.cnt<=360&&account()&&/^\d{4}-\d{2}-\d{2}$/.test(x.dt||'')?'':'分期欄位錯誤';
+    case 'ledger_search':return '';
     case 'edit_match':return Object.keys(x).every(k=>['kind','dt','a','c','amt','names','_ledgerInbox'].includes(k))&&
       /^\d{4}-\d{2}-\d{2}$/.test(x.dt||'')&&typeof x.a==='string'&&!!x.a&&typeof x.c==='string'&&!!x.c.trim()&&
       typeof x.amt==='number'&&Number.isFinite(x.amt)&&x.amt>0&&inboxEditNames(x)?'':'候選金額修改欄位錯誤';
@@ -2428,6 +2473,14 @@ async function executeInbox(docs){
 
     if(x.src==='ap'){if(!S.byId.has(id)){const o=apRecord(x,id);if(o.r){add.push(o.r);apN++;if(!o.sure)apUnk++}else if(o.skip==='dup')apDup++;else{reject('Apple Pay 指令資料不足');continue}}dels.push(d.ref);continue}
     if(x.kind==='px'){try{const q=JSON.parse(x.p||'{}');const cur=S.settings.pxx||{d:'',p:{}};if((x.d||'')>=(cur.d||'')){S.settings.pxx={d:x.d||'',p:{...cur.p,...q}};pxApply(S.settings.pxx.p);pxN++}}catch(e){}dels.push(d.ref);continue}
+    if(x.kind==='ledger_search'){
+      const owner=Cloud.user?.uid,db=Cloud.db;
+      const request=await signedLedgerSearch(d,owner).catch(()=>null);
+      if(!request||Cloud.user?.uid!==owner||Cloud.db!==db){reject('搜尋要求已逾時或簽章無效');continue}
+      const result=ledgerSearchRows(request.query,D.live,D.acct);
+      await publishLedgerSearch(db,owner,request,result);
+      dels.push(d.ref);continue;
+    }
     if(x.kind==='edit_match'){
       if(!isRetainedInbox(d)){reject('候選修改指令來源不符');continue}
       const names=inboxEditNames(x);
