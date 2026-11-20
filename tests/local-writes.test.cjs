@@ -347,15 +347,21 @@ test('ChatGPT 收據分項共享一組、同步後維持同組、完成憑證可
   other.S.recs.push(...structuredClone(f.Cloud.writes));
   other.S.recs.forEach(r=>other.S.byId.set(r.id,r));
   assert.equal(new Set(other.S.recs.map(r=>r.g)).size,1);
-  const view=vm.runInNewContext(section('function gkey(', 'function grpSheet(')+'\nhomeItems(records)', {
-    records:other.S.recs, S:{search:{selMode:false}}, D:{acct:new Map()}, raw:r=>r.m, curOf:()=> 'TWD',
+  const renderGroups=records=>vm.runInNewContext(section('function gkey(', 'function grpSheet(')+'\nhomeItems(records)', {
+    records, S:{search:{selMode:false}}, D:{acct:new Map()}, raw:r=>r.m, curOf:()=> 'TWD',
     homeRow:()=>{throw Error('收據不得拆為獨立列')}, grpName:()=> '示例收據', aggTxt:()=>'', ruleTag:()=>'', esc:String,
     hbadge:()=>'', money:String, projPill:()=>''
   });
+  const oldRecords=other.S.recs.map(r=>({...r,gn:'舊主項名稱'}));
+  const view=renderGroups(oldRecords);
   assert.equal((view.match(/data-act="grp-toggle"/g)||[]).length,1);
   assert.match(view,/>35<\/span>/);
-  assert.match(view,/>測試商店<\/div>/);
-  assert.doesNotMatch(view,/示例收據|示例飲品/);
+  assert.match(view,/<div class="t">測試商店<\/div>/);
+  assert.doesNotMatch(view,/舊主項名稱|示例飲品/);
+  const noShop=oldRecords.map(r=>({...r,sh:''}));
+  assert.match(renderGroups(noShop),/<div class="t">生活<\/div>/);
+  assert.match(renderGroups(noShop.map(r=>({...r,s:'飲料'}))),/<div class="t">飲料<\/div>/);
+  assert.match(renderGroups([noShop[0],{...noShop[1],c:'其他'}]),/<div class="t">多類別<\/div>/);
   const wrong=command({...data,amt:36},'chatgpt_'+'c'.repeat(36));
   await process(f,wrong);
   assert.equal(wrong.data()._ledgerInbox.state,'invalid');

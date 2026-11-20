@@ -582,7 +582,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.94';
+window.APP_VER='v2.0.95';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1239,7 +1239,7 @@ async function fixOsGroups(){const up=[];const byKey=new Map();
     const fv=Math.abs(f.m),hint=[f.sh,f.gn,f.ds,f.p].filter(Boolean).join(' ');const units=new Map();
     /* 以首頁的合併方式分組（同 g，或同時間／帳戶／商家的多筆），用整個大項的合計比對 1.5% */
     for(const r of D.live)if(r.t==='支出'&&!FEE.test(r.n||'')&&r.a===f.a&&r.dt===f.dt&&!done.has(r.id)&&!hiddenInList(r)){const k=gkey(r)||r.id;(units.get(k)||units.set(k,[]).get(k)).push(r)}
-    let best=null,bs=0;for(const[k,ch]of units){if(used.has(k))continue;const nm=grpTitle(ch)||ch[0].n||'',tot=Math.abs(ch.reduce((t,r)=>t+raw(r),0)),df=Math.abs(osFeeOf(tot)-fv);
+    let best=null,bs=0;for(const[k,ch]of units){if(used.has(k))continue;const nm=grpName(ch)||grpTitle(ch)||ch[0].n||'',tot=Math.abs(ch.reduce((t,r)=>t+raw(r),0)),df=Math.abs(osFeeOf(tot)-fv);
       const sc=(df===0?2:df<=1?1:0)+((nm&&hint.includes(nm))||ch.some(r=>(r.sh&&hint.includes(r.sh))||(r.n&&hint.includes(r.n)))?1:0);
       if(sc>bs||(sc===bs&&sc&&Math.abs(ch[0].o-f.o)<Math.abs(best[0].o-f.o))){best=ch;bs=sc}}
     if(!best)continue;used.add(gkey(best[0])||best[0].id);const g=best[0].g||uid();
@@ -3290,10 +3290,10 @@ function receiptRow(ch,key){
   const big=ch.slice().sort((a,b)=>Math.abs(raw(b))-Math.abs(raw(a)))[0];
   const pjt=aggTxt(ch.map(x=>x.p),'專案'),acn=aggTxt(ch.map(x=>D.acct.get(x.a)?.name||''),'帳戶');
   const sel=S.search.selMode&&ch.every(x=>S.search.sel.has(x.id));
-  const sub=[ruleTag(r),r.sh].filter(Boolean);
-  return `<button class="row hrow grpr${sel?' sel':''}" data-act="grp-toggle" data-g="${esc(key)}">${new Set(ch.map(x=>x.c)).size>1?'<span class="hb" style="--bc:#6BD66B">📁</span>':hbadge(big)}<div style="min-width:0">${sub.length?`<div class="s">${esc(sub.join('・'))}</div>`:''}</div><div class="amt"><span class="num ${net<0?'neg':net>0?'pos':''}">${money(Math.abs(net),cur)}</span>${(pjt||acn)?`<span class="pills">${projPill(pjt)}${acn?`<span class="apill">${esc(acn)}</span>`:''}</span>`:''}</div></button>`;
+  const label=grpTitle(ch),tag=ruleTag(r);
+  return `<button class="row hrow grpr${sel?' sel':''}" data-act="grp-toggle" data-g="${esc(key)}">${new Set(ch.map(x=>x.c)).size>1?'<span class="hb" style="--bc:#6BD66B">📁</span>':hbadge(big)}<div style="min-width:0"><div class="t">${esc(label)}</div>${tag?`<div class="s">${esc(tag)}</div>`:''}</div><div class="amt"><span class="num ${net<0?'neg':net>0?'pos':''}">${money(Math.abs(net),cur)}</span>${(pjt||acn)?`<span class="pills">${projPill(pjt)}${acn?`<span class="apill">${esc(acn)}</span>`:''}</span>`:''}</div></button>`;
 }
-function grpTitle(ch){const gn=grpName(ch);if(gn)return gn;const r=ch[0];if(r.sh)return r.sh;const ss=new Set(ch.map(x=>x.c+'・'+(x.s||'')));if(ss.size===1)return r.s||r.c;const cs=new Set(ch.map(x=>x.c));return cs.size===1?r.c:'多類別'}
+function grpTitle(ch){const r=ch[0];if(r.sh)return r.sh;const ss=new Set(ch.map(x=>x.c+'・'+(x.s||'')));if(ss.size===1)return r.s||r.c;const cs=new Set(ch.map(x=>x.c));return cs.size===1?r.c:'多類別'}
 function grpSheet(g){
   const ch=grpMembers(g).slice().sort((a,b)=>(a.o||0)-(b.o||0));if(!ch.length)return;const r=ch[0];
   let net=0;for(const x of ch)net+=raw(x);const cur=r.cu||curOf(r);const a=D.acct.get(r.a);const rt=ruleTag(r);
