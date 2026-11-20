@@ -474,3 +474,15 @@ test('模糊搜尋同時比對日期、時間、商家、帳戶、專案與分�
   assert.equal(result.rows[0].project,matching.p);
   assert.equal(f.run('ledgerSearchRows(query,Array(13).fill(rows[0]),accounts).rows.length'),5);
 });
+
+test('修改提示依指令來源顯示 ChatGPT 或 Claude', async () => {
+  for(const [id,label] of [['chatgpt_'+'a'.repeat(36),'ChatGPT'],['claude-edit','Claude']]){
+    const f=fixture();
+    const messages=[];
+    f.context.toast=message=>messages.push(message);
+    await f.run("mutate([{id:'r1',a:'cash',t:'支出',c:'生活',s:'舊分類',n:'測試記錄',dt:'2026-01-01',m:-10}])");
+    await process(f,command({kind:'edit',n:'測試記錄',dt:'2026-01-01',amt:20},id));
+    assert.equal(f.rec.get('r1').m,-20);
+    assert.ok(messages.some(message=>message.startsWith(label+' 幫你修改了')));
+  }
+});

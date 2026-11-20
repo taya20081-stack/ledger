@@ -582,7 +582,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.98';
+window.APP_VER='v2.0.99';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -2524,8 +2524,8 @@ async function executeInbox(docs){
       else if(!diff)balMsgs.push(acct.name+'：餘額已經是 '+fmt(target,acct.cur)+'，不需調整')
       dels.push(d.ref);continue}
     if(x.kind==='osshop'){const L=new Set(S.settings.osShops||[]);const rm=x.rm==='1';String(x.n||'').split(/[,、，]/).map(t=>t.trim()).filter(Boolean).forEach(t=>rm?L.delete(t):L.add(t));S.settings.osShops=[...L];await saveKV('settings');toast('海外店家：'+(rm?'移除 ':'加入 ')+String(x.n||''));dels.push(d.ref);continue}
-    if(x.kind==='updrule'&&(x.nn!=null||x.p!=null)){rups.push(x);dels.push(d.ref);continue}
-    if(x.kind==='updrule'){upds.push({n:String(x.n||'').trim(),wk:x.wk});dels.push(d.ref);continue}
+    if(x.kind==='updrule'&&(x.nn!=null||x.p!=null)){rups.push({x,ref:d.ref});dels.push(d.ref);continue}
+    if(x.kind==='updrule'){upds.push({n:String(x.n||'').trim(),wk:x.wk,label:INBOX_SOURCES[inboxCommandSource(d.id,x)]});dels.push(d.ref);continue}
     if(x.kind==='delrule'){String(x.n||'').split(/[,、]/).map(t=>t.trim()).filter(Boolean).forEach(t=>delNames.push(t));dels.push(d.ref);continue}
     if(!S.byId.has(id)){const amt=Math.abs(+x.amt);if(isFinite(amt)&&amt>0){
       const kind=x.kind==='inc'?'inc':'exp';const acct=S.accts.find(a=>a.id===x.a||a.name===x.a)||D.acct.get(S.settings.lastA)||S.accts.find(a=>!a.arch);
@@ -2568,7 +2568,7 @@ async function executeInbox(docs){
     toast([...notices,apN?'Apple Pay 自動記了 '+apN+' 筆'+(apUnk?'（'+apUnk+' 筆卡片未設定對應帳戶）':''):''].filter(Boolean).join('；')+(apDup?'；略過重複 '+apDup+' 筆':''))}
   else if(apDup)toast('Apple Pay：略過 '+apDup+' 筆已記過的交易')
   if(rups.length){const up=[],okN=[],bad=[];let ch=false;
-    for(const x of rups){const nm=String(x.n||'').trim();
+    for(const {x} of rups){const nm=String(x.n||'').trim();
       const hit=S.rules.filter(q=>q.fq!=='I'&&q.fs&&(q.name===nm||(q.fs.n||'')===nm||(!q.fs.n&&q.fs.s===nm))&&(x.oamt==null||Math.abs(Math.abs(evalAmt(q.fs.amt)||0)-Math.abs(+x.oamt))<0.5));
       if(hit.length!==1){bad.push((nm||'?')+'（找到 '+hit.length+' 筆週期）');continue}
       const rule=hit[0];if(x.nn!=null&&String(x.nn).trim())rule.fs.n=String(x.nn).trim().slice(0,80);if(x.p!=null)rule.fs.p=String(x.p).slice(0,60);
@@ -2576,14 +2576,15 @@ async function executeInbox(docs){
       S.recs.forEach(r=>{if(!r.x&&r.id.startsWith(rule.id+'_')&&/_\d+_\d+$/.test(r.id)){const o={...r};if(x.nn!=null&&String(x.nn).trim())o.n=String(x.nn).trim().slice(0,80);if(x.p!=null)o.p=String(x.p).slice(0,60);o.u=Date.now();up.push(o)}});
       okN.push(nm+(x.nn?' → '+x.nn:''))}
     if(ch)await saveKV('rules');if(up.length)await mutate(up,[]);if(ch||up.length)scheduleRender();
-    toast([okN.length?'Claude 幫你修改了週期：'+okN.slice(0,3).join('、')+'（含 '+up.length+' 筆記錄）':'',bad.length?'沒有修改：'+bad.slice(0,3).join('、'):''].filter(Boolean).join('；'))}
+    const {x,ref}=rups[0],label=INBOX_SOURCES[inboxCommandSource(ref.id,x)];
+    toast([okN.length?label+' 幫你修改了週期：'+okN.slice(0,3).join('、')+'（含 '+up.length+' 筆記錄）':'',bad.length?'沒有修改：'+bad.slice(0,3).join('、'):''].filter(Boolean).join('；'))}
   if(upds.length){const td=TODAY();let ch=false;const dd=[];
     for(const u of upds){for(const rule of S.rules.filter(q=>q.fq!=='I'&&String(q.id).startsWith('ib_')&&q.name===u.n)){
       if(u.wk!==undefined)rule.wk=(u.wk==='prev'||u.wk==='next')?u.wk:'';
       let keep=0;while(keep<rule.done){const xx=S.byId.get(rule.id+'_'+keep+'_0');if(xx&&!xx.x&&xx.dt<=td)keep++;else break}
       S.recs.forEach(r=>{if(!r.x&&r.dt>td&&r.id.startsWith(rule.id+'_')&&/_\d+_\d+$/.test(r.id))dd.push(r.id)});
       rule.done=keep;rule.u=Date.now();ch=true}}
-    if(ch){await saveKV('rules');if(dd.length)await mutate([],dd);await runRules();scheduleRender();toast('Claude 幫你更新了週期設定')}}
+    if(ch){await saveKV('rules');if(dd.length)await mutate([],dd);await runRules();scheduleRender();toast(upds[0].label+' 幫你更新了週期設定')}}
   if(insts.length){await mutate(insts.flatMap(q=>q.recs));const nr=insts.map(q=>q.rule).filter(Boolean);if(nr.length){S.rules.push(...nr);try{await saveKV('rules')}catch(e){S.rules=S.rules.filter(q=>!nr.includes(q));throw e}}scheduleRender();toast('Claude 幫你建了 '+insts.length+' 個分期：'+insts.map(q=>q.nm).join('、'))}
   if(eds.length){const up=[],rm=[],bad=[],okN=[];
     for(const {x,ref} of eds){const nm=String(x.n||'').trim();const dt=String(x.dt||'');if(!nm||!/^\d{4}-\d{2}-\d{2}$/.test(dt)){bad.push((nm||'?')+'（資料不完整）');reject('記錄識別欄位錯誤');continue}
@@ -2600,7 +2601,8 @@ async function executeInbox(docs){
       if(/^\d{4}-\d{2}-\d{2}$/.test(x.ndt||''))o.dt=x.ndt;if(/^\d{2}:\d{2}$/.test(x.ntm||''))o.tm=x.ntm;
       up.push(o);okN.push(nm+(o.n!==nm?' → '+o.n:''))}
     if(up.length||rm.length){await mutate(up,rm);scheduleRender()}
-    toast([okN.length?'Claude 幫你修改了：'+okN.slice(0,3).join('、'):'',bad.length?'沒有修改：'+bad.slice(0,3).join('、'):''].filter(Boolean).join('；'))}
+    const {x,ref}=eds[0],label=INBOX_SOURCES[inboxCommandSource(ref.id,x)];
+    toast([okN.length?label+' 幫你修改了：'+okN.slice(0,3).join('、'):'',bad.length?'沒有修改：'+bad.slice(0,3).join('、'):''].filter(Boolean).join('；'))}
   if(balMsgs.length)toast(balMsgs.join('；'))
   // 等本機交易與雲端確認後再清除指令；本分頁重試時略過已執行的操作。
   return dels.length?'applied':invalid||'invalid';
