@@ -57,6 +57,7 @@ function fixture(storage = {kv: new Map()}) {
     section('async function renProj(', 'function ruleName('),
     section('async function renameSub(', '/* ================= record building'),
     section('const OS_RATE=', '/* ===== MOZE'),
+    section('function holdCodeOf(', 'let _hsT='),
     section('const INBOX_SOURCES=', 'function inboxSharedStatus()'),
     'let inboxBusy=Promise.resolve();',
     section('const inboxAwaitingCloud=', 'function processInbox(docs)'),
@@ -485,4 +486,39 @@ test('修改提示依指令來源顯示 ChatGPT 或 Claude', async () => {
     assert.equal(f.rec.get('r1').m,-20);
     assert.ok(messages.some(message=>message.startsWith(label+' 幫你修改了')));
   }
+});
+
+test('股票買入保存成交股數，改金額依原單價調整持股', async () => {
+  const f=fixture();
+  f.S.cats.exp.push({n:'投資',subs:['股票買入']});
+  const data={kind:'stock_buy',amt:1000,a:'cash',c:'投資',s:'股票買入',n:'0050 測試股票',dt:'2026-01-01',hsq:10};
+  const id='chatgpt_'+'e'.repeat(36);
+  await process(f,command({...data,hsq:1.5},'invalid-shares'));
+  assert.equal(f.rec.size,0);
+  await process(f,command(data,id));
+  const record=f.rec.get('ib_'+id);
+  assert.deepEqual([record.m,record.hsc,record.hsq,record.hsa],[-1000,'0050',10,1000]);
+  let today='2026-01-01';
+  const c=vm.createContext({S:f.S,D:f.D,PX:null,HOLD_FROM:'2026-01-01',TODAY:()=>today,uid:()=> 'test-holding',
+    fetch:async()=>({ok:false}),PRICE_URL:'https://example.test',toast() {},render() {},async saveKV() {},clearTimeout,setTimeout,setInterval() {}});
+  vm.runInContext(section('function validTradeShares(', 'function isRetainedInbox(')+
+    section('function holdCodeOf(', '/* ---------- 存錢目標'),c);
+  f.S.ready=true;
+  await vm.runInContext('holdSync()',c);
+  assert.equal(f.S.settings.hold[0].sh,10);
+  await process(f,command({kind:'edit',dt:data.dt,n:data.n,amt:1500},'test-edit'));
+  await vm.runInContext('holdSync()',c);
+  assert.equal(f.S.settings.hold[0].sh,10);
+  today='2026-01-02';
+  c.PX={d:today,p:{'0050':['測試股票',95,'TWD',today]}};
+  await vm.runInContext('holdSync()',c);
+  assert.equal(f.S.settings.hold[0].sh,10);
+  c.PX={d:today,p:{'0050':['測試股票',95,'TWD','2026-01-01']}};
+  await vm.runInContext('holdSync()',c);
+  await vm.runInContext('holdSync()',c);
+  assert.equal(f.S.settings.hold[0].sh,15);
+  f.context.deletedId='ib_'+id;
+  await f.run('mutate([], [deletedId])');
+  await vm.runInContext('holdSync()',c);
+  assert.equal(f.S.settings.hold[0].sh,0);
 });

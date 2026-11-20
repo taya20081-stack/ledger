@@ -591,7 +591,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.100';
+window.APP_VER='v2.0.101';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -967,7 +967,7 @@ function osFeeRec(recs){
   // 手續費併入同一筆（同一個 g），在首頁顯示成多類別的一個分項
   const g=main.every(x=>x.g&&x.g===m0.g)?m0.g:uid();
   main.forEach(x=>{x.g=g});
-  const r={...m0,...cat,id:uid(),m:-fee,f:0,d:0,g,n:'海外交易手續費',o:Math.max(...main.map(x=>x.o||0),m0.o||Date.now())+1,ds:'海外交易 1.5%（'+(m0.gn||m0.n||m0.s||'')+'）'};delete r.gn;delete r.cu;delete r.xr;return r;
+  const r={...m0,...cat,id:uid(),m:-fee,f:0,d:0,g,n:'海外交易手續費',o:Math.max(...main.map(x=>x.o||0),m0.o||Date.now())+1,ds:'海外交易 1.5%（'+(m0.gn||m0.n||m0.s||'')+'）'};delete r.gn;delete r.hsc;delete r.hsq;delete r.hsa;delete r.cu;delete r.xr;return r;
 }
 /* ===== MOZE 式分項：選中的分項欄位放在 EF 本身（c/s/amt/n/p），切換時存回 splits；_si=-1 代表「多類別」總覽 ===== */
 function spTotal(f){return(f.splits||[]).reduce((t,x,i)=>t+(evalAmt(i===f._si?f.amt:x.amt)||0),0)}
@@ -1649,6 +1649,12 @@ function renderEditor(){
   const curSel=ei?`<select class="cursel" id="f-cu" data-f="cu" data-rr="1" aria-label="幣別"><option value="">${cur}</option>${CURS.filter(c=>c!==cur).map(c=>`<option ${c===f.cu?'selected':''}>${c}</option>`).join('')}</select>`:`<span class="cur">${amtCur}</span>`;
   const amtBox=ei&&f.splits&&f._si===-1?`<div class="mcard"><div class="mrow"><span class="curw">${cur}</span><b class="num mtot">${fmt(spTotal(f))}</b></div></div>`
     :`<div class="amtwrap"><div class="mrow amt"><span class="curw">${curSel}</span><input id="f-amt" data-f="amt" data-calc inputmode="${CALC_IM}" autocomplete="off" placeholder="${ei?'0':amtLabel}" value="${esc(f.amt)}" aria-label="${amtLabel}"><span class="ev" id="f-ev">${showEv?'= '+fmt(ev,cur):''}</span></div>${ei&&f.cu&&f.cu!==cur?`<label class="field" style="margin-top:6px"><span>匯率：1 ${f.cu} = ? ${cur}</span><input class="in num" id="f-xr" data-f="xr" inputmode="decimal" value="${esc(f.xr)}" placeholder="${+(rateOf(f.cu)/rateOf(cur)).toPrecision(6)}"></label>`:''}</div>`;
+  const saved=f._edit&&S.byId.get(f.ids[f._si>=0?f._si:0]);
+  const shares=saved&&(!f.splits||f._si>=0)?recordedBuyShares(saved,holdCodeOf(saved)):null;
+  const shareLog=saved&&S.settings.hlog?.[saved.id];
+  const waiting=shares!==null&&Math.abs(saved.m)!==saved.hsa&&shareLog?.amt!==Math.abs(saved.m);
+  const shareRow=shares===null?'':`<div class="hint">${waiting?'股數待交易日收盤價更新後補算':
+    (Math.abs(saved.m)===saved.hsa?'成交股數':'依原成交單價換算股數')+' '+fmtSh(shares)+' 股'}</div>`;
   const dateBtn=`<label class="mbtn ov" data-ic="📅"><span id="f-dt-x">${dateBtnText(f.dt)}</span><input type="date" id="f-dt" data-f="dt" data-rr="1" value="${f.dt}"></label>`;
   const timeBtn=`<button type="button" class="mbtn tmb" data-act="tw-open"><span id="f-tm-x">${esc(f.tm)}</span></button>`;
   const dateRow=`<div class="grid2"><label class="field"><span>日期</span><input class="in" type="date" id="f-dt" data-f="dt" value="${f.dt}"></label><label class="field"><span>時間</span><input class="in" type="time" id="f-tm" data-f="tm" value="${f.tm}"></label></div>`;
@@ -1680,7 +1686,7 @@ function renderEditor(){
   const tabsH=(!ei||showCat)?`<div class="mtabs" role="tablist">${tabs.map(([k,l])=>`<button class="${tabOn(k)?'on':''}" data-act="ef-kind" data-k="${k}">${l}</button>`).join('')}</div>`:'';
   sb.innerHTML=`  ${f.kind==='sys'?`<label class="field"><span>類型</span><select class="in" id="f-st" data-f="st" data-rr="1">${SYS_T.filter(t=>!SYS_HIDE.has(t)||f.st===t).map(t=>`<option ${t===f.st?'selected':''}>${t}</option>`).join('')}</select></label>`:''}
   ${f.kind==='debt'?`<div class="field"><span>動作</span><div class="chips">${Object.entries(DEBT_ACT).map(([k,v])=>`<button class="chip${f.act===k?' on':''}" data-act="ef-debt" data-k="${k}">${v[3]}<small style="opacity:.7">${v[0]==='應收款項'?'應收':'應付'}</small></button>`).join('')}</div></div><label class="field"><span>對象</span><input class="in" id="f-w" data-f="w" list="dl-who" value="${esc(f.w)}" placeholder="例如：家人、同事姓名"></label>`:''}
-  <div id="ef-cat"${ei&&f.splits&&!showCat?' class="split-compact"':''}>${tabsH}${showCat?'':strip}${grid}</div>${amtBox}${ei&&nameRow?`<div class="mcard">${nameRow}</div>`:nameRow}
+  <div id="ef-cat"${ei&&f.splits&&!showCat?' class="split-compact"':''}>${tabsH}${showCat?'':strip}${grid}</div>${amtBox}${shareRow}${ei&&nameRow?`<div class="mcard">${nameRow}</div>`:nameRow}
   ${ei?`<div class="mgrid">${acctBtn}${projBtn}${shopBtn}${modeBtn}${dateBtn}${timeBtn}<div class="mbtn inp${evalAmt(f.fee)>0?'':' ph'}"><input id="f-fee" data-f="fee" data-calc inputmode="${CALC_IM}" value="${esc(f.fee)}" placeholder="手續費"></div>${f.kind==='exp'&&!f._edit&&f.mode!=='inst'?`<button class="mbtn${f.os?' on':''}" data-act="ef-os">${f.os?'✓ 海外交易 1.5%':'海外交易'}</button>`:'<div></div>'}${!f._edit&&!(f.mode||f.rep)?`<label class="mbtn sel"><select id="f-post" data-f="post"><option value="">立即入帳</option><option value="m" ${f.post==='m'?'selected':''}>手動確認後入帳</option></select></label><button class="mbtn${f.dep?' on':''}" data-act="ef-deptog">${f.dep?'✓ 訂金尾款':'訂金尾款'}</button>`:''}${f._edit?`<button class="mbtn" data-act="ef-del" id="ef-del" style="color:var(--seal);grid-column:1/-1">刪除</button>`:`<button class="mbtn" data-act="ef-save" data-again="1" style="grid-column:1/-1">儲存並再記一筆</button>`}</div>`:`${acctRow}${projRow}${dateRow}`}
   ${!ei?feeRow+osRow:''}
   ${(!f._edit||(canConv&&f.mode))&&['exp','inc','tr'].includes(f.kind)?(()=>{const md=f.mode||(f.rep?'rep':'');const canI=f.kind==='exp'&&!f.splits;
@@ -1716,7 +1722,7 @@ async function saveEditor(again){
   if(!f._edit&&!(f.mode||f.rep)&&(f.kind==='exp'||f.kind==='inc')&&!f.splits&&recs.filter(r=>r.n!=='海外交易手續費').length===1){const dp=dupOf(recs[0]);const sig=recs[0].a+'|'+recs[0].m+'|'+recs[0].dt+'|'+recs[0].tm;
     if(dp&&f._dupSig!==sig){f._dupSig=sig;f._dupMsg=dupText(dp);renderEditor();setTimeout(()=>{const e=$('#ef-dup');e&&e.scrollIntoView({block:'center'})},50);return toast('可能重複，再按一次儲存仍會記錄')}}
   const del=[];
-  if(f._edit){const old=f.ids.map(id=>S.byId.get(id)).filter(Boolean);recs.forEach((r,i)=>{if(old[i]){r.id=old[i].id;r.o=old[i].o;if(old[i].k&&r.k){/*keep pair id*/r.k=old[0].k||r.k}if(old[i].g&&f.kind==='exp'&&!f.splits)r.g=old[i].g}});
+  if(f._edit){const old=f.ids.map(id=>S.byId.get(id)).filter(Boolean);recs.forEach((r,i)=>{if(old[i]){r.id=old[i].id;r.o=old[i].o;if(old[i].k&&r.k){/*keep pair id*/r.k=old[0].k||r.k}if(old[i].g&&f.kind==='exp'&&!f.splits)r.g=old[i].g;if(old[i].hsc&&holdCodeOf(r)===old[i].hsc){r.hsc=old[i].hsc;r.hsq=old[i].hsq;r.hsa=old[i].hsa}}});
     if(f.kind==='tr'){const k=old[0]?.k||recs[0].k;recs.forEach(r=>r.k=k)}
     for(let i=recs.length;i<old.length;i++)del.push(old[i].id)}
   const md=!f._edit?(f.mode||(f.rep?'rep':'')):'';
@@ -2300,7 +2306,8 @@ function ledgerSearchRows(q,records,accounts){
   return {total:rows.length,rows:rows.slice(0,5).map(r=>({date:r.dt,time:r.tm||'',name:String(r.n||'').slice(0,100),
     group_name:String(r.gn||'').slice(0,80),merchant:String(r.sh||'').slice(0,80),account:String(accounts.get(r.a)?.name||'').slice(0,80),
     project:String(r.p||'').slice(0,80),category:String(r.c||'').slice(0,80),subcategory:String(r.s||'').slice(0,80),
-    amount:Math.abs(r.m),currency:r.cu||accounts.get(r.a)?.cur||'TWD',type:r.t}))};
+    amount:Math.abs(r.m),currency:r.cu||accounts.get(r.a)?.cur||'TWD',type:r.t,
+    ...(r.hsc?{shares:recordedBuyShares(r,holdCodeOf(r)),stock_code:r.hsc}:{})}))};
 }
 async function signedLedgerSearch(doc,owner){
   const x=doc.data();
@@ -2329,6 +2336,14 @@ async function publishLedgerSearch(db,owner,req,result){
     else tx.set(ref,{...botInfo(),chatgptSearchReplies:replies});
   }));
 }
+function validTradeShares(shares){return typeof shares==='number'&&shares>0&&shares<=1e9&&Math.abs(shares*1e5-Math.round(shares*1e5))<1e-4}
+function recordedBuyShares(record,code){
+  if(!code||record.hsc!==code||!validTradeShares(record.hsq)||!(record.hsa>0))return null;
+  const amount=Math.abs(record.m);
+  if(amount===record.hsa)return record.hsq;
+  const scale=/^\d/.test(code)?1:1e5;
+  return Math.round(amount/record.hsa*record.hsq*scale)/scale;
+}
 function isRetainedInbox(doc){const x=doc.data();return isChatGPTInboxId(doc.id)&&(x?.spv===1||['edit_match','ledger_search'].includes(x?.kind))}
 function inboxEditNames(x){
   let names;try{names=JSON.parse(x.names)}catch{return null}
@@ -2351,6 +2366,12 @@ function inboxInvalidReason(x){
   }catch(e){return '分項 JSON 無效'}}
   switch(x.kind){
     case 'px':try{const prices=JSON.parse(x.p);return prices&&typeof prices==='object'&&!Array.isArray(prices)&&x.d?'':'價格欄位錯誤'}catch(e){return '價格 JSON 無效'}
+    case 'stock_buy':{
+      const code=holdCodeOf({t:'支出',c:x.c,s:x.s,n:x.n});
+      const category=S.cats.exp.find(c=>c.n===x.c);
+      return amt&&+x.amt>0&&account()&&category?.subs.includes(x.s)&&code&&validTradeShares(x.hsq)&&
+        (!/^\d/.test(code)||Number.isInteger(x.hsq))&&!x.rep&&!x.sp?'':'股票買入或成交股數欄位錯誤';
+    }
     case 'exp':case 'inc':return amt&&+x.amt&&account()?'':'金額或帳戶欄位錯誤';
     case 'bal':return amt&&account()?'':'餘額或帳戶欄位錯誤';
     case 'inst':return amt&&+x.amt&&Number.isInteger(+x.cnt)&&+x.cnt>1&&+x.cnt<=360&&account()&&/^\d{4}-\d{2}-\d{2}$/.test(x.dt||'')?'':'分期欄位錯誤';
@@ -2542,6 +2563,7 @@ async function executeInbox(docs){
         if(!m||(s&&!m.subs.includes(s))){if(kind==='exp'){const g=suggestCat(x.n,x.sh);if(!m){c=g.c;s=g.s}else s=m.subs.includes(g.s)&&g.c===c?g.s:(m.subs[0]||'')}else{c=S.cats.inc[0]?.n||'收入';s=S.cats.inc[0]?.subs[0]||''}}
         const dt=/^\d{4}-\d{2}-\d{2}$/.test(x.dt||'')?x.dt:TODAY();const tm=/^\d{2}:\d{2}$/.test(x.tm||'')?x.tm:NOWTM();
         const r={id,a:acct.id,t:kind==='inc'?'收入':'支出',c,s:s||'',m:kind==='inc'?amt:-amt,f:-(Math.abs(+x.fee)||0),d:0,n:String(x.n||'').slice(0,80),sh:String(x.sh||'').slice(0,60),dt,tm,p:String(x.p||'').slice(0,60),ds:'',tg:inboxCommandSource(d.id,x),w:'',k:'',g:'',o:Date.now()};
+        if(x.kind==='stock_buy'){r.hsc=holdCodeOf(r);r.hsq=x.hsq;r.hsa=amt}
         if(x.cu&&x.cu!==acct.cur){r.cu=x.cu;r.xr=+(fxOn(x.cu,dt)/fxOn(acct.cur,dt)).toPrecision(6)}
         if(/^[DWMY]$/.test(x.rep||'')){
           if(!S.rules.some(q=>q.id===id)){
@@ -2568,7 +2590,7 @@ async function executeInbox(docs){
   if(delNames.length){const td=TODAY();const gone=S.rules.filter(q=>q.fq!=='I'&&String(q.id).startsWith('ib_')&&delNames.includes(q.name));
     if(gone.length){const ids=S.recs.filter(r=>!r.x&&r.dt>td&&/_\d+_\d+$/.test(r.id)&&gone.some(q=>r.id.startsWith(q.id+'_'))).map(r=>r.id);
       if(ids.length)await mutate([],ids);const previous=S.rules;S.rules=S.rules.filter(q=>!gone.includes(q));try{await saveKV('rules')}catch(e){S.rules=previous;throw e}scheduleRender();toast('Claude 幫你刪除了 '+gone.length+' 個週期')}}
-  if(apN||apDup||pxN)await saveKV('settings');if(pxN)scheduleRender();
+  if(apN||apDup||pxN)await saveKV('settings');if(pxN){scheduleRender();holdSyncSoon()}
   if(add.length){await mutate(add);await fixOsGroups().catch(()=>{});scheduleRender();
     const notices=Object.entries(INBOX_SOURCES).map(([source,label])=>{
       const records=add.filter(r=>r.t!=='餘額調整'&&inboxRecordSource(r)===source);
@@ -3780,7 +3802,7 @@ function pxApply(P){let n=0;for(const h of S.settings.hold||[]){if(h.pxManual)co
 async function loadPrices(force){const H=S.settings.hold||[];if(!H.length&&!goldG()&&!force)return false;const td=TODAY();if(!force&&S.settings.pxFor===td&&PX)return false;
   try{const res=await fetch(PRICE_URL+'?t='+Date.now(),{cache:'no-store'});if(!res.ok)return false;PX=await res.json();let n=0;
     for(const h of H){if(h.pxManual)continue;const q=PX.p&&PX.p[h.code];if(q&&(!h.pxd||(q[3]||PX.d)>=h.pxd)){h.px=+q[1];h.pxd=q[3]||PX.d;if(!h.name)h.name=q[0];if(q[2])h.cu=q[2];n++}}n+=pxApply(S.settings.pxx&&S.settings.pxx.p);if(goldApply())n++;
-    S.settings.pxFor=td;await saveKV('settings');return n>0}catch(e){return false}}
+    S.settings.pxFor=td;await saveKV('settings');holdSyncSoon();return n>0}catch(e){return false}}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.ready){loadPrices().then(ok=>{if(ok)render(true)});holdSyncSoon()}});
 function holdRecs(h){const code=String(h.code||'').trim(),nm=String(h.name||'').trim();const reC=code?new RegExp('(^|[^0-9A-Za-z])'+code.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?![0-9A-Za-z])','i'):null;
   return D.live.filter(r=>(r.c==='投資'||/股票|基金|ETF|申購|股利|配息/.test(r.s||''))&&((reC&&reC.test(r.n||''))||(nm&&nm.length>=2&&(r.n||'').includes(nm))))}
@@ -3877,27 +3899,55 @@ function holdEditSheet(i){const h=(S.settings.hold||[])[i];if(!h)return;
 /* ---------- 股票買入自動加股數：名稱開頭是代碼（0050元大台灣50、NVDA輝達），依金額 ÷ 收盤價反推股數，存進持股
    S.settings.hlog={記錄id:{code,pf,sh,amt}}；只處理 HOLD_FROM 之後的記錄（之前的股數你已手動輸入） ---------- */
 const HOLD_FROM='2026-11-16';
-function holdCodeOf(r){if(!r||r.t!=='支出'||r.c!=='投資'||/股利|配息|出售|贖回|手續費|定存|期貨|虛擬|貴金屬/.test(r.s||''))return'';const n=String(r.n||'').trim();
+function holdCodeOf(r){if(!r||r.t!=='支出'||r.c!=='投資'||/股利|配息|出售|賣出|贖回|手續費|定存|期貨|虛擬|貴金屬/.test(r.s||''))return'';const n=String(r.n||'').trim();
   let x=/^(\d{4,6}[A-Z]?)(?![0-9])/.exec(n);if(x)return x[1];x=/^([A-Z]{1,5}(?:\.[A-Z])?)(?![A-Za-z])/.exec(n);return x?x[1]:''}
-let _hsT=0,_hsBusy=false;function holdSyncSoon(){clearTimeout(_hsT);_hsT=setTimeout(()=>holdSync().catch(()=>{}),1500)}
+let _hsT=0,_hsBusy=false,_holdPxAt=0;function holdSyncSoon(){clearTimeout(_hsT);_hsT=setTimeout(()=>holdSync().catch(()=>{}),1500)}
+function holdingQuoteOn(code,date,log){
+  const publicQuote=PX?.p?.[code],privateQuote=S.settings.pxx?.p?.[code];
+  if(publicQuote?.[1]>0&&(publicQuote[3]||PX.d)===date)return publicQuote;
+  if(privateQuote?.[1]>0&&(privateQuote[3]||S.settings.pxx.d)===date)return privateQuote;
+  if(log?.code===code&&log.px>0&&log.d===date)return [code,log.px,log.cu,date];
+  return null;
+}
 async function holdSync(){if(_hsBusy||!S.ready)return;_hsBusy=true;try{
   const log=S.settings.hlog||(S.settings.hlog={});const H=S.settings.hold||(S.settings.hold=[]);const msgs=[];let ch=false;
-  const want=new Map();for(const r of D.live){if(r.dt<HOLD_FROM)continue;const c=holdCodeOf(r);if(c)want.set(r.id,{r,c})}
-  const needPx=[...want.entries()].some(([id,w])=>!log[id]||Math.abs((log[id].amt||0)-Math.abs(w.r.m))>0.5);
-  if(needPx&&(!PX||!PX.d||PX.d<TODAY())){try{const res=await fetch(PRICE_URL+'?t='+Date.now(),{cache:'no-store'});if(res.ok)PX=await res.json()}catch(e){}}
+  const want=new Map();const today=TODAY();for(const r of D.live){const c=holdCodeOf(r);if(!c||r.dt>today)continue;
+    const shares=recordedBuyShares(r,c);if(r.dt<HOLD_FROM&&shares===null)continue;want.set(r.id,{r,c,shares})}
+  const current=(L,r,c,shares)=>L&&L.code===c&&(shares===null?!L.exact&&Math.abs(L.amt-Math.abs(r.m))<=0.5:
+    L.exact&&L.sh===shares&&L.amt===Math.abs(r.m));
+  const needsClose=(r,shares)=>shares===null||Math.abs(r.m)!==r.hsa;
+  const needPx=[...want.entries()].some(([id,{r,c,shares}])=>today>r.dt&&needsClose(r,shares)&&
+    !current(log[id],r,c,shares)&&!holdingQuoteOn(c,r.dt,log[id]));
+  if(needPx&&Date.now()-_holdPxAt>300000){_holdPxAt=Date.now();try{
+    const res=await fetch(PRICE_URL+'?t='+_holdPxAt,{cache:'no-store'});if(res.ok)PX=await res.json();
+  }catch(e){}}
   const find=(c,pf)=>H.find(h=>h.code===c&&(!pf||(h.pf||'我的')===pf));
   const add=(c,pf,d,cu)=>{let h=find(c,pf)||(pf?null:find(c));if(!h){h=holdUpsert(pf||(H.find(x=>x.code===c)?.pf)||'我的',c,0,0,cu)}h.sh=Math.max(0,Math.round(((+h.sh||0)+d)*1e5)/1e5);return h};
   // 刪掉的記錄 → 扣回
   for(const id of Object.keys(log)){if(!want.has(id)){const L=log[id];add(L.code,L.pf,-L.sh);delete log[id];ch=true;msgs.push(L.code+' −'+fmtSh(L.sh)+' 股')}}
-  for(const[id,{r,c}]of want){const amt=Math.abs(r.m);const L=log[id];if(L&&L.code===c&&Math.abs(L.amt-amt)<=0.5)continue;
-    const q=PX&&PX.p&&PX.p[c];if(!q||!(+q[1]>0))continue;const pxd=q[3]||PX.d||'';if(pxd<r.dt)continue;// 等當天收盤價出來再算
-    const scu=q[2]||(/^[A-Z]/.test(c)?'USD':'TWD');const v=amt*rateOf(curOf(r))/rateOf(scu);let sh=v/(+q[1]);sh=scu==='TWD'?Math.round(sh):Math.round(sh*1e4)/1e4;
-    if(L){add(L.code,L.pf,-L.sh)}if(!(sh>0)){delete log[id];ch=true;continue}
-    const h0=find(c);const pf=(h0&&(h0.pf||'我的'))||'我的';const h=add(c,pf,sh,scu);if(!h.name||h.name===h.code)h.name=q[0]||h.name;
-    log[id]={code:c,pf,sh,amt,px:+q[1],d:pxd};ch=true;msgs.push(c+' +'+fmtSh(sh)+' 股')}
+  for(const[id,{r,c,shares}]of want){const amt=Math.abs(r.m),L=log[id];if(current(L,r,c,shares))continue;
+    const q=holdingQuoteOn(c,r.dt,L),exact=shares!==null;
+    if(needsClose(r,shares)&&(today<=r.dt||!q))continue;
+    const scu=q?.[2]||(/^[A-Z]/.test(c)?'USD':'TWD');
+    let sh=shares;
+    if(!exact){
+      const v=amt*rateOf(curOf(r))/rateOf(scu)/q[1];
+      sh=scu==='TWD'?Math.round(v):Math.round(v*1e4)/1e4;
+    }
+    const pf=L?.code===c?L.pf:(find(c)?.pf||'我的');
+    const same=L?.code===c&&L.pf===pf;
+    if(L&&!same)add(L.code,L.pf,-L.sh);
+    const delta=sh-(same?L.sh:0);
+    if(delta){const h=add(c,pf,delta,scu);if(!h.name||h.name===h.code)h.name=q?.[0]||h.name;
+      msgs.push(c+(delta>0?' +':' −')+fmtSh(Math.abs(delta))+' 股')}
+    if(exact||sh>0)log[id]={code:c,pf,sh,amt,...(exact?{exact:true}:{}),...(q?{px:+q[1],d:r.dt,cu:scu}:{})};
+    else delete log[id];
+    ch=true;
+  }
   if(ch){await saveKV('settings');if(msgs.length)toast('持股已更新：'+msgs.slice(0,3).join('、')+(msgs.length>3?' 等 '+msgs.length+' 筆':''));render(true)}
 }finally{_hsBusy=false}}
-function fmtSh(v){return(+v).toLocaleString('zh-TW',{maximumFractionDigits:4})}
+setInterval(()=>{if(S.ready&&document.visibilityState==='visible')holdSyncSoon()},900000);
+function fmtSh(v){return(+v).toLocaleString('zh-TW',{maximumFractionDigits:5})}
 function holdUpsert(pf,code,sh,cost,cu){const H=S.settings.hold||(S.settings.hold=[]);code=String(code).trim().toUpperCase();pf=String(pf||'我的').trim()||'我的';
   let h=H.find(x=>(x.pf||'我的')===pf&&x.code===code);if(!h){h={id:uid(),pf,code,name:'',sh:0};H.push(h)}h.sh=sh;if(cost>0)h.cost=cost;if(cu)h.cu=cu;else if(!h.cu)h.cu=/^[A-Z]{1,5}$/.test(code)?'USD':'TWD';return h}
 
