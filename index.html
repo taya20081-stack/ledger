@@ -582,7 +582,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.95';
+window.APP_VER='v2.0.96';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -2276,7 +2276,17 @@ function receiptInboxLines(x){
   const units=lines.map(q=>q.amt*scale);
   return Math.abs(x.amt*scale-Math.round(x.amt*scale))<1e-6&&units.every(n=>Math.abs(n-Math.round(n))<1e-6)&&units.reduce((t,n)=>t+Math.round(n),0)===Math.round(x.amt*scale)?lines:null;
 }
-function isRetainedReceipt(doc){return doc.data()?.spv===1&&isChatGPTInboxId(doc.id)}
+function isRetainedInbox(doc){const x=doc.data();return isChatGPTInboxId(doc.id)&&(x?.spv===1||x?.kind==='edit_match')}
+function inboxEditNames(x){
+  let names;try{names=JSON.parse(x.names)}catch{return null}
+  return Array.isArray(names)&&names.length>=2&&names.length<=8&&new Set(names).size===names.length&&
+    names.every(n=>typeof n==='string'&&n.length>0&&n.length<=80&&n===n.trim())?names:null;
+}
+function matchesInboxEditName(value,names){
+  const name=String(value||'').normalize('NFKC').trim().toLowerCase();
+  const codes=name.match(/\d+[a-z]?/g)||[];
+  return names.some(candidate=>name===candidate||(/^\d{4,6}[a-z]?$/.test(candidate)&&codes.includes(candidate)));
+}
 function inboxInvalidReason(x){
   if(x.spv!=null||x.kind==='split_probe')return receiptInboxLines(x)?'':'多類別分項或總額不符';
   const amt=x.amt!=null&&x.amt!==''&&Number.isFinite(+x.amt);
@@ -2291,6 +2301,9 @@ function inboxInvalidReason(x){
     case 'exp':case 'inc':return amt&&+x.amt&&account()?'':'金額或帳戶欄位錯誤';
     case 'bal':return amt&&account()?'':'餘額或帳戶欄位錯誤';
     case 'inst':return amt&&+x.amt&&Number.isInteger(+x.cnt)&&+x.cnt>1&&+x.cnt<=360&&account()&&/^\d{4}-\d{2}-\d{2}$/.test(x.dt||'')?'':'分期欄位錯誤';
+    case 'edit_match':return Object.keys(x).every(k=>['kind','dt','a','c','amt','names','_ledgerInbox'].includes(k))&&
+      /^\d{4}-\d{2}-\d{2}$/.test(x.dt||'')&&typeof x.a==='string'&&!!x.a&&typeof x.c==='string'&&!!x.c.trim()&&
+      typeof x.amt==='number'&&Number.isFinite(x.amt)&&x.amt>0&&inboxEditNames(x)?'':'候選金額修改欄位錯誤';
     case 'edit':case 'del':return x.n&&x.dt?'':'缺少記錄識別欄位';
     case 'rensub':return x.c&&x.s&&String(x.ns||'').trim()?'':'缺少子類別欄位';
     case 'renproj':case 'mvproj':return String(x.o||'').trim()&&String(x.nv||'').trim()?'':'缺少專案欄位';
@@ -2309,7 +2322,7 @@ function processInbox(docs){
     for(const doc of ordered){
       if(Cloud.user?.uid!==uid||Cloud.db!==db||!Cloud.decided)return;
       if(doc.ref.path!=='users/'+uid+'/inbox/'+doc.id)continue;
-      if(doc.data()?._ledgerInbox?.state==='completed'&&isRetainedReceipt(doc))continue;
+      if(doc.data()?._ledgerInbox?.state==='completed'&&isRetainedInbox(doc))continue;
       if(DB.mem){Cloud.inboxErr='IndexedDB 無法使用，已保留收件匣指令';return}
       const key=doc.ref.path;
       const pending=inboxAwaitingCloud.get(key);
@@ -2322,13 +2335,13 @@ function processInbox(docs){
         token=crypto.randomUUID();
         const claim=await claimInbox(db,doc.ref,token);
         if(claim.state==='missing')continue;
-        if(claim.state==='completed'){if(!isRetainedReceipt(doc))await deleteInboxDoc(doc.ref);continue}
+        if(claim.state==='completed'){if(!isRetainedInbox(doc))await deleteInboxDoc(doc.ref);continue}
         if(claim.state!=='claimed'){
           Cloud.inboxErr=claim.state==='invalid'?'收件匣指令資料有誤，已保留供核對':'收件匣指令已被領取或待核對，已保留原指令';
           continue;
         }
         if(Cloud.user?.uid!==uid||Cloud.db!==db)return;
-        const session={db,token,queue:Cloud.q,retain:isRetainedReceipt(claim.doc)};
+        const session={db,token,queue:Cloud.q,retain:isRetainedInbox(claim.doc)};
         const result=await executeInbox([claim.doc]);
         if(result==='applied'){
           inboxAwaitingCloud.set(key,session);
@@ -2400,7 +2413,7 @@ async function executeInbox(docs){
     const reason=inboxInvalidReason(x);
     if(reason){reject(reason);continue}
     if(x.spv===1){
-      if(!isRetainedReceipt(d)){reject('多類別指令來源不符');continue}
+      if(!isChatGPTInboxId(d.id)){reject('多類別指令來源不符');continue}
       if(x.kind==='split_probe'){dels.push(d.ref);continue}
       const lines=receiptInboxLines(x),g=id+'_split';
       // 保留完成指令與確定性 ID，避免重送復活已編輯或刪除的分項。
@@ -2415,6 +2428,16 @@ async function executeInbox(docs){
 
     if(x.src==='ap'){if(!S.byId.has(id)){const o=apRecord(x,id);if(o.r){add.push(o.r);apN++;if(!o.sure)apUnk++}else if(o.skip==='dup')apDup++;else{reject('Apple Pay 指令資料不足');continue}}dels.push(d.ref);continue}
     if(x.kind==='px'){try{const q=JSON.parse(x.p||'{}');const cur=S.settings.pxx||{d:'',p:{}};if((x.d||'')>=(cur.d||'')){S.settings.pxx={d:x.d||'',p:{...cur.p,...q}};pxApply(S.settings.pxx.p);pxN++}}catch(e){}dels.push(d.ref);continue}
+    if(x.kind==='edit_match'){
+      if(!isRetainedInbox(d)){reject('候選修改指令來源不符');continue}
+      const names=inboxEditNames(x);
+      const matches=D.live.filter(r=>r.dt===x.dt&&r.a===x.a&&r.c===x.c&&(r.t==='支出'||r.t==='收入')&&
+        !r.k&&matchesInboxEditName(r.n,names));
+      if(matches.length!==1){reject('候選交易符合 '+matches.length+' 筆');toast('金額未修改：找到 '+matches.length+' 筆符合的交易');continue}
+      const r=matches[0],amount=r.t==='支出'?-x.amt:x.amt;
+      if(r.m!==amount){await mutate([{...r,m:amount}]);scheduleRender()}
+      dels.push(d.ref);toast('ChatGPT 已修改金額：'+r.n+' '+Math.abs(amount));continue;
+    }
     if(x.kind==='edit'||x.kind==='del'){eds.push({x,ref:d.ref});continue}
     if(x.kind==='inst'){const amt=Math.abs(+x.amt),k=parseInt(x.cnt)||0,acct=S.accts.find(a=>a.id===x.a||a.name===x.a);
       if(amt>0&&k>1&&acct&&/^\d{4}-\d{2}-\d{2}$/.test(x.dt||'')){const sno=Math.max(1,Math.min(k,parseInt(x.sno)||1));const nm=String(x.n||'分期付款').slice(0,80);const tm=/^\d{2}:\d{2}$/.test(x.tm||'')?x.tm:'00:00';const day=+x.dt.slice(8),o=Date.now();

@@ -432,3 +432,30 @@ test('海外消費與手續費共享一組，名稱只在分項，重送不重�
   assert.equal(f.rec.size,2);
   assert.equal(f.D.live.reduce((sum,r)=>sum+r.m,0),-203);
 });
+
+test('候選金額指令只修改同日、同帳戶、同分類中唯一匹配的既有交易', async () => {
+  const date='2026-01-01';
+  const entry={a:'cash',t:'支出',c:'投資',dt:date,m:-100};
+  const first={...entry,id:'r1',n:'0050元大台灣50'};
+  const second={...entry,id:'r2',n:'第一金 2892'};
+  const edit={kind:'edit_match',a:'cash',c:'投資',dt:date,amt:770,names:'["0050","2892","第一金"]'};
+  for(const [rows, expected] of [
+    [[first,{...second,a:'other'},{...second,id:'r3',dt:'2026-01-02'},{...second,id:'r4',c:'其他'}],'completed'],
+    [[first,second],'invalid'],
+    [[{...first,n:'10050'}],'invalid'],
+  ]) {
+    const f=fixture();
+    f.context.rows=rows;
+    await f.run('mutate(rows)');
+    const doc=command(edit,'chatgpt_'+'a'.repeat(36));
+    await process(f,doc);
+    assert.equal(doc.data()._ledgerInbox.state,expected);
+    assert.equal(f.rec.size,rows.length);
+    assert.equal(f.rec.get('r1').m,expected==='completed'?-770:-100);
+    assert.equal(doc.ref.deletes,0);
+    if(f.rec.has('r2'))assert.equal(f.rec.get('r2').m,-100);
+    const writes=f.Cloud.writes.length;
+    await process(f,doc);
+    assert.equal(f.Cloud.writes.length,writes);
+  }
+});
