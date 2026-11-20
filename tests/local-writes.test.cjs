@@ -472,5 +472,5 @@ test('模糊搜尋同時比對日期、時間、商家、帳戶、專案與分�
   assert.equal(result.rows[0].name,matching.n);
   assert.equal(result.rows[0].amount,208);
   assert.equal(result.rows[0].project,matching.p);
-  assert.equal(f.run('ledgerSearchRows(query,Array(13).fill(rows[0]),accounts).rows.length'),12);
+  assert.equal(f.run('ledgerSearchRows(query,Array(13).fill(rows[0]),accounts).rows.length'),5);
 });

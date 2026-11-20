@@ -582,7 +582,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.97';
+window.APP_VER='v2.0.98';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -2288,7 +2288,7 @@ function ledgerSearchRows(q,records,accounts){
   const rows=records.filter(r=>(!q.from||r.dt>=q.from)&&(!q.to||r.dt<=q.to)&&
     (q.end_time?(r.tm||'')>=q.time&&(r.tm||'')<=q.end_time:!q.time||(r.tm||'').startsWith(q.time))&&
     (q.amount===undefined||Math.abs(r.m)===q.amount)&&filters.every(([term,get])=>fuzzyLedgerText(get(r)).includes(term)));
-  return {total:rows.length,rows:rows.slice(0,12).map(r=>({date:r.dt,time:r.tm||'',name:String(r.n||'').slice(0,100),
+  return {total:rows.length,rows:rows.slice(0,5).map(r=>({date:r.dt,time:r.tm||'',name:String(r.n||'').slice(0,100),
     group_name:String(r.gn||'').slice(0,80),merchant:String(r.sh||'').slice(0,80),account:String(accounts.get(r.a)?.name||'').slice(0,80),
     project:String(r.p||'').slice(0,80),category:String(r.c||'').slice(0,80),subcategory:String(r.s||'').slice(0,80),
     amount:Math.abs(r.m),currency:r.cu||accounts.get(r.a)?.cur||'TWD',type:r.t}))};
@@ -2320,7 +2320,7 @@ async function publishLedgerSearch(db,owner,req,result){
     else tx.set(ref,{...botInfo(),chatgptSearchReplies:replies});
   }));
 }
-function isRetainedInbox(doc){const x=doc.data();return isChatGPTInboxId(doc.id)&&(x?.spv===1||x?.kind==='edit_match')}
+function isRetainedInbox(doc){const x=doc.data();return isChatGPTInboxId(doc.id)&&(x?.spv===1||['edit_match','ledger_search'].includes(x?.kind))}
 function inboxEditNames(x){
   let names;try{names=JSON.parse(x.names)}catch{return null}
   return Array.isArray(names)&&names.length>=2&&names.length<=8&&new Set(names).size===names.length&&
