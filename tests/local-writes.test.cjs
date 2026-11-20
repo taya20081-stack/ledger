@@ -47,7 +47,7 @@ function fixture(storage = {kv: new Map()}) {
   const context = vm.createContext({
     DB, S, D, Cloud, crypto: require('node:crypto').webcrypto, firebase: {firestore:{FieldValue:{serverTimestamp:()=>0}}}, GOLD_U: {}, CURS:['TWD'], window: {Cloud, addEventListener() {}}, structuredClone, setTimeout, clearTimeout,
     toast() {}, ensureCats() {}, recompute() {D.live = S.recs.filter(r => !r.x)}, scheduleRender() {},
-    isOsShop: () => false, async fixOsGroups() {}, r2: n => n, fmt: String, TODAY: () => '2026-01-01', NOWTM: () => '12:00',
+    val: r => r.m + (r.f || 0) + (r.d || 0), uid: () => require('node:crypto').randomUUID(), async fixOsGroups() {}, r2: n => n, fmt: String, TODAY: () => '2026-01-01', NOWTM: () => '12:00',
     balAt: () => D.live.reduce((sum,r) => sum + r.m, 0),
     addMonths(date, months) {return '2026-' + String(1 + months).padStart(2, '0') + '-01'}
   });
@@ -56,6 +56,7 @@ function fixture(storage = {kv: new Map()}) {
     section('let recordWrites', '/* ================= recurring'),
     section('async function renProj(', 'function ruleName('),
     section('async function renameSub(', '/* ================= record building'),
+    section('const OS_RATE=', '/* ===== MOZE'),
     section('const INBOX_SOURCES=', 'function inboxSharedStatus()'),
     'let inboxBusy=Promise.resolve();',
     section('const inboxAwaitingCloud=', 'function processInbox(docs)'),
@@ -336,7 +337,7 @@ test('ChatGPT 收據分項共享一組、同步後維持同組、完成憑證可
   assert.equal(f.rec.size,3);
   const records=[...f.rec.values()];
   assert.equal(new Set(records.map(r=>r.g)).size,1);
-  assert.ok(records.every(r=>r.p==='測試專案'&&r.sh==='測試商店'));
+  assert.ok(records.every(r=>r.p==='測試專案'&&r.sh==='測試商店'&&!r.gn));
   assert.equal(records.reduce((sum,r)=>sum+r.m,0),-35);
   assert.deepEqual(records.map(r=>[r.s,Math.abs(r.m)]),[['飲料',11],['點心',24],['舊分類',0]]);
   assert.equal(f.Cloud.writes.length,3);
@@ -353,6 +354,8 @@ test('ChatGPT 收據分項共享一組、同步後維持同組、完成憑證可
   });
   assert.equal((view.match(/data-act="grp-toggle"/g)||[]).length,1);
   assert.match(view,/>35<\/span>/);
+  assert.match(view,/>測試商店<\/div>/);
+  assert.doesNotMatch(view,/示例收據|示例飲品/);
   const wrong=command({...data,amt:36},'chatgpt_'+'c'.repeat(36));
   await process(f,wrong);
   assert.equal(wrong.data()._ledgerInbox.state,'invalid');
@@ -373,7 +376,8 @@ test('Claude 舊版 sp 保留，既有單分類照常入帳', async () => {
   await process(f,command(base,'legacy-single'));
   await process(f,command({...base,sp:JSON.stringify([{c:'生活',s:'舊分類',n:'甲',amt:10},{c:'生活',s:'舊分類',n:'乙',amt:20}])},'legacy-split'));
   assert.equal(f.D.live.length,3);
-  assert.equal(f.D.live.filter(r=>r.g).length,2);
+  assert.deepEqual(f.D.live.filter(r=>r.g).map(r=>[r.n,r.gn]),[['甲',undefined],['乙',undefined]]);
+  assert.equal(f.D.live.find(r=>!r.g).n,'範例');
   assert.equal(f.D.live.reduce((sum,r)=>sum+r.m,0),-60);
 });
 
@@ -388,6 +392,7 @@ test('多分類編輯沿用群組與發票，增刪分項後重新合計', () =>
   const read=()=>vm.runInContext('buildRecords0(form)',context);
   assert.equal(read().reduce((s,r)=>s+r.m,0),9);
   assert.equal(read().length,2);
+  assert.deepEqual(Array.from(read(),r=>[r.n,r.gn]),[['甲',undefined],['乙',undefined]]);
   context.form.splits.splice(0,1,{c:'生活',s:'飲料',n:'丙',amt:'6'});
   assert.equal(read().reduce((s,r)=>s+r.m,0),15);
   context.form.splits.pop();
@@ -404,4 +409,20 @@ test('展開收據時同時顯示商品名稱與分類', () => {
   });
   assert.match(view,/>測試商品<\/div>/);
   assert.match(view,/>生活／飲料<\/div>/);
+});
+
+
+test('海外消費與手續費共享一組，名稱只在分項，重送不重複記帳', async () => {
+  const f=fixture();
+  f.S.settings.osShops=['測試商店'];
+  const data={kind:'exp',amt:200,a:'cash',c:'生活',s:'舊分類',dt:'2026-01-01',n:'測試訂閱',sh:'測試商店'};
+  await process(f,command(data,'overseas-test'));
+  const items=[...f.rec.values()];
+  assert.deepEqual(items.map(r=>[r.n,r.m,r.gn]),[['測試訂閱',-200,undefined],['海外交易手續費',-3,undefined]]);
+  assert.ok(items[0].g);
+  assert.equal(items[0].g,items[1].g);
+  assert.ok(items[1].o>items[0].o);
+  await process(f,command(data,'overseas-test'));
+  assert.equal(f.rec.size,2);
+  assert.equal(f.D.live.reduce((sum,r)=>sum+r.m,0),-203);
 });
