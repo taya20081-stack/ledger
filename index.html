@@ -418,27 +418,28 @@ h1{font-weight:700}
 /* v2.0.37 列表：金額欄固定 7 位數寬，品名可延伸到金額旁；專案/帳戶標籤移到第二列靠右 */
 .row.hrow,.gkids .row.hrow{grid-template-columns:48px minmax(0,1fr) minmax(98px,auto);column-gap:10px;row-gap:3px}
 .gkids .row.hrow{grid-template-columns:36px minmax(0,1fr) minmax(98px,auto)}
-.row.hrow>.amt{display:contents}
+.row.hrow>.amt,.row.hrow .hlabels{display:contents}
 .row.hrow>.amt>.num{grid-column:3;grid-row:1;justify-self:end;white-space:nowrap}
-.row.hrow>.amt>small{grid-column:3;grid-row:2;justify-self:end;white-space:nowrap}
-.row.hrow>.amt>.pills,.row.hrow>.amt>.apill{grid-column:2/4;grid-row:2;justify-self:end;max-width:100%}
+.row.hrow>.amt>.hlabels>small{grid-column:3;grid-row:2;justify-self:end;white-space:nowrap}
+.row.hrow>.amt>.hlabels>.pills,.row.hrow>.amt>.apill{grid-column:2/4;grid-row:2;justify-self:end;max-width:100%}
 .row.hrow>.amt>.apill{max-width:none}
-.row.hrow:has(>.amt>.pills)>:first-child,.row.hrow:has(>.amt>.apill)>:first-child{grid-row:1/3;align-self:center}
+.row.hrow:has(>.amt>.hlabels>.pills)>:first-child,.row.hrow:has(>.amt>.apill)>:first-child{grid-row:1/3;align-self:center}
 .row.hrow>div[style*="min-width:0"]{grid-column:2;grid-row:1;align-self:center}
 .row.hrow .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .trl{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin-top:-4px;grid-column:2/-1;min-width:0}.row.hrow:has(>.trl)>:first-child{grid-row:1/3;align-self:center}.trl .apill{max-width:none;overflow:visible}.trl .arr{color:var(--muted);font-size:13px}
-/* 首頁交易列：第一行是名稱與金額，第二行是商家與標籤。 */
-.shell.home>.hlist>.hrow{height:62px;grid-template-columns:42px minmax(0,1fr) min(51%,13rem);grid-template-rows:22px 22px;align-content:center;gap:5px 8px;padding:6px 4px}
+/* 首頁交易列：金額保留七位數與貨幣符號、逗號的寬度。 */
+.shell.home>.hlist>.hrow{height:62px;grid-template-columns:42px minmax(0,1fr) max-content;grid-template-rows:22px 22px;align-content:center;gap:5px 8px;padding:6px 4px}
 .shell.home>.hlist>.hrow>.hb{width:42px;height:42px;font-size:22px;grid-row:1/3;align-self:center}
 .shell.home>.hlist>.hrow>div[style*="min-width:0"]{display:contents}
-.shell.home>.hlist>.hrow .t,.shell.home>.hlist>.hrow .s{grid-column:2;min-width:0}
-.shell.home>.hlist>.hrow .t{grid-row:1;line-height:22px}
-.shell.home>.hlist>.hrow .s{grid-row:2;line-height:18px}
-.shell.home>.hlist>.hrow>.amt{display:grid;grid-area:1/3/3/4;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:22px 22px;align-items:center;min-width:0;gap:5px 4px}
-.shell.home>.hlist>.hrow>.amt>.num{grid-area:1/2;line-height:22px}
-.shell.home>.hlist>.hrow>.amt>small{grid-area:1/1;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis}
-.shell.home>.hlist>.hrow>.amt>.pills,.shell.home>.hlist>.hrow>.amt>.apill{grid-area:2/1/3/3;flex-wrap:nowrap}
-.shell.home>.hlist>.hrow>.amt>.pills>*{min-width:0}
+.shell.home>.hlist>.hrow .t{grid-area:1/2;min-width:0;line-height:22px}
+.shell.home>.hlist>.hrow .s{grid-area:2/2/3/4;min-width:0;line-height:18px}
+.shell.home>.hlist>.hrow>.amt>.num{width:calc(7ch + 1.1em);text-align:right;line-height:22px}
+.shell.home>.hlist>.hrow .hlabels{display:flex;align-items:center;gap:4px;grid-area:2/2/3/4;justify-self:end;max-width:100%;min-width:0}
+.shell.home>.hlist>.hrow:has(.s) .hlabels{max-width:66%}
+.shell.home>.hlist>.hrow:has(.hlabels) .s{max-width:32%}
+.shell.home>.hlist>.hrow .hlabels>small{overflow:hidden;text-overflow:ellipsis}
+.shell.home>.hlist>.hrow .hlabels>.pills{flex-wrap:nowrap;min-width:0}
+.shell.home>.hlist>.hrow .hlabels>.pills>*{min-width:0}
 .shell.home>.hlist>.hrow>.trl{grid-row:2;flex-wrap:nowrap;margin-top:0}
 .shell.home>.hlist>.hrow>.trl .apill{min-width:0;overflow:hidden}
 .shell.home>.hlist>.hrow:has(>.trl)>div[style*="min-width:0"]{display:flex;align-items:baseline;gap:5px}
@@ -598,7 +599,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.103';
+window.APP_VER='v2.0.104';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -3347,7 +3348,7 @@ function homeRow(r,noShop){
   if(r.sh&&!noShop&&!isTr)sub.push(r.sh);const shop='';
   const conv=cur!=='TWD'&&!isTr?`<small class="num">≈ ${money(Math.round(Math.abs(val(r))*rateOf(curOf(r))),'TWD')}</small>`:'';
   const fut=r.dt>td;const sel=S.search.selMode&&S.search.sel.has(r.id);
-  return`<button class="row hrow${fut?' future':''}${sel?' sel':''}" data-act="${S.search.selMode?'sel-toggle':'edit-rec'}" data-id="${r.id}">${hbadge(r)}<div style="min-width:0"><div class="t">${esc(noShop?((r.n&&(r.rv===1||r.n!==noShop)?r.n:'')||r.s||r.c||titleOf(r)):titleOf(r))}</div>${sub.length||fut?`<div class="s">${fut?'<span class="pill warn" style="margin:0 6px 0 0">未入帳</span>':''}${esc(sub.join('・'))}</div>`:''}${shop?`<div class="s shp">🏪 ${esc(shop)}</div>`:''}</div><div class="amt">${amt}${conv}${(acct||(!isTr&&r.p))?`<span class="pills">${isTr?'':projPill(r.p)}${acct?`<span class="apill">${esc(acct)}</span>`:''}</span>`:''}</div>${trl}</button>`;
+  return`<button class="row hrow${fut?' future':''}${sel?' sel':''}" data-act="${S.search.selMode?'sel-toggle':'edit-rec'}" data-id="${r.id}">${hbadge(r)}<div style="min-width:0"><div class="t">${esc(noShop?((r.n&&(r.rv===1||r.n!==noShop)?r.n:'')||r.s||r.c||titleOf(r)):titleOf(r))}</div>${sub.length||fut?`<div class="s">${fut?'<span class="pill warn" style="margin:0 6px 0 0">未入帳</span>':''}${esc(sub.join('・'))}</div>`:''}${shop?`<div class="s shp">🏪 ${esc(shop)}</div>`:''}</div><div class="amt">${amt}${conv||acct||(!isTr&&r.p)?`<span class="hlabels">${conv}${(acct||(!isTr&&r.p))?`<span class="pills">${isTr?'':projPill(r.p)}${acct?`<span class="apill">${esc(acct)}</span>`:''}</span>`:''}</span>`:''}</div>${trl}</button>`;
 }
 const homeProjOk=r=>!S.settings.homeProj||r.p===S.settings.homeProj;
 function calCells(){
@@ -3407,7 +3408,7 @@ function receiptRow(ch,key){
   const pjt=aggTxt(ch.map(x=>x.p),'專案'),acn=aggTxt(ch.map(x=>D.acct.get(x.a)?.name||''),'帳戶');
   const sel=S.search.selMode&&ch.every(x=>S.search.sel.has(x.id));
   const label=grpTitle(ch),tag=ruleTag(r);
-  return `<button class="row hrow grpr${sel?' sel':''}" data-act="grp-toggle" data-g="${esc(key)}">${new Set(ch.map(x=>x.c)).size>1?'<span class="hb" style="--bc:#6BD66B">📁</span>':hbadge(big)}<div style="min-width:0"><div class="t">${esc(label)}</div>${tag?`<div class="s">${esc(tag)}</div>`:''}</div><div class="amt"><span class="num ${net<0?'neg':net>0?'pos':''}">${money(Math.abs(net),cur)}</span>${(pjt||acn)?`<span class="pills">${projPill(pjt)}${acn?`<span class="apill">${esc(acn)}</span>`:''}</span>`:''}</div></button>`;
+  return `<button class="row hrow grpr${sel?' sel':''}" data-act="grp-toggle" data-g="${esc(key)}">${new Set(ch.map(x=>x.c)).size>1?'<span class="hb" style="--bc:#6BD66B">📁</span>':hbadge(big)}<div style="min-width:0"><div class="t">${esc(label)}</div>${tag?`<div class="s">${esc(tag)}</div>`:''}</div><div class="amt"><span class="num ${net<0?'neg':net>0?'pos':''}">${money(Math.abs(net),cur)}</span>${(pjt||acn)?`<span class="hlabels"><span class="pills">${projPill(pjt)}${acn?`<span class="apill">${esc(acn)}</span>`:''}</span></span>`:''}</div></button>`;
 }
 function grpTitle(ch){const r=ch[0];if(r.sh)return r.sh;const ss=new Set(ch.map(x=>x.c+'・'+(x.s||'')));if(ss.size===1)return r.s||r.c;const cs=new Set(ch.map(x=>x.c));return cs.size===1?r.c:'多類別'}
 function grpSheet(g){
