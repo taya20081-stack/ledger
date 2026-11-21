@@ -427,15 +427,22 @@ h1{font-weight:700}
 .row.hrow>div[style*="min-width:0"]{grid-column:2;grid-row:1;align-self:center}
 .row.hrow .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .trl{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin-top:-4px;grid-column:2/-1;min-width:0}.row.hrow:has(>.trl)>:first-child{grid-row:1/3;align-self:center}.trl .apill{max-width:none;overflow:visible}.trl .arr{color:var(--muted);font-size:13px}
-/* 首頁明細：固定列高，名稱、補充資訊、帳戶標籤各有固定位置。 */
-.shell.home>.hlist>.hrow{height:78px;grid-template-rows:22px 14px 22px;align-content:center;row-gap:2px;padding:8px 4px}
-.shell.home>.hlist>.hrow>.hb{grid-row:1/4;align-self:center}
-.shell.home>.hlist>.hrow>div[style*="min-width:0"]{grid-row:1/3;align-self:start}
-.shell.home>.hlist>.hrow .t,.shell.home>.hlist>.hrow>.amt>.num{line-height:22px}
-.shell.home>.hlist>.hrow .s{line-height:14px}
-.shell.home>.hlist>.hrow>.amt>small{line-height:14px}
-.shell.home>.hlist>.hrow>.amt>.pills,.shell.home>.hlist>.hrow>.amt>.apill,.shell.home>.hlist>.hrow>.trl{grid-row:3;flex-wrap:nowrap;margin-top:0}
+/* 首頁交易列：第一行是名稱與金額，第二行是商家與標籤。 */
+.shell.home>.hlist>.hrow{height:62px;grid-template-columns:42px minmax(0,1fr) min(51%,13rem);grid-template-rows:22px 22px;align-content:center;gap:5px 8px;padding:6px 4px}
+.shell.home>.hlist>.hrow>.hb{width:42px;height:42px;font-size:22px;grid-row:1/3;align-self:center}
+.shell.home>.hlist>.hrow>div[style*="min-width:0"]{display:contents}
+.shell.home>.hlist>.hrow .t,.shell.home>.hlist>.hrow .s{grid-column:2;min-width:0}
+.shell.home>.hlist>.hrow .t{grid-row:1;line-height:22px}
+.shell.home>.hlist>.hrow .s{grid-row:2;line-height:18px}
+.shell.home>.hlist>.hrow>.amt{display:grid;grid-area:1/3/3/4;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:22px 22px;align-items:center;min-width:0;gap:5px 4px}
+.shell.home>.hlist>.hrow>.amt>.num{grid-area:1/2;line-height:22px}
+.shell.home>.hlist>.hrow>.amt>small{grid-area:1/1;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.shell.home>.hlist>.hrow>.amt>.pills,.shell.home>.hlist>.hrow>.amt>.apill{grid-area:2/1/3/3;flex-wrap:nowrap}
+.shell.home>.hlist>.hrow>.amt>.pills>*{min-width:0}
+.shell.home>.hlist>.hrow>.trl{grid-row:2;flex-wrap:nowrap;margin-top:0}
 .shell.home>.hlist>.hrow>.trl .apill{min-width:0;overflow:hidden}
+.shell.home>.hlist>.hrow:has(>.trl)>div[style*="min-width:0"]{display:flex;align-items:baseline;gap:5px}
+.shell.home>.hlist>.hrow:has(>.trl) .t{flex:none}
 /* 計算機鍵盤 */
 .calc{position:fixed;left:0;right:0;bottom:0;z-index:500;background:var(--paper2);border-top:1px solid var(--rule);padding:8px 8px calc(8px + env(safe-area-inset-bottom));box-shadow:0 -6px 20px rgba(0,0,0,.08)}
 .calc-pv{font:600 18px/1.3 var(--num,inherit);text-align:right;padding:4px 10px 8px;color:var(--muted,#777);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
@@ -591,7 +598,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.102';
+window.APP_VER='v2.0.103';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
