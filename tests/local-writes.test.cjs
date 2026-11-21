@@ -522,3 +522,23 @@ test('股票買入保存成交股數，改金額依原單價調整持股', async
   await vm.runInContext('holdSync()',c);
   assert.equal(f.S.settings.hold[0].sh,0);
 });
+
+test('發票可在原群組展開為各品項，維持原總額與分項專案', async () => {
+  const f=fixture();
+  const original='chatgpt_'+'a'.repeat(36), revise='chatgpt_'+'b'.repeat(36);
+  const base={spv:1,kind:'exp',a:'cash',cu:'TWD',dt:'2026-01-01',tm:'13:30',sh:'示例商家',n:'示例',inv:'AB-00000001',amt:30};
+  const line=(n,amt,p)=>({c:'生活',s:'舊分類',n,amt,...(p?{p}:{})});
+  await process(f,command({...base,sp:JSON.stringify([line('食材',30)])},original));
+  const input={...base,kind:'split_revise',target:original,sp:JSON.stringify([line('示例甲',20,'示例專案'),line('示例乙',10)])};
+  const wrong=command({...input,sh:'其他商家'},'chatgpt_'+'c'.repeat(36));
+  await process(f,wrong);
+  assert.equal(wrong.data()._ledgerInbox.state,'invalid');
+  const doc=command(input,revise);
+  await process(f,doc);
+  assert.equal(doc.data()._ledgerInbox.state,'completed');
+  assert.equal(f.D.live.length,2);
+  assert.deepEqual(f.D.live.map(r=>[r.n,r.m,r.p]),[['示例甲',-20,'示例專案'],['示例乙',-10,'']]);
+  assert.ok(f.D.live.every(r=>r.g==='ib_'+original+'_split'));
+  await process(f,doc);
+  assert.equal(f.D.live.length,2);
+});
