@@ -361,6 +361,9 @@ input[type=date].in,input[type=time].in{min-width:0;width:100%;display:block;-we
 .gdi span{font-size:11.5px;color:var(--muted)}
 .gdi b{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gl{margin-top:8px}
+/* 多類別明細：主交易原高 88px，加 3pt 後，分項列採相同高度。 */
+.gdh,.gl>.hrow{height:calc(88px + 3pt)}
+.gl>.hrow{align-content:center;grid-auto-rows:max-content}
 .gdh .grow{flex:1;min-width:0}.gdh .gdt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @keyframes slideL{from{opacity:.3;transform:translateX(28px)}to{opacity:1;transform:none}}
 @keyframes slideR{from{opacity:.3;transform:translateX(-28px)}to{opacity:1;transform:none}}
@@ -599,7 +602,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.106';
+window.APP_VER='v2.0.107';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
