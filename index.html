@@ -491,7 +491,7 @@ body.calc-on #sb{padding-bottom:330px}
 .savedfx span{width:104px;height:104px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:56px;box-shadow:0 10px 30px rgba(0,0,0,.2);animation:savedpop .85s ease-out forwards}
 @keyframes savedpop{0%{transform:scale(.4);opacity:0}25%{transform:scale(1.08);opacity:1}70%{transform:scale(1);opacity:1}100%{transform:scale(1);opacity:0}}
 .calc{border-radius:18px 18px 0 0;padding-top:6px}
-.calc-q{display:flex;gap:8px;overflow-x:auto;padding:4px 6px 8px;scrollbar-width:none}
+.calc-q{display:flex;align-items:center;gap:8px;height:44px;box-sizing:border-box;overflow-x:auto;padding:4px 6px 8px;scrollbar-width:none}
 .calc-q button{flex:none;border:1px solid var(--rule);background:var(--paper);color:var(--ink);border-radius:99px;padding:6px 14px;font-size:15px}
 .calc-pv{display:none}
 body.calc-on #sb{padding-bottom:370px}
@@ -538,7 +538,7 @@ body.calc-on #sb{padding-bottom:370px}
 .sheet.ed .mbtn{height:42px}.sheet.ed .mgrid{gap:7px;margin:6px 0}
 .sheet.ed .cgrid{gap:8px 4px}.sheet.ed .cpager .ctile .cbd{width:44px;height:44px;font-size:21px}
 .sheet.ed .cdots{margin:4px 0 6px}.sheet.ed .cstrip{padding:6px}
-.sheet.ed #ef-cat.split-compact{height:auto}
+.sheet.ed #ef-cat.split-compact{height:84px}
 .sheet.ed .split-compact .cstrip{gap:6px;padding:6px 3px 5px}
 .split-compact .ctile{width:58px;min-width:0;gap:3px;font-size:11px}
 .split-compact .ctile .cbd{width:34px;height:34px;font-size:18px}
@@ -591,7 +591,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.101';
+window.APP_VER='v2.0.102';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1686,7 +1686,7 @@ function renderEditor(){
   const tabsH=(!ei||showCat)?`<div class="mtabs" role="tablist">${tabs.map(([k,l])=>`<button class="${tabOn(k)?'on':''}" data-act="ef-kind" data-k="${k}">${l}</button>`).join('')}</div>`:'';
   sb.innerHTML=`  ${f.kind==='sys'?`<label class="field"><span>類型</span><select class="in" id="f-st" data-f="st" data-rr="1">${SYS_T.filter(t=>!SYS_HIDE.has(t)||f.st===t).map(t=>`<option ${t===f.st?'selected':''}>${t}</option>`).join('')}</select></label>`:''}
   ${f.kind==='debt'?`<div class="field"><span>動作</span><div class="chips">${Object.entries(DEBT_ACT).map(([k,v])=>`<button class="chip${f.act===k?' on':''}" data-act="ef-debt" data-k="${k}">${v[3]}<small style="opacity:.7">${v[0]==='應收款項'?'應收':'應付'}</small></button>`).join('')}</div></div><label class="field"><span>對象</span><input class="in" id="f-w" data-f="w" list="dl-who" value="${esc(f.w)}" placeholder="例如：家人、同事姓名"></label>`:''}
-  <div id="ef-cat"${ei&&f.splits&&!showCat?' class="split-compact"':''}>${tabsH}${showCat?'':strip}${grid}</div>${amtBox}${shareRow}${ei&&nameRow?`<div class="mcard">${nameRow}</div>`:nameRow}
+  <div id="ef-cat"${ei&&strip&&!showCat?' class="split-compact"':''}>${tabsH}${showCat?'':strip}${grid}</div>${amtBox}${shareRow}${ei&&nameRow?`<div class="mcard">${nameRow}</div>`:nameRow}
   ${ei?`<div class="mgrid">${acctBtn}${projBtn}${shopBtn}${modeBtn}${dateBtn}${timeBtn}<div class="mbtn inp${evalAmt(f.fee)>0?'':' ph'}"><input id="f-fee" data-f="fee" data-calc inputmode="${CALC_IM}" value="${esc(f.fee)}" placeholder="手續費"></div>${f.kind==='exp'&&!f._edit&&f.mode!=='inst'?`<button class="mbtn${f.os?' on':''}" data-act="ef-os">${f.os?'✓ 海外交易 1.5%':'海外交易'}</button>`:'<div></div>'}${!f._edit&&!(f.mode||f.rep)?`<label class="mbtn sel"><select id="f-post" data-f="post"><option value="">立即入帳</option><option value="m" ${f.post==='m'?'selected':''}>手動確認後入帳</option></select></label><button class="mbtn${f.dep?' on':''}" data-act="ef-deptog">${f.dep?'✓ 訂金尾款':'訂金尾款'}</button>`:''}${f._edit?`<button class="mbtn" data-act="ef-del" id="ef-del" style="color:var(--seal);grid-column:1/-1">刪除</button>`:`<button class="mbtn" data-act="ef-save" data-again="1" style="grid-column:1/-1">儲存並再記一筆</button>`}</div>`:`${acctRow}${projRow}${dateRow}`}
   ${!ei?feeRow+osRow:''}
   ${(!f._edit||(canConv&&f.mode))&&['exp','inc','tr'].includes(f.kind)?(()=>{const md=f.mode||(f.rep?'rep':'');const canI=f.kind==='exp'&&!f.splits;
@@ -4070,7 +4070,7 @@ if(CALC_TOUCH){const conv=root=>{(root.querySelectorAll?root:document).querySele
 let CK=null;   // 目前輸入中的欄位
 const CALC_KEYS=[['÷','×','−','+'],['7','8','9','⌫'],['4','5','6','AC'],['1','2','3','='],['.','0','00','完成']];
 function calcEl(){let k=$('#calc');if(k)return k;k=document.createElement('div');k.id='calc';k.className='calc';k.hidden=true;
-  k.innerHTML=`<div class="calc-q" id="calc-q" hidden></div><div class="calc-pv" id="calc-pv"></div><div class="calc-g">${CALC_KEYS.flat().map(x=>`<button type="button" data-ck="${x}" class="${/^[÷×−+=]$/.test(x)?'op':x==='完成'?'ok':x==='AC'||x==='⌫'?'fn':''}">${x}</button>`).join('')}</div>`;
+  k.innerHTML=`<div class="calc-q" id="calc-q"></div><div class="calc-pv" id="calc-pv"></div><div class="calc-g">${CALC_KEYS.flat().map(x=>`<button type="button" data-ck="${x}" class="${/^[÷×−+=]$/.test(x)?'op':x==='完成'?'ok':x==='AC'||x==='⌫'?'fn':''}">${x}</button>`).join('')}</div>`;
   document.body.appendChild(k);
   k.addEventListener('pointerdown',e=>{e.preventDefault();const q=e.target.closest('[data-cq]');if(q)return calcSet(q.dataset.cq);const b=e.target.closest('[data-ck]');if(b)calcKey(b.dataset.ck)});
   k.addEventListener('mousedown',e=>e.preventDefault());return k}
@@ -4089,7 +4089,7 @@ if(window.visualViewport)visualViewport.addEventListener('scroll',()=>{if($('#sh
 document.addEventListener('scroll',e=>{const t=e.target;if(t&&t.id==='sb'&&t.scrollLeft)t.scrollLeft=0;else if(t===document&&window.scrollX)window.scrollTo(0,window.scrollY)},true);
 function fixX(){if(window.scrollX)window.scrollTo(0,window.scrollY)}document.addEventListener('focusout',()=>setTimeout(fixX,350));window.addEventListener('resize',()=>setTimeout(fixX,100));if(window.visualViewport)visualViewport.addEventListener('resize',()=>setTimeout(fixX,100));document.addEventListener('visibilitychange',()=>setTimeout(fixX,100));
 function calcShow(el){CK=el;{const sb=el.closest('#sb');if(sb)sb.scrollLeft=0;window.scrollTo(0,window.scrollY)}const k=calcEl();k.hidden=false;document.body.classList.add('calc-on');calcPv();
-  {const q=$('#calc-q');if(q){let arr=[];if(el.id==='f-amt'&&EF&&EF.c){const e=recentIdx().by.get(EF.c+'\u0001'+EF.s);arr=(e?e.a:[]).slice(0,6)}q.innerHTML=arr.map(v=>`<button type="button" data-cq="${v}">${v}</button>`).join('');q.hidden=!arr.length}}
+  {const q=$('#calc-q');if(q){let arr=[];if(el.id==='f-amt'&&EF&&EF.c){const e=recentIdx().by.get(EF.c+'\u0001'+EF.s);arr=(e?e.a:[]).slice(0,6)}q.innerHTML=arr.map(v=>`<button type="button" data-cq="${v}">${v}</button>`).join('')}}
 
   setTimeout(()=>{const r=el.getBoundingClientRect(),kt=k.getBoundingClientRect().top;const sb=el.closest('#sb');if(sb&&(r.bottom>kt-12||r.top<80))sb.scrollBy({top:r.bottom-(kt-24),behavior:'smooth'})},60)}
 function calcHide(){const k=$('#calc');if(k)k.hidden=true;document.body.classList.remove('calc-on');CK=null}
