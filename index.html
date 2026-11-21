@@ -599,7 +599,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.105';
+window.APP_VER='v2.0.106';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -2500,7 +2500,7 @@ async function executeInbox(docs){
       if(x.kind==='split_probe'){dels.push(d.ref);continue}
       const lines=receiptInboxLines(x);
       if(x.kind==='split_revise'){
-        if(!isChatGPTInboxId(x.target)||!x.inv){reject('缺少原發票識別資料');continue}
+        if(!isChatGPTInboxId(x.target)||!x.inv||(x.revision!==undefined&&!isChatGPTInboxId(x.revision))){reject('缺少原發票識別資料');continue}
         const group='ib_'+x.target+'_split';
         const old=D.live.filter(r=>r.g===group).sort((a,b)=>(a.o||0)-(b.o||0));
         const acct=S.accts.find(a=>a.id===x.a);
@@ -2511,7 +2511,7 @@ async function executeInbox(docs){
           reject('原發票未找到、已變動或合計不同');continue;
         }
         const first=old[0];
-        const revised=lines.map((q,i)=>({...first,...old[i],id:old[i]?.id||id+'_line_'+i,
+        const revised=lines.map((q,i)=>({...first,...old[i],id:old[i]?.id||'ib_'+(x.revision||d.id)+'_line_'+i,
           c:q.c,s:q.s,n:q.n,m:-q.amt,p:q.p??String(x.p||'').slice(0,60),o:(first.o||0)+i}));
         await mutate(revised);scheduleRender();dels.push(d.ref);
         toast('ChatGPT 已更新 '+lines.length+' 個發票分項');continue;
@@ -2533,7 +2533,11 @@ async function executeInbox(docs){
       const owner=Cloud.user?.uid,db=Cloud.db;
       const request=await signedLedgerSearch(d,owner).catch(()=>null);
       if(!request||Cloud.user?.uid!==owner||Cloud.db!==db){reject('搜尋要求已逾時或簽章無效');continue}
-      const result=ledgerSearchRows(request.query,D.live,D.acct);
+      const result={...ledgerSearchRows(request.query,D.live,D.acct),app_version:window.APP_VER};
+      if(isChatGPTInboxId(request.revision_ref)){
+        const candidate=await inboxDeadline(db.doc('users/'+owner+'/inbox/'+request.revision_ref).get({source:'server'}));
+        if(candidate.data()?.kind==='split_revise')result.revision_status=candidate.data()._ledgerInbox?.state||'queued';
+      }
       await publishLedgerSearch(db,owner,request,result);
       dels.push(d.ref);continue;
     }
