@@ -599,7 +599,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.104';
+window.APP_VER='v2.0.105';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -2288,13 +2288,13 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 const inboxAwaitingCloud=new Map();
 // ChatGPT spv=1：sp 為已分攤實付的 JSON 陣列，inv 是發票號碼，保留完成文件去重。split_probe 只驗證，不入帳。
 function receiptInboxLines(x){
-  if(x.spv!==1||!['exp','inc','split_probe'].includes(x.kind)||x.rep||x.fee||x.os||typeof x.n!=='string'||!x.n.trim()||
+  if(x.spv!==1||!['exp','inc','split_probe','split_revise'].includes(x.kind)||x.rep||x.fee||x.os||typeof x.n!=='string'||!x.n.trim()||
     !/^\d{4}-\d{2}-\d{2}$/.test(x.dt||'')||!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(x.tm||'')||
     !S.accts.some(a=>a.id===x.a)||!CURS.includes(x.cu)||!(Number.isFinite(x.amt)&&x.amt>0))return null;
   let lines;try{lines=JSON.parse(x.sp)}catch{return null}
-  const categories=S.cats[x.kind==='split_probe'?'exp':x.kind];
+  const categories=S.cats[x.kind==='inc'?'inc':'exp'];
   if(!Array.isArray(lines)||!lines.length||lines.length>150||lines.some(q=>!q||typeof q.n!=='string'||!q.n.trim()||
-    !Number.isFinite(q.amt)||q.amt<0||!categories.some(c=>c.n===q.c&&(c.subs.length?c.subs.includes(q.s):q.s===''))))return null;
+    !Number.isFinite(q.amt)||q.amt<0||(q.p!==undefined&&(typeof q.p!=='string'||q.p.length>60))||!categories.some(c=>c.n===q.c&&(c.subs.length?c.subs.includes(q.s):q.s===''))))return null;
   const scale=x.cu==='TWD'?1:100;
   const units=lines.map(q=>q.amt*scale);
   return Math.abs(x.amt*scale-Math.round(x.amt*scale))<1e-6&&units.every(n=>Math.abs(n-Math.round(n))<1e-6)&&units.reduce((t,n)=>t+Math.round(n),0)===Math.round(x.amt*scale)?lines:null;
@@ -2498,14 +2498,32 @@ async function executeInbox(docs){
     if(x.spv===1){
       if(!isChatGPTInboxId(d.id)){reject('多類別指令來源不符');continue}
       if(x.kind==='split_probe'){dels.push(d.ref);continue}
-      const lines=receiptInboxLines(x),g=id+'_split';
+      const lines=receiptInboxLines(x);
+      if(x.kind==='split_revise'){
+        if(!isChatGPTInboxId(x.target)||!x.inv){reject('缺少原發票識別資料');continue}
+        const group='ib_'+x.target+'_split';
+        const old=D.live.filter(r=>r.g===group).sort((a,b)=>(a.o||0)-(b.o||0));
+        const acct=S.accts.find(a=>a.id===x.a);
+        const scale=x.cu==='TWD'?1:100;
+        if(!old.length||old.length>lines.length||old.some(r=>r.rv!==1||r.inv!==x.inv||r.a!==x.a||
+            r.dt!==x.dt||r.tm!==x.tm||r.sh!==x.sh||r.t!=='支出'||(r.cu||acct.cur)!==x.cu||r.f||r.d)||
+            old.reduce((sum,r)=>sum+Math.round(Math.abs(r.m)*scale),0)!==Math.round(x.amt*scale)){
+          reject('原發票未找到、已變動或合計不同');continue;
+        }
+        const first=old[0];
+        const revised=lines.map((q,i)=>({...first,...old[i],id:old[i]?.id||id+'_line_'+i,
+          c:q.c,s:q.s,n:q.n,m:-q.amt,p:q.p??String(x.p||'').slice(0,60),o:(first.o||0)+i}));
+        await mutate(revised);scheduleRender();dels.push(d.ref);
+        toast('ChatGPT 已更新 '+lines.length+' 個發票分項');continue;
+      }
+      const g=id+'_split';
       // 保留完成指令與確定性 ID，避免重送復活已編輯或刪除的分項。
       if(S.byId.has(id)||S.byId.has(id+'_0')||S.recs.some(r=>r.g===g||r.id.startsWith(id+'_'))){dels.push(d.ref);continue}
       const acct=S.accts.find(a=>a.id===x.a),expense=x.kind==='exp';
       const currency=x.cu&&x.cu!==acct.cur?{cu:x.cu,xr:+(fxOn(x.cu,x.dt)/fxOn(acct.cur,x.dt)).toPrecision(6)}:{};
       const stamp=Date.now();
       add.push(...lines.map((q,i)=>({id:id+'_'+i,a:acct.id,t:expense?'支出':'收入',c:q.c,s:q.s,m:expense?-q.amt:q.amt,
-        f:0,d:0,n:q.n,sh:x.sh||'',dt:x.dt,tm:x.tm,p:String(x.p||'').slice(0,60),ds:'',tg:'chatgpt',w:'',k:'',g,o:stamp+i,rv:1,inv:x.inv||'',...currency})));
+        f:0,d:0,n:q.n,sh:x.sh||'',dt:x.dt,tm:x.tm,p:q.p??String(x.p||'').slice(0,60),ds:'',tg:'chatgpt',w:'',k:'',g,o:stamp+i,rv:1,inv:x.inv||'',...currency})));
       dels.push(d.ref);continue;
     }
 
