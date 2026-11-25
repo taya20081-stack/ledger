@@ -9,9 +9,9 @@ on:
   workflow_dispatch:
     inputs:
       refresh_taiwan:
-        description: 手動補抓台股收盤價
+        description: 補抓台股收盤價（每日 14:25 的外部觸發不帶參數，所以預設要抓）
         type: boolean
-        default: false
+        default: true
 permissions:
   contents: write
 concurrency:   # 外部排程與 GitHub 排程同時觸發時排隊執行，避免互相覆蓋 prices.json
@@ -192,7 +192,7 @@ jobs:
           PY
       - name: 安裝 Playwright（使用 runner 內建的 Chrome）
         continue-on-error: true
-        run: python3 -m pip install -q playwright==1.51.0 pyee==12.1.1 greenlet==3.1.1 typing-extensions==4.12.2
+        run: python3 -m pip install -q playwright==1.51.0 pyee==12.1.1 greenlet==3.2.4 typing-extensions==4.12.2
       - name: 黃金牌價（臺灣銀行黃金存摺・本行買進・每公克）
         run: python3 scripts/bank_gold.py
       - name: 提交
