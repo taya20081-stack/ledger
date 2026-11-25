@@ -1,0 +1,203 @@
+name: 股票收盤價
+on:
+  schedule:
+    - cron: '10 6 * * 1-5'    # 台灣 14:10，首批約 14:00 產製後 10 分鐘
+    - cron: '40 9 * * 1-5'    # 台灣 17:40，第三批約 17:30 產製後 10 分鐘
+    - cron: '30 12 * * 1-5'   # 20:30 補抓金價、匯率
+    - cron: '30 22 * * 1-5'   # 週二至週六 06:30（台灣時間），美股收盤後
+    - cron: '10 1 * * 6'      # 週六 09:10 補抓（臺銀黃金週五晚間最後掛牌）
+  workflow_dispatch:
+    inputs:
+      refresh_taiwan:
+        description: 手動補抓台股收盤價
+        type: boolean
+        default: false
+permissions:
+  contents: write
+concurrency:   # 外部排程與 GitHub 排程同時觸發時排隊執行，避免互相覆蓋 prices.json
+  group: prices-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: 抓取上市、上櫃收盤價
+        if: inputs.refresh_taiwan == true || github.event.schedule == '10 6 * * 1-5' || github.event.schedule == '40 9 * * 1-5'
+        run: |
+          python3 - <<'PY'
+          import json, os, re, urllib.request, datetime, math
+          from concurrent.futures import ThreadPoolExecutor
+          TW = datetime.timezone(datetime.timedelta(hours=8))
+          HDR = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36', 'Accept': 'application/json,text/csv,*/*'}
+          def get(url):
+              with urllib.request.urlopen(urllib.request.Request(url, headers=HDR), timeout=40) as r:
+                  return r.read().decode('utf-8-sig', 'ignore')
+          def num(v):
+              try:
+                  value = float(str(v).replace(',', '').strip())
+                  return value if math.isfinite(value) else 0.0
+              except Exception: return 0.0
+          def roc(d):   # 1151111 → 2026-11-11
+              d = re.sub(r'\D', '', str(d))
+              if len(d) == 7:
+                  d = str(int(d[:3]) + 1911) + d[3:]
+              try:
+                  return datetime.datetime.strptime(d, '%Y%m%d').date().isoformat() if len(d) == 8 else ''
+              except ValueError:
+                  return ''
+          old = json.load(open('prices.json', encoding='utf-8')) if os.path.exists('prices.json') else {'d': '', 'p': {}}
+          p = {k: v for k, v in old.get('p', {}).items() if not (len(v) > 2 and v[2] == 'USD')}; day = ''
+          today = datetime.datetime.now(TW).strftime('%Y-%m-%d')
+          def mi_index(d):   # 證交所「每日收盤行情」，比對官方資料日期，取正式收盤價
+              j = json.loads(get('https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?response=json&date=%s&type=ALLBUT0999' % d.replace('-', '')))
+              out = {}
+              if j.get('stat') != 'OK' or roc(j.get('date')) != d:
+                  return out
+              for t in j.get('tables', []) or []:
+                  if '每日收盤行情' not in (t.get('title') or ''): continue
+                  f = t.get('fields') or []
+                  ic, iname, iv = f.index('證券代號'), f.index('證券名稱'), f.index('收盤價')
+                  for r in t.get('data') or []:
+                      v = num(re.sub('<[^>]+>', '', str(r[iv])))
+                      if r[ic] and v > 0: out[str(r[ic]).strip()] = [str(r[iname]).strip(), v]
+              return out
+          def tpex_day(d):   # 櫃買中心當日收盤
+              y, m, dd = d.split('-')
+              j = json.loads(get('https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes?date=%s%%2F%s%%2F%s&id=&response=json' % (y, m, dd)))
+              out = {}
+              for t in j.get('tables', []) or []:
+                  # 櫃買的資料日期可能是西元或民國，必須和請求日吻合。
+                  if roc(t.get('date') or j.get('date')) != d:
+                      continue
+                  f = t.get('fields') or []
+                  if '代號' not in f or '收盤' not in f: continue
+                  ic, iname, iv = f.index('代號'), f.index('名稱'), f.index('收盤')
+                  for r in t.get('data') or []:
+                      v = num(r[iv])
+                      if r[ic] and v > 0: out[str(r[ic]).strip()] = [str(r[iname]).strip(), v]
+              return out
+          def openapi_twse():
+              rows = json.loads(get('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL')); dates = set(); out = {}
+              for r in rows:
+                  c, v = r.get('Code', ''), num(r.get('ClosingPrice'))
+                  if c and v > 0: out[c] = [r.get('Name', ''), v]
+                  dates.add(roc(r.get('Date', '')))
+              return (dates.pop(), out) if len(dates) == 1 and '' not in dates else ('', {})
+          def openapi_tpex():
+              rows = json.loads(get('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes')); dates = set(); out = {}
+              for r in rows:
+                  c = r.get('SecuritiesCompanyCode') or r.get('Code') or ''
+                  v = num(r.get('Close') or r.get('ClosingPrice'))
+                  if c and v > 0: out[c] = [r.get('CompanyName') or r.get('Name', ''), v]
+                  dates.add(roc(r.get('Date', '')))
+              return (dates.pop(), out) if len(dates) == 1 and '' not in dates else ('', {})
+          def latest_market(label, daily, fallback, minimum):
+              for back in range(6):
+                  d = (datetime.date.fromisoformat(today) - datetime.timedelta(days=back)).isoformat()
+                  try:
+                      quotes = daily(d)
+                      if len(quotes) > minimum:
+                          return d, quotes
+                  except Exception as e:
+                      print(label, d, '失敗', repr(e)[:120])
+                  # 當日報表尚未發布時，優先嘗試同市場的另一個官方來源。
+                  if back == 0:
+                      try:
+                          date, quotes = fallback()
+                          if date <= today and len(quotes) > minimum:
+                              return date, quotes
+                      except Exception as e:
+                          print(label, 'OpenAPI 失敗', repr(e)[:120])
+              return '', {}
+
+          with ThreadPoolExecutor(max_workers=2) as pool:
+              listed = pool.submit(latest_market, '上市', mi_index, openapi_twse, 500)
+              otc = pool.submit(latest_market, '上櫃', tpex_day, openapi_tpex, 200)
+              markets = [listed.result(), otc.result()]
+          previous_day = old.get('d', '')
+          day = max(previous_day, *(date for date, _ in markets))
+          # 停牌或暫缺的報價保留自身日期，各市場可獨立更新。
+          p = {code: value if code == 'GOLD' or len(value) > 3 else [*value[:2], 'TWD', previous_day]
+               for code, value in p.items()}
+          for date, quotes in markets:
+              print('報價日', date, '檔數', len(quotes))
+              for code, value in quotes.items():
+                  if code not in p or p[code][3] <= date:
+                      p[code] = [*value, 'TWD', date]
+          out = {'d': day or old.get('d', ''), 'u': datetime.datetime.now(TW).strftime('%Y-%m-%d %H:%M'), 'p': p}
+          if out['p'] != old.get('p') or out['d'] != old.get('d'):
+              json.dump(out, open('prices.json', 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
+              print('已更新 prices.json，共', len(p), '檔')
+          else: print('沒有變動')
+          PY
+      - name: 先發布台股收盤價
+        if: inputs.refresh_taiwan == true || github.event.schedule == '10 6 * * 1-5' || github.event.schedule == '40 9 * * 1-5'
+        run: bash scripts/push_generated.sh prices.json "更新台股收盤價"
+      - name: 美股收盤價（只寫進你的私人收件匣，不公開）
+        if: github.ref == 'refs/heads/main'
+        continue-on-error: true
+        env:
+          OWNER_UID: ${{ secrets.OWNER_UID }}
+          BOT_EMAIL: ${{ secrets.BOT_EMAIL }}
+          BOT_PASSWORD: ${{ secrets.BOT_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, datetime, math, urllib.request
+          from zoneinfo import ZoneInfo
+          E = os.environ
+          if not (E.get('OWNER_UID') and E.get('BOT_EMAIL') and E.get('BOT_PASSWORD')):
+              print('尚未設定記帳助理密鑰，略過美股'); raise SystemExit(0)
+          KEY = 'AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo'   # 與網站相同，本來就是公開的
+          BASE = 'https://firestore.googleapis.com/v1/projects/money-app-54e0d/databases/(default)/documents/users/' + E['OWNER_UID']
+          HDR = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36', 'Referer': 'https://taya20081-stack.github.io/ledger/'}   # 金鑰若限制網域，排程也能用
+          def req(url, body=None, h=None):
+              r = urllib.request.Request(url, data=json.dumps(body).encode() if body is not None else None, headers={'Content-Type': 'application/json', **HDR, **(h or {})})
+              return urllib.request.urlopen(r, timeout=40).read().decode('utf-8-sig', 'ignore')
+          tok = json.loads(req('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + KEY,
+                               {'email': E['BOT_EMAIL'], 'password': E['BOT_PASSWORD'], 'returnSecureToken': True}))['idToken']
+          A = {'Authorization': 'Bearer ' + tok}
+          info = json.loads(req(BASE + '/kv/botinfo', h=A)).get('fields', {})
+          tick = json.loads(info.get('us', {}).get('stringValue', '[]') or '[]')
+          tick = [t for t in tick if re.fullmatch(r'[A-Z][A-Z.\-]{0,9}', t)]
+          print('持有美股', len(tick), '檔')   # 不印代號，避免出現在公開的執行紀錄
+          p = {}; day = ''
+          ny = datetime.datetime.now(ZoneInfo('America/New_York'))
+          latest_day = ny.date() if ny.hour >= 16 else ny.date() - datetime.timedelta(days=1)
+          for t in tick:
+              v, d = 0.0, ''
+              try:
+                  chart = json.loads(req('https://query1.finance.yahoo.com/v8/finance/chart/%s?range=5d&interval=1d' % t))['chart']['result'][0]
+                  for stamp, close in reversed(list(zip(chart['timestamp'], chart['indicators']['quote'][0]['close']))):
+                      quote_day = datetime.datetime.fromtimestamp(stamp, ny.tzinfo).date()
+                      if close and quote_day <= latest_day:
+                          v, d = float(close), quote_day.isoformat()
+                          break
+              except Exception: pass
+              if v <= 0:
+                  try:
+                      c = req('https://stooq.com/q/l/?s=%s.us&f=sd2t2c&h&e=csv' % t.lower()).splitlines()[1].split(',')
+                      v = float(c[3]); d = c[1]
+                  except Exception: pass
+              try:
+                  date = datetime.date.fromisoformat(d)
+                  if math.isfinite(v) and v > 0 and date <= latest_day and (ny.date() - date).days <= 7:
+                      p[t] = [t, v, 'USD', d]; day = max(day, d)
+              except (ValueError, TypeError):
+                  pass
+          print('取得', len(p), '檔')
+          if p:
+              req(BASE + '/inbox', {'fields': {'kind': {'stringValue': 'px'}, 'd': {'stringValue': day}, 'p': {'stringValue': json.dumps(p)}}}, A)
+              print('已寫入收件匣')
+          PY
+      - name: 安裝 Playwright（使用 runner 內建的 Chrome）
+        continue-on-error: true
+        run: python3 -m pip install -q playwright==1.51.0 pyee==12.1.1 greenlet==3.1.1 typing-extensions==4.12.2
+      - name: 黃金牌價（臺灣銀行黃金存摺・本行買進・每公克）
+        run: python3 scripts/bank_gold.py
+      - name: 提交
+        run: bash scripts/push_generated.sh prices.json "更新股票與黃金牌價"
+  rates:   # 股價、金價存好之後接著更新匯率，同一個排程就能更新三項（股價失敗也照樣更新匯率，被取消則不跑）
+    needs: fetch
+    if: ${{ !cancelled() }}
+    uses: ./.github/workflows/rates.yml

@@ -1,0 +1,35 @@
+// 測試用合成規則，包含假帳號，勿部署至正式 Firebase。
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/inbox/{id} {
+      function owner() {
+        return request.auth != null && request.auth.uid == uid;
+      }
+
+      // 正式整合時合併至現行 match，避免其他 allow update 分支放寬限制。
+      function validInboxTransition() {
+        let step = request.resource.data._ledgerInbox;
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['_ledgerInbox'])
+          && step is map
+          && step.keys().hasAll(['state', 'token', 'at'])
+          && step.keys().hasOnly(['state', 'token', 'at'])
+          && step.token is string
+          && step.token.size() == 36
+          && step.at == request.time
+          && (
+            (!('_ledgerInbox' in resource.data) && step.state == 'processing')
+            || (('_ledgerInbox' in resource.data)
+              && resource.data._ledgerInbox.state == 'processing'
+              && step.token == resource.data._ledgerInbox.token
+              && step.state in ['completed', 'invalid', 'review'])
+          );
+      }
+
+      allow get, list, delete: if owner();
+      allow create: if request.auth != null && request.auth.uid == 'fixture-bot'
+                    && !('_ledgerInbox' in request.resource.data);
+      allow update: if owner() && validInboxTransition();
+    }
+  }
+}
