@@ -20,8 +20,8 @@ python3 -c "import re;s=open('index.html',encoding='utf-8').read();open('/tmp/ap
 
 ## Release convention (every app change)
 
-1. Bump the version in **both** `index.html` (`window.APP_VER='v2.0.N'`, ~line 570) and `sw.js` (`const CACHE='passbook-ledger-v2.0.N'`). The SW cache name is what forces clients to pick up the new `index.html`; forgetting it leaves users on the old version.
-2. Commit message format: `v2.0.N: <繁中描述>`.
+1. Bump the version in **both** `index.html` (`window.APP_VER='v3.0.N'`, ~line 700) and `sw.js` (`const CACHE='passbook-ledger-v3.0.N'`). The SW cache name is what forces clients to pick up the new `index.html`; forgetting it leaves users on the old version.
+2. Commit message format: `v3.0.N: <繁中描述>` (v2.0.x ended at v2.0.136).
 3. GitHub Actions bots commit `prices.json`, `rates.json`, `push-sent.json` to `main` several times a day — fetch/merge before pushing to avoid rejected pushes.
 
 ## Architecture (index.html)
