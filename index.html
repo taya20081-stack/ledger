@@ -695,7 +695,7 @@ body.kb-on .sheet.ed{height:auto;bottom:var(--kbh,0px)}
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v2.0.135';
+window.APP_VER='v2.0.136';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -4611,7 +4611,8 @@ document.addEventListener('change',asyncAction(async e=>{const t=e.target;
   if(t.id==='rc-file'&&t.files&&t.files[0]){const txt=await readTextFile(t.files[0]);t.value='';rcRun(t.dataset.id,txt)}}));
 
 /* ---------- 推播提醒：App 把未來 30 天的提醒寫到 kv/notify，GitHub 排程每小時用記帳助理帳號讀取並發送 ---------- */
-const VAPID_PUB='BNRR8U8w982WoTEk56OYHNbsQoQVSy-QuWDQTiQLJ8XUW-X1OttHDlcHIPETchMOL8D4lIuzxDpdajLHoJDVbIU';
+const VAPID_PUB='BOHdJcTqC1Qbq4Zp_tkaRJ-rLY3UqzL24ZG67TFkDC-9y5GFY7cyDUxBh6GvvE-IN9ccRG-lIDO1ZawND-Ajq8U';
+const VAPID_KID=VAPID_PUB.slice(0,16);   // pushSubs 記下訂閱時用的公鑰，換金鑰後舊訂閱會自動重訂
 function ntfCfg(){return Object.assign({card:1,rule:1,pend:1,ruleMin:0},S.settings.ntf||{})}
 function notifyItems(){const c=ntfCfg();const td=TODAY(),to=addDays(td,30);const out=[];const add=(dt,tm,id,t,b)=>{if(dt>=td&&dt<=to)out.push({id,at:dt+'T'+tm,t,b})};
   if(c.card)for(const a of S.accts){if(a.arch||a.grp!=='信用卡')continue;const cc=cardCycle(a);if(!cc||!cc.due||!(cc.remain>0))continue;const amt=money(Math.round(cc.remain));
@@ -4626,13 +4627,23 @@ async function ntfSync(force){if(!window.Cloud||!Cloud.user||!Cloud.db)return;co
 function ntfLater(){clearTimeout(_ntfT);_ntfT=setTimeout(()=>ntfSync(),4000)}
 {const _m=mutate;mutate=async function(add=[],del=[]){await _m(add,del);ntfLater()}}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.ready)ntfLater()});
+{const _nl=ntfLater;ntfLater=function(){_nl.apply(this,arguments);ntfRekey()}}
+{let n=0;const t=()=>{if(ntfRekey.done||++n>40)return;if(S.ready&&window.Cloud&&Cloud.user)ntfRekey();setTimeout(t,3000)};setTimeout(t,3000)}
 function b64u(s){const p='='.repeat((4-s.length%4)%4);const b=atob((s+p).replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from(b,c=>c.charCodeAt(0))}
 async function ntfEnable(){if(!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window))return toast(/iPhone|iPad/.test(navigator.userAgent)&&!navigator.standalone?'請先用 Safari「分享 → 加入主畫面」，再從主畫面打開 App 開啟通知':'這個瀏覽器不支援推播');
   if(!window.Cloud||!Cloud.user)return toast('請先登入雲端同步');
   const perm=await Notification.requestPermission();if(perm!=='granted')return toast('沒有取得通知權限，可到 iPhone 設定 → 通知 開啟');
-  try{const reg=await navigator.serviceWorker.ready;let sub=await reg.pushManager.getSubscription();if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(VAPID_PUB)});
-    const j=sub.toJSON();const subs=(S.settings.pushSubs||[]).filter(x=>x.endpoint!==j.endpoint);subs.push({endpoint:j.endpoint,keys:j.keys,dev:(navigator.userAgent.match(/iPhone|iPad|Mac|Android|Windows/)||['裝置'])[0],at:TODAY()});
+  try{const reg=await navigator.serviceWorker.ready;let sub=await reg.pushManager.getSubscription();const old=sub&&sub.endpoint;
+    if(sub&&!(S.settings.pushSubs||[]).some(x=>x.endpoint===old&&x.k===VAPID_KID)){await sub.unsubscribe();sub=null}
+    if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(VAPID_PUB)});
+    const j=sub.toJSON();const subs=(S.settings.pushSubs||[]).filter(x=>x.endpoint!==j.endpoint&&x.endpoint!==old);subs.push({endpoint:j.endpoint,keys:j.keys,k:VAPID_KID,dev:(navigator.userAgent.match(/iPhone|iPad|Mac|Android|Windows/)||['裝置'])[0],at:TODAY()});
     S.settings.pushSubs=subs.slice(-5);await saveKV('settings');await ntfSync(true);render(true);toast('已開啟推播提醒')}catch(e){toast('開啟失敗：'+(e.message||e))}}
+async function ntfRekey(){if(ntfRekey.done||!S.ready||!window.Cloud||!Cloud.user||!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window)||Notification.permission!=='granted')return;ntfRekey.done=true;
+  try{const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();if(!sub)return;const old=sub.endpoint;
+    if((S.settings.pushSubs||[]).some(x=>x.endpoint===old&&x.k===VAPID_KID))return;
+    await sub.unsubscribe();const ns=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(VAPID_PUB)});const j=ns.toJSON();
+    const subs=(S.settings.pushSubs||[]).filter(x=>x.endpoint!==old&&x.endpoint!==j.endpoint);subs.push({endpoint:j.endpoint,keys:j.keys,k:VAPID_KID,dev:(navigator.userAgent.match(/iPhone|iPad|Mac|Android|Windows/)||['裝置'])[0],at:TODAY()});
+    S.settings.pushSubs=subs.slice(-5);await saveKV('settings');await ntfSync(true)}catch(e){ntfRekey.done=false}}
 async function ntfDisable(){try{const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();if(sub){const ep=sub.endpoint;await sub.unsubscribe();S.settings.pushSubs=(S.settings.pushSubs||[]).filter(x=>x.endpoint!==ep)}}catch(e){}
   await saveKV('settings');await ntfSync(true);render(true);toast('這台裝置已關閉推播')}
 function pageNotify(){const c=ntfCfg();const subs=S.settings.pushSubs||[];const items=notifyItems();const perm=('Notification' in window)?Notification.permission:'unsupported';
