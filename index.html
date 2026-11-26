@@ -451,7 +451,12 @@ body.calc-on #sb{padding-bottom:330px}
 .sheet.ed{top:0;bottom:0;max-height:none;height:100%;border-radius:0}
 .sheet.ed .sh{padding-top:calc(10px + env(safe-area-inset-top,0px));border-bottom:0}
 .sheet.ed .sh h2{text-align:center;font-size:18px}
-.sheet.ed .sh .okb{color:var(--accent);font-size:24px;font-weight:700}
+.sheet.ed .sh .editor-head-spacer{width:44px;flex:none}
+.transfer-accounts{display:grid;grid-template-columns:minmax(0,1fr) 44px minmax(0,1fr);align-items:end;gap:8px}
+.transfer-accounts .field{min-width:0}
+.transfer-accounts .in,.transfer-swap{min-height:44px}
+.transfer-swap{display:grid;place-items:center;padding:0;border:1px solid var(--rule);border-radius:10px;background:var(--paper2);color:var(--ink);font-size:22px;touch-action:manipulation}
+.transfer-swap:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 @media (min-width:700px){.sheet.ed{top:50%;bottom:auto;height:min(880px,94vh);border-radius:18px}}
 .mtabs{display:flex;gap:20px;overflow-x:auto;border-bottom:1px solid var(--rule);margin:-14px 0 14px;padding:0;scrollbar-width:none}
 .mtabs::-webkit-scrollbar{display:none}
@@ -679,6 +684,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 .efbar .btn{min-height:52px;font-size:17px;border-radius:14px}
 .efbar .btn.pri{flex:1}
 .efbar .btn:not(.pri){flex:0 0 34%}
+.efbar.scoped .btn:not(.pri){flex-basis:50%}
 body.calc-on .sheet.ed{height:auto;bottom:var(--calch,300px)}
 body.calc-on .sheet.ed #sb{padding-bottom:16px}
 body.calc-on .sheet.ed .efbar{padding-bottom:10px}
@@ -1786,7 +1792,7 @@ function acctOptions(sel,allowEmpty){return(allowEmpty?'<option value="">選擇�
 function catOptions(kind,c,s){return S.cats[kind].map(m=>`<optgroup label="${esc(m.n)}">${(m.subs.length?m.subs:['']).map(x=>`<option value="${esc(m.n+'\u0001'+x)}" ${m.n===c&&x===s?'selected':''}>${esc(m.n)}${x?' / '+esc(x):''}</option>`).join('')}</optgroup>`).join('')}
 function openEditor(fs,isEdit){
   if(!S.accts.length){toast('請先建立帳戶');return}
-  openSheet(isEdit?'編輯記錄':'記一筆','',{});{const sh=$('#sheet');sh.classList.add('ed');const hd=sh.querySelector('.sh');const t=hd.querySelector('h2').textContent;hd.innerHTML=`<button class="ibtn" data-act="close-sheet" aria-label="關閉">${IC.x}</button><h2>${esc(t)}</h2>${isEdit?"":`<button class="ibtn camb" data-act="cam-open" aria-label="相機">${IC.cam}</button>`}<button class="ibtn okb" data-act="ef-save" aria-label="儲存">✓</button>`}EF=fs;EF._edit=!!isEdit;if(isEdit&&fs.kind==='exp')fs._tab='full';renderEditor();
+  openSheet(isEdit?'編輯記錄':'記一筆','',{});{const sh=$('#sheet');sh.classList.add('ed');const hd=sh.querySelector('.sh');const t=hd.querySelector('h2').textContent;hd.innerHTML=`<button class="ibtn" data-act="close-sheet" aria-label="關閉">${IC.x}</button><h2>${esc(t)}</h2>${isEdit?'<span class="editor-head-spacer" aria-hidden="true"></span>':`<button class="ibtn camb" data-act="cam-open" aria-label="相機">${IC.cam}</button>`}`}EF=fs;EF._edit=!!isEdit;if(isEdit&&fs.kind==='exp')fs._tab='full';renderEditor();
   if(!isEdit)setTimeout(()=>{const el=$('#f-amt');el&&!isMobile()&&EF&&EF.c&&el.focus()},80);
 }
 const WDN=['日','一','二','三','四','五','六'];
@@ -1837,7 +1843,7 @@ function renderEditor(){
   const dateBtn=`<label class="mbtn ov" data-ic="📅"><span id="f-dt-x">${dateBtnText(f.dt)}</span><input type="date" id="f-dt" data-f="dt" data-rr="1" value="${f.dt}"></label>`;
   const timeBtn=`<button type="button" class="mbtn tmb" data-act="tw-open"><span id="f-tm-x">${esc(f.tm)}</span></button>`;
   const dateRow=`<div class="grid2"><label class="field"><span>日期</span><input class="in" type="date" id="f-dt" data-f="dt" value="${f.dt}"></label><label class="field"><span>時間</span><input class="in" type="time" id="f-tm" data-f="tm" value="${f.tm}"></label></div>`;
-  const acctRow=f.kind==='tr'?`<div class="grid2"><label class="field"><span>從</span><select class="in" id="f-a" data-f="a" data-rr="1">${acctOptions(f.a,1)}</select></label><label class="field"><span>到</span><select class="in" id="f-a2" data-f="a2" data-rr="1">${acctOptions(f.a2,1)}</select></label></div>${diffCur?`<label class="field"><span>轉入金額（${acB.cur}）${f._sugg&&!f.amt2?' · 依匯率約 '+fmt(f._sugg,acB.cur):''}</span><input class="in num" id="f-amt2" data-f="amt2" data-calc inputmode="${CALC_IM}" value="${esc(f.amt2||'')}" placeholder="${f._sugg||''}"></label>`:''}`
+  const acctRow=f.kind==='tr'?`<div class="transfer-accounts"><label class="field"><span>從</span><select class="in" id="f-a" data-f="a" data-rr="1">${acctOptions(f.a,1)}</select></label><button type="button" class="transfer-swap" data-act="ef-swap-accts" aria-label="對調轉出與轉入帳戶" title="對調帳戶"><span aria-hidden="true">⇄</span></button><label class="field"><span>到</span><select class="in" id="f-a2" data-f="a2" data-rr="1">${acctOptions(f.a2,1)}</select></label></div>${diffCur?`<label class="field"><span>轉入金額（${acB.cur}）${f._sugg&&!f.amt2?' · 依匯率約 '+fmt(f._sugg,acB.cur):''}</span><input class="in num" id="f-amt2" data-f="amt2" data-calc inputmode="${CALC_IM}" value="${esc(f.amt2||'')}" placeholder="${f._sugg||''}"></label>`:''}`
     :`<label class="field"><span>帳戶</span><select class="in" id="f-a" data-f="a" data-rr="1">${acctOptions(f.a)}</select></label>`;
   const acctBtn=`<label class="mbtn sel" data-ic="👛"><select id="f-a" data-f="a" data-rr="1" aria-label="${f.splits?(f._si===-1?'帳戶（整筆）':'帳戶（此分項）'):'帳戶'}">${acctOptions(f.a)}</select></label>`;
   const feeRow=['exp','inc','tr'].includes(f.kind)?`<label class="field"><span>手續費${ei&&f.cu&&f.cu!==cur?'（'+f.cu+'）':''}</span><input class="in num" id="f-fee" data-f="fee" data-calc inputmode="${CALC_IM}" value="${esc(f.fee)}" placeholder="0"></label>`:'';
@@ -1896,7 +1902,7 @@ function renderEditor(){
     if(ei)return f.dep?`<div class="grid2"><label class="field"><span>總金額（上面金額＝訂金）</span><input class="in num" id="f-depT" data-f="depT" data-calc inputmode="${CALC_IM}" value="${esc(f.depT||'')}"></label><label class="field"><span>尾款預計日期</span><input class="in" type="date" id="f-depD" data-f="depD" value="${esc(f.depD||'')}"></label></div>`:'';
     return modeControl+`<div class="grid2">${postSel}<label class="field"><span>訂金尾款追蹤</span><select class="in" id="f-dep" data-act-change="ef-dep"><option value="">關閉</option><option value="1" ${f.dep?'selected':''}>開啟</option></select></label></div>${f.dep?`<div class="grid2"><label class="field"><span>總金額（上面金額＝訂金）</span><input class="in num" id="f-depT" data-f="depT" data-calc inputmode="${CALC_IM}" value="${esc(f.depT||'')}"></label><label class="field"><span>尾款預計日期</span><input class="in" type="date" id="f-depD" data-f="depD" value="${esc(f.depD||'')}"></label></div><div class="hint">存檔後先記訂金；尾款（總金額－訂金）會放進鈴鐺的待入帳清單，付款時點「入帳」即可。</div>`:''}`})():''}
   ${f._dupMsg?`<div class="note alert" id="ef-dup"><div class="grow"><b>可能重複</b>：同帳戶已有 ${f._dupMsg}。確定不是同一筆，再按一次「儲存」。</div></div>`:''}
-  ${f._edit&&efRule(f)?`<div class="note" style="flex-wrap:wrap"><div class="grow">這是週期記錄「${esc(ruleName(efRule(f).rule.fs,efRule(f).rule.name))}」的第 ${efRule(f).k+1+(efRule(f).rule.off||0)} 期，要改哪些？</div></div><div class="btns fill"><button class="btn pri" data-act="ef-save">只改這一期</button><button class="btn" data-act="ef-save" data-scope="all">這一期和之後都改</button></div>`:ei?'':`<div class="btns fill"><button class="btn pri" data-act="ef-save">儲存</button>${f._edit?'':`<button class="btn" data-act="ef-save" data-again="1">儲存並再記一筆</button>`}</div>`}
+  ${f._edit&&efRule(f)?`<div class="note" style="flex-wrap:wrap"><div class="grow">這是週期記錄「${esc(ruleName(efRule(f).rule.fs,efRule(f).rule.name))}」的第 ${efRule(f).k+1+(efRule(f).rule.off||0)} 期，要改哪些？</div></div>`:''}
   ${f._edit&&!ei?`<div class="btns editor-actions"><button class="btn sm" data-act="ef-copy">複製</button><button class="btn sm danger" data-act="ef-del" id="ef-del">刪除</button>${f.kind==='exp'?`<button class="btn sm" data-act="ef-refund">退款</button>`:''}</div>`:''}
   ${scheduleDialog}${datalists()}`;
   const dialog=$('#ef-schedule');
@@ -1914,7 +1920,7 @@ function renderEditor(){
 }
 function efHead(canc){const hd=$('#sheet.ed .sh');if(!hd)return;const l=hd.firstElementChild;if(!l)return;
   if(canc){l.dataset.act='ef-pcancel';l.classList.add('txt');l.textContent='取消'}else{l.dataset.act='close-sheet';l.classList.remove('txt');l.innerHTML=IC.x}
-  hd.querySelectorAll('.okb,.camb').forEach(b=>b.style.visibility=canc?'hidden':'')}
+  hd.querySelectorAll('.camb').forEach(b=>b.style.visibility=canc?'hidden':'')}
 function datalists(){
   const names=new Map(),shops=new Map();let n=0;for(const r of D.live){if(n++>4000)break;if(r.n)names.set(r.n,(names.get(r.n)||0)+1);if(r.sh)shops.set(r.sh,(shops.get(r.sh)||0)+1)}
   const top=(m,k)=>[...m.entries()].sort((a,b)=>b[1]-a[1]).slice(0,k).map(x=>`<option value="${esc(x[0])}">`).join('');
@@ -2101,6 +2107,17 @@ const ACT={
   },
   'ef-schedule-done':()=>{scheduleDraft=null;$('#ef-schedule')?.close();$('#f-mode-open')?.focus()},
   'ef-mode':el=>{if(!EF)return;EF.mode=el.dataset.k;if(EF.mode==='rep'){if(!EF.rep)EF.rep='M'}else EF.rep='';renderEditor()},
+  'ef-swap-accts':()=>{
+    if(!EF||EF.kind!=='tr')return;
+    const {a,a2,amt,amt2}=EF;
+    [EF.a,EF.a2]=[a2,a];
+    if(D.acct.get(a)?.cur!==D.acct.get(a2)?.cur&&evalAmt(amt2)>0){
+      [EF.amt,EF.amt2]=[amt2,amt];
+    }
+    EF._sugg='';
+    renderEditor();
+    $('[data-act="ef-swap-accts"]')?.focus({preventScroll:true});
+  },
   'ef-save':async el=>{if(EF)EF._scope=el.dataset.scope||'';const had=!!$('#sheet');await saveEditor(!!el.dataset.again);if(had&&!$('#sheet'))savedFx()},
   'ef-copy':()=>{const f={...EF,ids:[],_edit:false,dt:TODAY(),tm:NOWTM()};EF=f;$('.sheet h2').textContent='記一筆（複製）';renderEditor()},
   'ef-refund':()=>{const f={...EF,ids:[],_edit:false,dt:TODAY(),tm:NOWTM()};const amt=f.splits?f.splits.reduce((s,x)=>s+(evalAmt(x.amt)||0),0):evalAmt(f.amt);
@@ -2219,7 +2236,7 @@ function applyTheme(){const t=S.settings.theme==='dark'?'dark':'light';document.
 
 /* ================= events ================= */
 document.addEventListener('pointerdown',e=>{
-  const button=e.target.closest('#sheet.ed button:is([data-act="ef-save"],[data-act="close-sheet"],[data-act="ef-schedule"])');
+  const button=e.target.closest('#sheet.ed button:is([data-act="ef-save"],[data-act="close-sheet"],[data-act="ef-schedule"],[data-act="ef-swap-accts"])');
   if(e.button===0&&button&&document.activeElement.matches('#sheet.ed input'))e.preventDefault();
 });
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const fn=ACT[el.dataset.act];if(fn){e.preventDefault();try{Promise.resolve(fn(el,e)).catch(onActionError)}catch(error){onActionError(error)}}});
@@ -4830,7 +4847,9 @@ if('serviceWorker' in navigator && location.protocol!=='file:'){
 <script>
 /* ================= v2.0.134 介面整理：記一筆底部儲存列、更多選項、統計分組下拉、更多頁分組 ================= */
 function efBar(){const sh=$('#sheet.ed');if(!sh||!EF)return;let bar=sh.querySelector('.efbar');if(!bar){bar=document.createElement('div');bar.className='efbar';sh.appendChild(bar)}
-  bar.innerHTML=EF._edit?`<button class="btn pri" data-act="ef-save">儲存</button>`:`<button class="btn" data-act="ef-save" data-again="1">再記一筆</button><button class="btn pri" data-act="ef-save">儲存</button>`}
+  const scoped=EF._edit&&efRule(EF);
+  bar.classList.toggle('scoped',!!scoped);
+  bar.innerHTML=scoped?`<button class="btn" data-act="ef-save" data-scope="all">這一期和之後都改</button><button class="btn pri" data-act="ef-save">只改這一期</button>`:EF._edit?`<button class="btn pri" data-act="ef-save">儲存</button>`:`<button class="btn" data-act="ef-save" data-again="1">再記一筆</button><button class="btn pri" data-act="ef-save">儲存</button>`}
 {const _rE=renderEditor;renderEditor=function(){_rE.apply(this,arguments);efBar()}}
 {const _oE=openEditor;openEditor=function(fs,isEdit){_oE.apply(this,arguments);if(isEdit)return;
   setTimeout(()=>{const el=$('#f-amt');if(!el||EF!==fs||!fs.c||document.activeElement.closest('#sheet'))return;try{el.focus({preventScroll:true})}catch(e){el.focus()}if(typeof CALC_TOUCH!=='undefined'&&CALC_TOUCH&&!document.body.classList.contains('calc-on'))calcShow(el)},120)}}
