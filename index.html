@@ -1151,7 +1151,7 @@ function splitDisplayAmount(f){
   const parts=f.splits.map((part,i)=>{
     const x=i===f._si?f:part;
     const a=x.a||f.a,cu=x.cu??f.cu;
-    const xr=evalAmt(x.xr??f.xr);
+    const xr=Number(x.xr??f.xr)||evalAmt(x.xr??f.xr);
     return {a,cu,xr,m:evalAmt(x.amt)||0};
   });
   return receiptAmountText(receiptAmount(parts));
@@ -1187,8 +1187,8 @@ function buildRecords0(fs){
             const cu=x.cu??(a===fs.a?fs.cu:'');
             const accountCurrency=cu?(D.acct.get(a)?.cur||'TWD'):'';
             const foreign=cu&&cu!==accountCurrency;
-            const enteredRate=evalAmt(x.xr??fs.xr);
-            const xr=foreign?(enteredRate>0?enteredRate:+(rateOf(cu)/rateOf(accountCurrency)).toPrecision(6)):0;
+            const enteredRate=Number(x.xr??fs.xr)||evalAmt(x.xr??fs.xr);
+            const xr=foreign?(Number.isFinite(enteredRate)&&enteredRate>0?enteredRate:+(rateOf(cu)/rateOf(accountCurrency)).toPrecision(6)):0;
             return R({a,t:x.t==='手續費'?'手續費':t,c:x.c,s:x.s,m:sign*evalAmt(x.amt),...(foreign?{cu,xr}:{}),o:base.o+i,n:(x.n||'').trim(),
             p:expense&&x.p!=null?String(x.p).trim():base.p,sh:fs.sh||'',g,...(groupName?{gn:groupName}:{}),f:i===0?-fee:0,d:expense&&i===0?disc:0,
             ...(fs._receipt?{rv:1,inv:fs._edit?fs._receipt.inv||'':'',tg:fs._edit?fs._receipt.tg||'':''}: {})});
@@ -4094,15 +4094,12 @@ function receiptAmount(rows){
     const currency=r.cu||curOf(r);
     amounts.set(currency,r2((amounts.get(currency)||0)+raw(r)));
   }
-  if(amounts.size===1){
-    const [[currency,net]]=amounts;
-    return {net,currency};
-  }
+  if(amounts.size===1&&amounts.has('TWD'))return {net:amounts.get('TWD'),currency:'TWD'};
   let net=0;
   for(const r of rows){
     const accountCurrency=curOf(r),currency=r.cu||accountCurrency;
     const rate=rateOf(accountCurrency);
-    if(!(rate>0)||currency!==accountCurrency&&!(r.xr>0))return {amounts};
+    if(!(rate>0)||currency!==accountCurrency&&!(Number.isFinite(r.xr)&&r.xr>0))return {amounts};
     net+=val(r)*rate;
   }
   return {net:r2(net),currency:'TWD',approximate:true};
