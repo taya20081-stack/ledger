@@ -705,7 +705,7 @@ body.kb-on .sheet.ed{height:auto;bottom:var(--kbh,0px)}
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v3.0.4';
+window.APP_VER='v3.0.5';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -4747,10 +4747,10 @@ PAGES.more=function(){
   const bk=S.settings.lastBackup?new Date(S.settings.lastBackup).toLocaleString('zh-TW',{hour12:false}):'從未備份';
   const G=S.settings.goals||[];const n=(S.settings.pushSubs||[]).length;const mt=typeof mktTotal==='function'?mktTotal():0;
   return{head:`<h1>更多</h1>`,body:
-    grp('資產',it('market','📈','投資市值',(mt?money(Math.round(mt))+' · ':'')+'股票・黃金・外匯 · 更新：'+(typeof mktDate==='function'?mktDate():'—'))+it('goals','🎯','存錢目標',G.length?G.length+' 個目標':'設定目標金額與期限')+it('debts','🤝','應收應付',debtN+' 筆未結清'))
+    grp('同步與備份',(!window.__ARTIFACT__?it('cloud','☁️','雲端同步','<span id="cloud-label">'+esc(Cloud.label())+'</span>'):'')+it('backup','💾','備份與匯出','上次備份：'+bk))
+    +grp('資產',it('market','📈','投資市值',(mt?money(Math.round(mt))+' · ':'')+'股票・黃金・外匯 · 更新：'+(typeof mktDate==='function'?mktDate():'—'))+it('goals','🎯','存錢目標',G.length?G.length+' 個目標':'設定目標金額與期限')+it('debts','🤝','應收應付',debtN+' 筆未結清'))
     +grp('記帳設定',it('cats','🗂️','分類管理',S.cats.exp.length+' 個支出主類別 · '+S.cats.inc.length+' 個收入主類別')+it('rules','🔁','週期與分期',S.rules.filter(r=>r.fq!=='I'&&r.on).length+' 個週期 · '+S.rules.filter(r=>r.fq==='I').length+' 個分期')+it('budget','💰','預算',S.budgets.total?'每月 '+money(S.budgets.total):'尚未設定')+it('projects','📁','專案',D.projs.length+' 個專案'))
     +grp('自動化',it('applepay','📱','Apple Pay 自動記帳','刷卡當下自動記一筆')+it('notify','🔔','推播提醒',n?'已開啟 · '+n+' 台裝置':'繳款日、扣款前一天提醒'))
-    +grp('同步與備份',(!window.__ARTIFACT__?it('cloud','☁️','雲端同步','<span id="cloud-label">'+esc(Cloud.label())+'</span>'):'')+it('backup','💾','備份與匯出','上次備份：'+bk))
     +grp('其他',it('search','🔍','搜尋與批次編輯','名稱、商家、描述、專案、金額')+it('rates','💱','匯率','更新：'+(S.rates.at||'—'))+it('settings','⚙️','設定','主題、統計排除分類、清除資料'))
     +`<div class="hint mt">共 ${D.live.length.toLocaleString()} 筆記錄 · ${S.accts.length} 個帳戶${DB.mem?' · <b class="neg">此環境無法永久儲存</b>':''}</div><div class="appver">存摺記帳 ${window.APP_VER||''}</div>`};
 };
