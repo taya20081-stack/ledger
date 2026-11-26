@@ -731,13 +731,18 @@ body.kb-on .sheet.ed{height:auto;bottom:var(--kbh,0px)}
   .shell.home .cal:not(.col) .cal-handle::after{pointer-events:none}
   .shell.home .cal:not(.col) .cd.td:not(.on)::after{top:auto;bottom:0;width:4px;height:4px;transform:translateX(-50%)}
 }
+/* 月曆熱力圖：每日收支抵減後的淨額，紅＝淨支出、綠＝淨收入（跟著「紅綠對調」設定） */
+.cd.hn{--hmc:var(--seal)}.cd.hp{--hmc:var(--gain)}
+:root[data-swap] .cd.hn{--hmc:var(--gain)}:root[data-swap] .cd.hp{--hmc:var(--seal)}
+.cd.l1{--hma:14%}.cd.l2{--hma:26%}.cd.l3{--hma:40%}.cd.l4{--hma:56%}
+.cd.hn>span,.cd.hp>span{background:color-mix(in srgb,var(--hmc) var(--hma),transparent);color:var(--ink)}
 </style>
 </head>
 <body>
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v3.0.17';
+window.APP_VER='v3.0.18';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -4112,11 +4117,17 @@ function calCells(){
   const ym=S.month;const[y,m]=ym.split('-').map(Number);const first=ym+'-01';
   const dow=(new Date(y,m-1,1).getDay()+6)%7;let start=addDays(first,-dow);
   let n=42;if(S.calCol){const d=S.day;const dd=(new Date(+d.slice(0,4),+d.slice(5,7)-1,+d.slice(8)).getDay()+6)%7;start=addDays(d,-dd);n=7}
-  const has=new Set();for(const r of D.live)if(!hiddenInList(r)&&homeProjOk(r))has.add(r.dt);
+  const has=new Set(),net=new Map();
+  for(const r of D.live){if(hiddenInList(r)||!homeProjOk(r))continue;has.add(r.dt);if(excluded(r))continue;const v=(incomeOf(r)-spendOf(r))*rateOf(curOf(r));if(v)net.set(r.dt,(net.get(r.dt)||0)+v)}
+  // 熱力圖：深淺依「當月」每日淨額的四分位數分 4 級，避免單筆大額（如薪水）讓其他天都變淡
+  const refM=S.calCol?S.day.slice(0,7):ym;const mags=[];for(const[d,v]of net)if(d.slice(0,7)===refM&&Math.abs(v)>=0.5)mags.push(Math.abs(v));mags.sort((a,b)=>a-b);
+  const q=f=>mags.length?mags[Math.min(mags.length-1,Math.floor(mags.length*f))]:0;const qs=[q(.25),q(.5),q(.75)];
+  const lvl=a=>a<0.5?0:a<=qs[0]?1:a<=qs[1]?2:a<=qs[2]?3:4;
   const td=TODAY();let h='';
   for(let i=0;i<n;i++){const d=addDays(start,i);const day=+d.slice(8);const col=i%7;
     const cls=['cd'];if(!S.calCol&&d.slice(0,7)!==ym)cls.push('o');if(has.has(d))cls.push('h');if(col===5)cls.push('sa');if(col===6)cls.push('su');if(d===S.day)cls.push('on');if(d===td)cls.push('td');
-    h+=`<button class="${cls.join(' ')}" data-act="cal-day" data-d="${d}" aria-label="${d}"><span class="num">${p2(day)}</span></button>`}
+    const nv=net.get(d)||0,lv=lvl(Math.abs(nv));if(lv)cls.push(nv<0?'hn':'hp','l'+lv);
+    h+=`<button class="${cls.join(' ')}" data-act="cal-day" data-d="${d}" aria-label="${d}${lv?(nv<0?' 淨支出 ':' 淨收入 ')+money(Math.round(Math.abs(nv))):''}"><span class="num">${p2(day)}</span></button>`}
   return h;
 }
 function pendHTML(){const td=TODAY();const ps=(S.settings.pend||[]).slice().sort((a,b)=>(a.due||'9')<(b.due||'9')?-1:1);if(!ps.length)return'';
