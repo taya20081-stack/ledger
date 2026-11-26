@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 「存摺記帳」— a single-user personal finance PWA (Traditional Chinese UI), served by GitHub Pages from `main` at `https://taya20081-stack.github.io/ledger/`. No build step or package.json. Local write regressions can be checked with `node --test tests/local-writes.test.cjs`. The whole app is the inline `<script>` in `index.html` (~3,400 very long lines, minified-style code). The user communicates in 繁體中文; UI strings, comments and commit messages are in 繁體中文.
 
+## 手機 UI／UX 開發
+
+每次涉及介面或操作流程的變更，都要在 **iPhone 13 Pro（390 × 844）** 與 **iPhone 16 Pro（402 × 874）** 一起開發及驗證。兩款共用同一套響應式 PWA。尺寸、驗證項目和設計指南以 [AGENTS.md](AGENTS.md) 為準。
+
 ## Commands
 
 There is no build/lint/test tooling. Useful checks:
@@ -15,7 +19,7 @@ There is no build/lint/test tooling. Useful checks:
 python3 -c "import re;s=open('index.html',encoding='utf-8').read();open('/tmp/app.js','w').write('\n;\n'.join(re.findall(r'<script(?![^>]*src)[^>]*>(.*?)</script>',s,re.S)))" && node --check /tmp/app.js
 ```
 
-- Smoke test in a browser: Playwright can open `file:///…/index.html` directly (Firebase CDN may be blocked in sandboxes; that's expected). Viewport 390×844 matches the primary device (iPhone).
+- Smoke test in a browser: Playwright can open `file:///…/index.html` directly (Firebase CDN may be blocked in sandboxes; that's expected). Use both iPhone viewports listed in [手機 UI／UX 開發規範](AGENTS.md).
 - Lines are extremely long — `grep -n` output gets truncated; use Python `s.find(...)` / slicing to inspect context instead of trusting an empty grep.
 
 ## Release convention (every app change)
