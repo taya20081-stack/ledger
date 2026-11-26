@@ -737,7 +737,7 @@ body.kb-on .sheet.ed{height:auto;bottom:var(--kbh,0px)}
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v3.0.11';
+window.APP_VER='v3.0.12';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1124,9 +1124,19 @@ function blankForm(kind='exp'){
   return{kind,a:lastA,a2:'',amt:'',amt2:'',c:kind==='inc'?S.cats.inc[0]?.n:c0?.n,s:kind==='inc'?S.cats.inc[0]?.subs[0]:c0?.subs[0],
     n:'',sh:'',p:'',w:'',fee:'',disc:'',ds:'',cu:'',xr:'',dt:TODAY(),tm:NOWTM(),act:'lend',st:'紅利回饋',rep:'',iv:1,cnt:'',splits:null,ids:[],os:false};
 }
+function exchangeRateInput(value){
+  const rate=Number(value)||evalAmt(value);
+  return Number.isFinite(rate)&&rate>0?rate:0;
+}
+function billedPrincipal(f){
+  const accountCurrency=curOf(f);
+  const rate=exchangeRateInput(f.xr)||rateOf(f.cu)/rateOf(accountCurrency);
+  const amount=evalAmt(f.amt);
+  return Number.isFinite(rate)&&rate>0&&amount>0?r2(amount*rate):'';
+}
 function buildRecords(fs){
   const out=buildRecords0(fs);const ac=D.acct.get(fs.a)?.cur||'TWD';
-  if(!fs.splits?.length&&fs.kind!=='tr'&&fs.cu&&fs.cu!==ac){const xr=evalAmt(fs.xr)>0?evalAmt(fs.xr):+(rateOf(fs.cu)/rateOf(ac)).toPrecision(6);out.forEach(r=>{if(r.a===fs.a){r.cu=fs.cu;r.xr=xr}})}
+  if(!fs.splits?.length&&fs.kind!=='tr'&&fs.cu&&fs.cu!==ac){const xr=exchangeRateInput(fs.xr)||+(rateOf(fs.cu)/rateOf(ac)).toPrecision(6);out.forEach(r=>{if(r.a===fs.a){r.cu=fs.cu;r.xr=xr}})}
   if(fs.kind==='exp'&&fs.os&&!fs._edit){const fr=osFeeRec(out);if(fr)out.push(fr)}
   return out;
 }
@@ -1151,7 +1161,7 @@ function splitDisplayAmount(f){
   const parts=f.splits.map((part,i)=>{
     const x=i===f._si?f:part;
     const a=x.a||f.a,cu=x.cu??f.cu;
-    const xr=Number(x.xr??f.xr)||evalAmt(x.xr??f.xr);
+    const xr=exchangeRateInput(x.xr??f.xr);
     return {a,cu,xr,m:evalAmt(x.amt)||0};
   });
   return receiptAmountText(receiptAmount(parts));
@@ -1187,7 +1197,7 @@ function buildRecords0(fs){
             const cu=x.cu??(a===fs.a?fs.cu:'');
             const accountCurrency=cu?(D.acct.get(a)?.cur||'TWD'):'';
             const foreign=cu&&cu!==accountCurrency;
-            const enteredRate=Number(x.xr??fs.xr)||evalAmt(x.xr??fs.xr);
+            const enteredRate=foreign?exchangeRateInput(x.xr??fs.xr):0;
             const xr=foreign?(Number.isFinite(enteredRate)&&enteredRate>0?enteredRate:+(rateOf(cu)/rateOf(accountCurrency)).toPrecision(6)):0;
             return R({a,t:x.t==='手續費'?'手續費':t,c:x.c,s:x.s,m:sign*evalAmt(x.amt),...(foreign?{cu,xr}:{}),o:base.o+i,n:(x.n||'').trim(),
             p:expense&&x.p!=null?String(x.p).trim():base.p,sh:fs.sh||'',g,...(groupName?{gn:groupName}:{}),f:i===0?-fee:0,d:expense&&i===0?disc:0,
@@ -1889,7 +1899,7 @@ function renderEditor(){
   const ev=evalAmt(f.amt);const showEv=/[+\-*/×÷]/.test(String(f.amt).slice(1))&&isFinite(ev);
   const curSel=ei?`<select class="cursel" id="f-cu" data-f="cu" data-rr="1" aria-label="幣別"><option value="">${cur}</option>${CURS.filter(c=>c!==cur).map(c=>`<option ${c===f.cu?'selected':''}>${c}</option>`).join('')}</select>`:`<span class="cur">${amtCur}</span>`;
   const amtBox=ei&&f.splits&&f._si===-1?`<div class="mcard"><div class="mrow"><b class="num mtot">${esc(splitDisplayAmount(f))}</b></div></div>`
-    :`<div class="amtwrap"><div class="mrow amt"><span class="curw">${curSel}</span><input id="f-amt" data-f="amt" data-calc inputmode="${CALC_IM}" autocomplete="off" placeholder="${ei?'0':amtLabel}" value="${esc(f.amt)}" aria-label="${amtLabel}"><span class="ev" id="f-ev">${showEv?'= '+fmt(ev,cur):''}</span></div>${ei&&f.cu&&f.cu!==cur?`<label class="field" style="margin-top:6px"><span>匯率：1 ${f.cu} = ? ${cur}</span><input class="in num" id="f-xr" data-f="xr" inputmode="decimal" value="${esc(f.xr)}" placeholder="${+(rateOf(f.cu)/rateOf(cur)).toPrecision(6)}"></label>`:''}</div>`;
+    :`<div class="amtwrap"><div class="mrow amt"><span class="curw">${curSel}</span><input id="f-amt" data-f="amt" data-calc inputmode="${CALC_IM}" autocomplete="off" placeholder="${ei?'0':amtLabel}" value="${esc(f.amt)}" aria-label="${amtLabel}"><span class="ev" id="f-ev">${showEv?'= '+fmt(ev,cur):''}</span></div>${ei&&f.cu&&f.cu!==cur?`<label class="field" style="margin-top:6px"><span>匯率：1 ${f.cu} = ? ${cur}</span><input class="in num" id="f-xr" data-f="xr" inputmode="decimal" value="${esc(f.xr)}" placeholder="${+(rateOf(f.cu)/rateOf(cur)).toPrecision(6)}"></label>${f._edit&&cur==='TWD'?`<label class="field" style="margin-top:6px"><span>台幣入帳本金</span><input class="in num" id="f-billed" inputmode="decimal" autocomplete="off" value="${billedPrincipal(f)}"></label>`:''}`:''}</div>`;
   const saved=f._edit&&S.byId.get(f.ids[f._si>=0?f._si:0]);
   const shares=saved&&(!f.splits||f._si>=0)?recordedBuyShares(saved,holdCodeOf(saved)):null;
   const shareLog=saved&&S.settings.hlog?.[saved.id];
@@ -1983,6 +1993,7 @@ function datalists(){
   return`<datalist id="dl-names">${top(names,80)}</datalist><datalist id="dl-shops">${top(shops,50)}</datalist><datalist id="dl-proj">${D.projs.filter(p=>!projDoneAt(p)).slice(0,60).map(p=>`<option value="${esc(p)}">`).join('')}</datalist><datalist id="dl-who">${D.whos.slice(0,60).map(p=>`<option value="${esc(p)}">`).join('')}</datalist>`;
 }
 async function saveEditor(again){
+  const billed=$('#f-billed');if(billed&&(!(evalAmt(billed.value)>0)||!(evalAmt(EF?.amt)>0)))return toast('請輸入大於 0 的原幣本金和台幣入帳本金');
   const f=EF&&EF.splits?spMerge(EF):EF;const balanceTarget=isBalanceAdjustment(f);const err=validate(f,{balanceTarget});if(err)return toast(err);
   if(!f._edit&&f.kind==='exp'){const sh=(f.sh||'').trim();if(sh&&f._osFor!==sh&&isOsShop(sh))f.os=true;
     if(sh&&f._osFor===sh){const L=osShops();const has=isOsShop(sh);if(f.osShop&&!has)S.settings.osShops=[...L,sh];else if(!f.osShop&&has)S.settings.osShops=L.filter(x=>x.toLowerCase()!==sh.toLowerCase());if(!!f.osShop!==has){if(f.osShop)f.os=true;saveKV('settings')}}}
@@ -2308,7 +2319,17 @@ let sTimer;
 function searchUpd(partial){const w=$('#sresWrap');if(partial&&w){w.innerHTML=searchResHTML();return}render(true)}
 document.addEventListener('compositionend',e=>{const t=e.target;if(!t.dataset||!t.dataset.sf)return;S.search[t.dataset.sf]=t.value;S.search.limit=300;clearTimeout(sTimer);sTimer=setTimeout(()=>searchUpd(true),60)});
 document.addEventListener('input',e=>{const t=e.target;
+  if(t.id==='f-billed'&&EF){
+    const original=evalAmt(EF.amt),billed=evalAmt(t.value);
+    if(original>0&&billed>0){
+      EF.xr=String(billed/original);
+      const rate=$('#f-xr');if(rate)rate.value=EF.xr;
+      const total=$('#sp-tot');if(total&&EF.splits)total.textContent=splitDisplayAmount(EF);
+    }
+    return;
+  }
   if(t.dataset.f&&EF){EF[t.dataset.f]=t.type==='checkbox'?t.checked:t.value;
+    if(t.dataset.f==='amt'||t.dataset.f==='xr'){const billed=$('#f-billed');if(billed)billed.value=billedPrincipal(EF)}
     if(t.dataset.f==='gn'){const label=$('#sp-group-name');if(label)label.textContent=t.value.trim()||'\u00a0'}
     if(t.dataset.f==='amt'&&EF.splits&&EF._si>=0){const a=$('#sp-v-'+EF._si);if(a)a.textContent=money(evalAmt(t.value)||0,EF.cu||D.acct.get(EF.a)?.cur);const b=$('#sp-tot');if(b)b.textContent=splitDisplayAmount(EF)}
     if(t.dataset.f==='amt'&&!EF.splits){const a=$('#sp-v-s');if(a)a.textContent='$'+fmt(evalAmt(t.value)||0)}
