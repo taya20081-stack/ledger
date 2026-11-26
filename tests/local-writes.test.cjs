@@ -505,16 +505,45 @@ test('展開收據時同時顯示商品名稱與分類', () => {
 test('海外消費與手續費共享一組，名稱只在分項，重送不重複記帳', async () => {
   const f=fixture();
   f.S.settings.osShops=['測試商店'];
+  f.S.accts[0].grp='信用卡';
   const data={kind:'exp',amt:200,a:'cash',c:'生活',s:'舊分類',dt:'2026-01-01',n:'測試訂閱',sh:'測試商店'};
   await process(f,command(data,'overseas-test'));
   const items=[...f.rec.values()];
   assert.deepEqual(items.map(r=>[r.n,r.m,r.gn]),[['測試訂閱',-200,undefined],['海外交易手續費',-3,undefined]]);
   assert.ok(items[0].g);
   assert.equal(items[0].g,items[1].g);
+  assert.equal(items[0].sh,'測試商店');
+  assert.equal(items[1].sh,'');
   assert.ok(items[1].o>items[0].o);
   await process(f,command(data,'overseas-test'));
   assert.equal(f.rec.size,2);
   assert.equal(f.D.live.reduce((sum,r)=>sum+r.m,0),-203);
+});
+
+test('已確認的跨國費用記住唯一商家，並讓費用分項商家保持空白', async () => {
+  const f=fixture();
+  f.S.accts[0].grp='信用卡';
+  f.S.cats.exp[0].subs.push('手續費');
+  const data={spv:1,kind:'exp',a:'cash',cu:'TWD',dt:'2026-01-01',tm:'12:00',amt:203,n:'試算',sh:'已確認商家',
+    sp:JSON.stringify([{c:'生活',s:'舊分類',n:'商品',amt:200},{c:'生活',s:'手續費',n:'跨國交易手續費',amt:3}])};
+  await process(f,command(data,'chatgpt_'+'a'.repeat(36)));
+  assert.deepEqual([...f.rec.values()].map(r=>[r.n,r.sh,r.m]),[['商品','已確認商家',-200],['跨國交易手續費','',-3]]);
+  assert.ok(f.kv.get('settings').osShops.includes('已確認商家'));
+  assert.equal(f.run("isOsShop('已確認商家')"),true);
+});
+
+test('已列手續費的多分項、現金支出及關稅不另加預估費用', async () => {
+  const f=fixture();
+  f.S.accts[0].grp='信用卡';
+  f.S.cats.exp[0].subs.push('手續費','稅捐及規費');
+  const data={kind:'exp',amt:200,a:'cash',c:'生活',s:'舊分類',dt:'2026-01-01',sh:'淘寶'};
+  await process(f,command({...data,n:'關稅',s:'稅捐及規費'},'customs'));
+  assert.equal(f.rec.size,1);
+  await process(f,command({...data,n:'商品',sp:JSON.stringify([{c:'生活',s:'舊分類',n:'商品',amt:200},{c:'生活',s:'手續費',n:'海外交易手續費',amt:3}])},'with-fee'));
+  assert.equal(f.rec.size,3);
+  f.S.accts[0].grp='現金';
+  await process(f,command({...data,n:'現金支出'},'cash-only'));
+  assert.equal(f.rec.size,4);
 });
 
 test('候選金額指令只修改同日、同帳戶、同分類中唯一匹配的既有交易', async () => {
