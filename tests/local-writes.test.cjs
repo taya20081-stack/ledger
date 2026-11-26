@@ -800,3 +800,26 @@ test('當天先抓到舊收盤價，稍後仍會更新成當日價格',async()=>
   assert.equal(holding.px,110);
   assert.equal(holding.pxd,'2026-11-25');
 });
+
+
+test('多期與小數分期的本金合計等於原金額、各期不會出現負本金', () => {
+  const f = fixture();
+  for (const [total, periods, rate] of [[100, 60, 0], [100.01, 60, 0], [100.01, 60, 5], [9000, 3, 0]]) {
+    const plan = f.run(`amortize(${total},${periods},${rate})`);
+    assert.equal(plan.length, periods);
+    assert.ok(plan.every(row => row.pr >= 0 && row.int >= 0));
+    const principalCents = plan.reduce((sum, row) => sum + Math.round(row.pr * 100), 0);
+    assert.equal(principalCents, Math.round(total * 100));
+  }
+});
+
+test('編輯目標餘額時只扣除該帳戶且已入帳的舊記錄', () => {
+  const f = fixture();
+  f.D.bal = new Map([['cash', 962], ['bank', 500]]);
+  f.S.byId.set('adjustment', {a:'cash', dt:'2026-01-01', m:385});
+  f.S.byId.set('future', {a:'cash', dt:'2026-01-02', m:700});
+  vm.runInContext(section('function balanceForAdjustment(', 'function acctOptions('), f.context);
+  assert.equal(f.run("balanceForAdjustment({a:'cash',dt:'2026-01-01',ids:['adjustment','future']}).base"), 577);
+  assert.equal(f.run("balanceForAdjustment({a:'bank',dt:'2026-01-01',ids:['adjustment']}).base"), 500);
+  assert.equal(f.run("962-balanceForAdjustment({a:'cash',dt:'2026-01-01',ids:['adjustment']}).base"), 385);
+});
