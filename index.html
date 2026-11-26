@@ -734,13 +734,15 @@ body.kb-on .sheet.ed{height:auto;bottom:var(--kbh,0px)}
 :root[data-swap] .cd.hn{--hmc:var(--gain)}:root[data-swap] .cd.hp{--hmc:var(--seal)}
 .cd.l1{--hma:14%}.cd.l2{--hma:26%}.cd.l3{--hma:40%}.cd.l4{--hma:56%}
 .cd.hn>span,.cd.hp>span{background:color-mix(in srgb,var(--hmc) var(--hma),transparent);color:var(--ink)}
+/* 設定頁「主題」「收支顏色」：兩個選項各佔一半，撐滿外框 */
+.seg.duo{display:flex;flex-wrap:nowrap}.seg.duo>button{flex:1 1 0;min-width:0;min-height:44px}
 </style>
 </head>
 <body>
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v3.0.19';
+window.APP_VER='v3.0.20';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1854,7 +1856,7 @@ function pageBackup(){
 }
 function pageSettings(){
   const ex=S.settings.excl;const persisted=S.persisted;
-  return{back:1,head:`<h1>設定</h1>`,body:`<div class="card stack" style="margin-top:0"><div class="lbl">主題</div><div class="seg"><button class="${S.settings.theme!=='dark'?'on':''}" data-act="theme" data-k="light">淺色</button><button class="${S.settings.theme==='dark'?'on':''}" data-act="theme" data-k="dark">深色</button></div><div class="lbl">收支顏色</div><div class="seg"><button class="${S.settings.swapCol===false?'on':''}" data-act="swapcol" data-k="">支出紅・收入綠</button><button class="${S.settings.swapCol!==false?'on':''}" data-act="swapcol" data-k="1">支出綠・收入紅</button></div></div>
+  return{back:1,head:`<h1>設定</h1>`,body:`<div class="card stack" style="margin-top:0"><div class="lbl">主題</div><div class="seg duo"><button class="${S.settings.theme!=='dark'?'on':''}" data-act="theme" data-k="light">淺色</button><button class="${S.settings.theme==='dark'?'on':''}" data-act="theme" data-k="dark">深色</button></div><div class="lbl">收支顏色</div><div class="seg duo"><button class="${S.settings.swapCol===false?'on':''}" data-act="swapcol" data-k="">支出紅・收入綠</button><button class="${S.settings.swapCol!==false?'on':''}" data-act="swapcol" data-k="1">支出綠・收入紅</button></div></div>
   <div class="card stack"><div class="lbl">跨國交易手續費</div><div class="hint">清單內的商家以信用卡付款時，預估加列 1.5% 手續費。關稅及稅捐規費不自動加費。手續費分項的商家欄留空。新增含手續費且能對應唯一商家的信用卡交易時，會把商家加入清單。</div><div class="hint">${esc(osShops().join('、')||'尚未指定海外商家')}</div><div class="btns fill os-shop-actions"><button class="btn" data-act="os-shop-settings">編輯海外商家</button><button class="btn" data-act="os-shop-history">從最近 15 筆補入</button></div></div>
   <div class="card stack"><div class="lbl">統計排除分類</div><div class="hint">被排除的主類別不計入首頁收支、預算與統計（例如把「投資」視為資產移轉而非消費）。</div><div class="chips">${S.cats.exp.map(c=>`<button class="chip${ex.includes(c.n)?' on':''}" data-act="excl" data-c="${esc(c.n)}"><i style="background:var(--c${c.ci})"></i>${esc(c.n)}</button>`).join('')}</div></div>
   <div class="card stack"><div class="lbl">儲存狀態</div><div class="hint">${DB.mem?'<b class="neg">此瀏覽器不允許 IndexedDB，資料不會保存。</b>':'資料存於本機 IndexedDB。'}${persisted===true?' 已取得永久儲存權限。':persisted===false?' 瀏覽器未授予永久儲存；iPhone 請「加入主畫面」後使用，並定期備份。':''}</div></div>
