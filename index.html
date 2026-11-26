@@ -742,7 +742,7 @@ body.kb-on .sheet.ed{height:auto;bottom:var(--kbh,0px)}
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v3.0.21';
+window.APP_VER='v3.0.22';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -4918,14 +4918,14 @@ document.addEventListener('change',asyncAction(async e=>{const t=e.target;
   if(t.matches&&t.matches('[data-apmap]')){const m=S.settings.apMap||(S.settings.apMap={});if(t.value)m[t.dataset.apmap]=t.value;else delete m[t.dataset.apmap];await saveKV('settings');toast('已設定')}
   if(t.id==='rc-file'&&t.files&&t.files[0]){const txt=await readTextFile(t.files[0]);t.value='';rcRun(t.dataset.id,txt)}}));
 
-/* ---------- 推播提醒：App 把未來 30 天的提醒寫到 kv/notify，GitHub 排程每小時用記帳助理帳號讀取並發送 ---------- */
+/* ---------- 推播提醒：App 把未來 30 天的提醒寫到 kv/notify，GitHub 排程每 3 小時用記帳助理帳號讀取並發送 ---------- */
 const VAPID_PUB='BOHdJcTqC1Qbq4Zp_tkaRJ-rLY3UqzL24ZG67TFkDC-9y5GFY7cyDUxBh6GvvE-IN9ccRG-lIDO1ZawND-Ajq8U';
 const VAPID_KID=VAPID_PUB.slice(0,16);   // pushSubs 記下訂閱時用的公鑰，換金鑰後舊訂閱會自動重訂
 function ntfCfg(){return Object.assign({card:1,rule:1,pend:1,ruleMin:0},S.settings.ntf||{})}
 function notifyItems(){const c=ntfCfg();const td=TODAY(),to=addDays(td,30);const out=[];const add=(dt,tm,id,t,b)=>{if(dt>=td&&dt<=to)out.push({id,at:dt+'T'+tm,t,b})};
   if(c.card)for(const a of S.accts){if(a.arch||a.grp!=='信用卡')continue;const cc=cardCycle(a);if(!cc||!cc.due||!(cc.remain>0))continue;const amt=money(Math.round(cc.remain));
-    add(addDays(cc.due,-3),'09:00','c3_'+a.id+'_'+cc.due,a.name+' 3 天後繳款','待繳 '+amt+'（'+cc.due.slice(5).replace('-','/')+' 到期）');add(cc.due,'09:00','c0_'+a.id+'_'+cc.due,a.name+' 今天繳款','待繳 '+amt)}
-  if(c.rule)for(const x of upcoming(31)){if(x.k==='收入'||x.twd<(c.ruleMin||0))continue;add(addDays(x.dt,-1),'20:00','r_'+x.dt+'_'+x.n,'明天'+(x.tag==='分期'?'分期':'扣款')+'：'+x.n,money(Math.round(x.twd))+(x.a?' · '+x.a:''))}
+    add(addDays(cc.due,-3),'18:00','c3_'+a.id+'_'+cc.due,a.name+' 3 天後繳款','待繳 '+amt+'（'+cc.due.slice(5).replace('-','/')+' 到期）');add(cc.due,'18:00','c0_'+a.id+'_'+cc.due,a.name+' 今天繳款','待繳 '+amt)}
+  if(c.rule)for(const x of upcoming(31)){if(x.k==='收入'||x.twd<(c.ruleMin||0))continue;add(addDays(x.dt,-1),'18:00','r_'+x.dt+'_'+x.n,'明天'+(x.tag==='分期'?'分期':'扣款')+'：'+x.n,money(Math.round(x.twd))+(x.a?' · '+x.a:''))}
   if(c.pend)for(const p of S.settings.pend||[]){if(!p.due)continue;add(p.due,'09:00','p_'+p.id,(p.label||'待入帳')+'到期：'+(p.fs?.n||p.fs?.s||''),money(evalAmt(p.fs?.amt)||0)+' · 到鈴鐺確認入帳')}
   return out.sort((a,b)=>a.at<b.at?-1:1).slice(0,120)}
 let _ntfLast='',_ntfT=null;
@@ -4962,7 +4962,7 @@ function pageNotify(){const c=ntfCfg();const subs=S.settings.pushSubs||[];const 
    <div class="hint">iPhone 需 iOS 16.4 以上，而且要從「主畫面」上的 App 圖示打開才能開啟通知。已登記 ${subs.length} 台裝置。</div></div>
   <div class="card stack">${tg('card','信用卡繳款','繳款日前 3 天與當天早上 9 點，提醒待繳金額（繳清後就不會再提醒）。')}${tg('rule','週期、分期扣款','扣款前一天晚上 8 點提醒。')}${tg('pend','待入帳、尾款到期','到期當天早上 9 點提醒。')}</div>
   <div class="grp"><div class="grph"><span>接下來的提醒</span><span>${items.length}</span></div><div class="list">${items.slice(0,15).map(x=>`<div class="li"><div class="grow"><div>${esc(x.t)}</div><small class="num">${x.at.slice(5).replace('-','/').replace('T',' ')} · ${esc(x.b)}</small></div></div>`).join('')||'<div class="empty">未來 30 天沒有提醒</div>'}</div>
-  <div class="hint">提醒由 GitHub 每小時檢查一次發送，可能晚幾分鐘到幾十分鐘。打開 App 時會自動更新排程。</div></div>`}}
+  <div class="hint">提醒由 GitHub 每 3 小時檢查一次發送（09、12、15、18、21 點…），可能晚幾分鐘到幾十分鐘。打開 App 時會自動更新排程。</div></div>`}}
 PAGES.notify=pageNotify;
 {const _more2=PAGES.more;PAGES.more=function(){const r=_more2();const n=(S.settings.pushSubs||[]).length;
   return r}}
