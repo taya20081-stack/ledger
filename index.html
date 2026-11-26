@@ -689,13 +689,21 @@ body.kb-on .sheet.ed{height:auto;bottom:var(--kbh,0px)}
 .seg button,.chip,.ibtn,.btn.sm,.cbtn,.calc button,.lg,.more-btn,.cd,.apill,.mtabs button,.ctile{position:relative}
 .seg button::after,.chip::after,.ibtn::after,.btn.sm::after,.cbtn::after,.lg::after,.more-btn::after,.cd::after,.mtabs button::after{content:'';position:absolute;top:50%;left:50%;width:max(100%,44px);height:max(100%,44px);transform:translate(-50%,-50%)}
 .seg button,.chip,.btn.sm{min-height:36px}
+/* 手機直向的整月月曆：日期列縮為 42px 的 75%，避免擴大的點擊範圍重疊。 */
+@media (orientation:portrait) and (max-width:599px){
+  .shell.home .cal:not(.col) .cd{height:31.5px}
+  .shell.home .cal:not(.col) .cd>span{width:30px;height:30px}
+  .shell.home .cal:not(.col) .cd::after,
+  .shell.home .cal:not(.col) .cal-handle::after{pointer-events:none}
+  .shell.home .cal:not(.col) .cd.td:not(.on)::after{top:auto;bottom:0;width:4px;height:4px;transform:translateX(-50%)}
+}
 </style>
 </head>
 <body>
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v3.0.1';
+window.APP_VER='v3.0.2';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
