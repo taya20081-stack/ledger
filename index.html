@@ -420,23 +420,23 @@ h1{font-weight:700}
 .trl{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:4px 6px;margin-top:-4px;grid-column:2/-1;min-width:0}.row.hrow:has(>.trl)>:first-child{grid-row:1/3;align-self:center}.trl .apill{max-width:none;overflow:visible}.trl .arr{color:var(--muted);font-size:13px}
 /* 首頁交易與多類別明細共用兩列排列，金額保留七位數的寬度。 */
 :root{--home-row-height:62px;--group-row-height:calc(var(--home-row-height) + 3pt)}
-:is(.shell.home>.hlist,.gl)>.hrow{height:var(--row-height,var(--home-row-height));grid-template-columns:42px minmax(0,1fr) max-content;grid-template-rows:22px 22px;align-content:center;gap:5px 8px;padding:6px 4px}
-:is(.shell.home>.hlist,.gl)>.hrow>.hb{width:42px;height:42px;font-size:22px;grid-row:1/3;align-self:center}
-:is(.shell.home>.hlist,.gl)>.hrow>div[style*="min-width:0"]{display:contents}
-:is(.shell.home>.hlist,.gl)>.hrow .t{grid-area:1/2;min-width:0;line-height:22px}
-:is(.shell.home>.hlist,.gl)>.hrow .s{grid-area:2/2/3/4;min-width:0;line-height:18px}
-:is(.shell.home>.hlist,.gl)>.hrow>.amt>.num{width:calc(7ch + 1.1em);text-align:right;line-height:22px}
-:is(.shell.home>.hlist,.gl)>.hrow .hlabels{display:flex;align-items:center;gap:4px;grid-area:2/2/3/4;justify-self:end;max-width:100%;min-width:0}
-:is(.shell.home>.hlist,.gl)>.hrow:has(.s) .hlabels{max-width:66%}
-:is(.shell.home>.hlist,.gl)>.hrow:has(.hlabels) .s{max-width:32%}
-:is(.shell.home>.hlist,.gl)>.hrow .hlabels>small{overflow:hidden;text-overflow:ellipsis}
-:is(.shell.home>.hlist,.gl)>.hrow .hlabels>.pills{flex-wrap:nowrap;min-width:0}
-:is(.shell.home>.hlist,.gl)>.hrow .hlabels>.pills>*{min-width:0}
-:is(.shell.home>.hlist,.gl)>.hrow>.trl{grid-row:2;flex-wrap:nowrap;margin-top:0}
-:is(.shell.home>.hlist,.gl)>.hrow>.trl .apill{min-width:0;overflow:hidden}
-:is(.shell.home>.hlist,.gl)>.hrow:has(>.trl)>div[style*="min-width:0"]{display:flex;align-items:baseline;gap:5px}
-:is(.shell.home>.hlist,.gl)>.hrow:has(>.trl) .t{flex:none}
-.shell.home>.hlist>.hrow.grpr,.gl>.hrow{--row-height:var(--group-row-height)}
+:is(.shell.home>.hlist,.gl,.summary-items)>.hrow{height:var(--row-height,var(--home-row-height));grid-template-columns:42px minmax(0,1fr) max-content;grid-template-rows:22px 22px;align-content:center;gap:5px 8px;padding:6px 4px}
+:is(.shell.home>.hlist,.gl,.summary-items)>.hrow>.hb{width:42px;height:42px;font-size:22px;grid-row:1/3;align-self:center}
+:is(.shell.home>.hlist,.gl,.summary-items)>.hrow>div[style*="min-width:0"]{display:contents}
+:is(.shell.home>.hlist,.gl,.summary-items)>.hrow .t{grid-area:1/2;min-width:0;line-height:22px}
+:is(.shell.home>.hlist,.gl,.summary-items)>.hrow .s{grid-area:2/2/3/4;min-width:0;line-height:18px}
+:is(.shell.home>.hlist,.gl,.summary-items)>.hrow>.amt>.num{width:calc(7ch + 1.1em);text-align:right;line-height:22px}
+:is(.shell.home>.hlist,.gl,.summary-items)>.hrow .hlabels{display:flex;align-items:center;gap:4px;grid-area:2/2/3/4;justify-self:end;max-width:100%;min-width:0}
+:is(.shell.home>.hlist,.gl,.summary-items)>.hrow:has(.s) .hlabels{max-width:66%}
+:is(.shell.home>.hlist,.gl,.summary-items)>.hrow:has(.hlabels) .s{max-width:32%}
+:is(.shell.home>.hlist,.gl,.summary-items)>.hrow .hlabels>small{overflow:hidden;text-overflow:ellipsis}
+:is(.shell.home>.hlist,.gl,.summary-items)>.hrow .hlabels>.pills{flex-wrap:nowrap;min-width:0}
+:is(.shell.home>.hlist,.gl,.summary-items)>.hrow .hlabels>.pills>*{min-width:0}
+:is(.shell.home>.hlist,.gl,.summary-items)>.hrow>.trl{grid-row:2;flex-wrap:nowrap;margin-top:0}
+:is(.shell.home>.hlist,.gl,.summary-items)>.hrow>.trl .apill{min-width:0;overflow:hidden}
+:is(.shell.home>.hlist,.gl,.summary-items)>.hrow:has(>.trl)>div[style*="min-width:0"]{display:flex;align-items:baseline;gap:5px}
+:is(.shell.home>.hlist,.gl,.summary-items)>.hrow:has(>.trl) .t{flex:none}
+.shell.home>.hlist>.hrow.grpr,:is(.gl,.summary-items)>.hrow{--row-height:var(--group-row-height)}
 /* 計算機鍵盤 */
 .calc{position:fixed;left:0;right:0;bottom:0;z-index:500;background:var(--paper2);border-top:1px solid var(--rule);padding:8px 8px calc(8px + env(safe-area-inset-bottom));box-shadow:0 -6px 20px rgba(0,0,0,.08)}
 .calc-pv{font:600 18px/1.3 var(--num,inherit);text-align:right;padding:4px 10px 8px;color:var(--muted,#777);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
@@ -737,7 +737,7 @@ body.kb-on .sheet.ed{height:auto;bottom:var(--kbh,0px)}
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v3.0.12';
+window.APP_VER='v3.0.13';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
