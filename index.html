@@ -304,7 +304,7 @@ input[type=date].in,input[type=time].in{min-width:0;width:100%;display:block;-we
 .cal-wd span{font-size:13px;color:var(--ink);padding:4px 0 6px;opacity:.85}
 .cd{border:0;background:none;height:48px;display:grid;place-items:center;padding:0;color:var(--muted);opacity:.5;position:relative}
 .cd>span{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-size:18px;border:2px solid transparent}
-.cd .mo{font:500 15px/1 var(--sans);color:var(--seal)}
+.cd .mo{font:500 13px/1 var(--sans);color:var(--seal);white-space:nowrap}
 .cd.h{color:var(--ink);opacity:1}
 .cd.sa{color:var(--gain)} .cd.su{color:var(--seal)}
 .cd.o{opacity:.25}
@@ -363,6 +363,7 @@ body:has(.shell.home){overflow:hidden;height:100dvh}
 .shell.home>*{flex:none}
 .shell.home>.hlist{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 .shell.home .cd{height:42px}.shell.home .cd>span{width:36px;height:36px;font-size:17px}
+.shell.home .cd>.mo{font-size:12px}
 .dask{flex-wrap:wrap;margin-bottom:10px}.dask .btns{width:100%;margin-top:6px}
 button.dtitle{border:0;background:none;padding:0;color:inherit}
 .dpick{cursor:pointer}
@@ -608,6 +609,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
   .shell.home .calnav .ibtn{width:36px;height:36px}
   .shell.home .cd{height:30px}
   .shell.home .cd>span{width:28px;height:28px;font-size:14px}
+  .shell.home .cd>.mo{font-size:9.5px}
   .shell.home .cal-wd span{padding:0 0 2px}
   .shell.home .cal-handle{margin:0 auto;padding-block:6px}
   .shell.home>.pcard,.shell.home>.hlist{grid-column:2;min-width:0}
@@ -728,6 +730,7 @@ body.kb-on .sheet.ed{height:auto;bottom:var(--kbh,0px)}
 @media (orientation:portrait) and (max-width:599px){
   .shell.home .cal:not(.col) .cd{height:35.7px}
   .shell.home .cal:not(.col) .cd>span{width:30px;height:30px}
+  .shell.home .cal:not(.col) .cd>.mo{font-size:10px}
   .shell.home .cal:not(.col) .cd::after,
   .shell.home .cal:not(.col) .cal-handle::after{pointer-events:none}
   .shell.home .cal:not(.col) .cd.td:not(.on)::after{top:auto;bottom:0;width:4px;height:4px;transform:translateX(-50%)}
@@ -738,7 +741,7 @@ body.kb-on .sheet.ed{height:auto;bottom:var(--kbh,0px)}
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v3.0.14';
+window.APP_VER='v3.0.15';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
