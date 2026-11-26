@@ -4026,7 +4026,7 @@ function homeRow(r,noShop){
     var sub=[];const rt0=ruleTag(r);if(rt0)sub.push(rt0);
     var trl=`<div class="trl"><span class="apill">${esc(D.acct.get(o.a)?.name||'—')}</span><span class="arr">→</span><span class="apill">${esc(p&&D.acct.get(p.a)?.name||'—')}</span></div>`;acct=''}
   else{var trl='';amt=`<span class="num ${v<0?'neg':v>0?'pos':''}">${money(Math.abs(v),cur)}</span>`;
-    var sub=[];const rt=ruleTag(r);if(rt)sub.push(rt);if(r.t!=='支出'&&r.t!=='收入')sub.push(r.t+(r.w?' @'+r.w:''))}
+    var sub=[];const rt=ruleTag(r);if(rt)sub.push(rt);if(r.t!=='支出'&&r.t!=='收入'&&(r.t!=='餘額調整'||titleOf(r)!==r.t))sub.push(r.t+(r.w?' @'+r.w:''))}
   if(noShop&&r.rv===1)sub.push([r.c,r.s].filter(Boolean).join('／'));
   if(r.sh&&!noShop&&!isTr)sub.push(r.sh);const shop='';
   const conv=cur!=='TWD'&&!isTr?`<small class="num">≈ ${money(Math.round(Math.abs(val(r))*rateOf(curOf(r))),'TWD')}</small>`:'';
