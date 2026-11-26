@@ -19,6 +19,8 @@
 
 ## 開發
 
+介面變更需同時適用於 iPhone 13 Pro 和 iPhone 16 Pro。請依照 [手機 UI／UX 開發規範](AGENTS.md) 在兩種尺寸驗證操作流程。
+
 沒有建置流程，`index.html` 就是整個 App（inline `<script>`，約 3,400 行）。
 
 ```bash
