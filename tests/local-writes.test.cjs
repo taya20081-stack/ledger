@@ -823,3 +823,21 @@ test('編輯目標餘額時只扣除該帳戶且已入帳的舊記錄', () => {
   assert.equal(f.run("balanceForAdjustment({a:'bank',dt:'2026-01-01',ids:['adjustment']}).base"), 500);
   assert.equal(f.run("962-balanceForAdjustment({a:'cash',dt:'2026-01-01',ids:['adjustment']}).base"), 385);
 });
+
+test('既有 Apple Pay 捷徑指令可入帳，重送相同指令不會新增第二筆', async () => {
+  const f = fixture();
+  f.context.p2 = n => String(n).padStart(2, '0');
+  f.context.suggestCat = () => ({c: '生活', s: '舊分類'});
+  f.context.dupOf = () => null;
+  vm.runInContext(section('function apAmt(', 'function pageApplePay('), f.context);
+  const payload = {src: 'ap', shop: '測試商家', amt: 'NT$125', card: '測試卡', at: '2026-01-01T09:08'};
+  const id = 'apple-pay-test';
+  await process(f, command(payload, id));
+  await process(f, command(payload, id));
+  assert.equal(f.S.recs.length, 1);
+  const record = f.S.recs[0];
+  assert.equal(record.tg, 'ap');
+  assert.equal(record.m, -125);
+  assert.equal(record.sh, '測試商家');
+  assert.equal(record.tm, '09:08');
+});

@@ -737,7 +737,7 @@ body.kb-on .sheet.ed{height:auto;bottom:var(--kbh,0px)}
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v3.0.9';
+window.APP_VER='v3.0.10';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -2727,11 +2727,11 @@ function inboxTransferValid(x){
     [x.a,x.a2].every(id=>S.accts.some(a=>a.id===id&&!a.arch&&a.cur===x.cu));
 }
 function inboxInvalidReason(x){
-  if(x.src==='ap')return 'Apple Pay 自動記帳已停用';
   if(x.kind==='transfer')return inboxTransferValid(x)?'':'轉帳帳戶、幣別、時間或金額無效';
   if(x.spv!=null||x.kind==='split_probe')return receiptInboxDetails(x).reason||'';
   const amt=x.amt!=null&&x.amt!==''&&Number.isFinite(+x.amt);
   const account=()=>S.accts.some(a=>a.id===x.a||a.name===x.a);
+  if(x.src==='ap')return '';
   if(x.sp!=null){try{
     const lines=typeof x.sp==='string'?JSON.parse(x.sp):x.sp;
     if(!Array.isArray(lines)||!lines.length||lines.some(q=>!q||!Number.isFinite(+q.amt)||!+q.amt))return '分項欄位錯誤';
@@ -2897,7 +2897,7 @@ function attachToSplit(x){
 
 async function executeInbox(docs){
   const add=[],dels=[],newRules=[],delNames=[],upds=[],insts=[],eds=[],rups=[],balMsgs=[];
-  let pxN=0;const mvq=[];
+  let apN=0,apDup=0,apUnk=0,pxN=0;const mvq=[];
   let invalid='';
   const reject=reason=>{invalid=reason};
   for(const d of docs){const x=d.data()||{};const id='ib_'+d.id;
@@ -2970,6 +2970,7 @@ async function executeInbox(docs){
       dels.push(d.ref);continue;
     }
 
+    if(x.src==='ap'){if(!S.byId.has(id)){const o=apRecord(x,id);if(o.r){add.push(o.r);apN++;if(!o.sure)apUnk++}else if(o.skip==='dup')apDup++;else{reject('Apple Pay 指令資料不足');continue}}dels.push(d.ref);continue}
     if(x.kind==='px'){try{const q=JSON.parse(x.p||'{}');const cur=S.settings.pxx||{d:'',p:{}};if((x.d||'')>=(cur.d||'')){S.settings.pxx={d:x.d||'',p:{...cur.p,...q}};pxApply(S.settings.pxx.p);pxN++}}catch(e){}dels.push(d.ref);continue}
     if(x.kind==='ledger_search'){
       const owner=Cloud.user?.uid,db=Cloud.db;
@@ -3094,15 +3095,14 @@ async function executeInbox(docs){
   if(delNames.length){const td=TODAY();const gone=S.rules.filter(q=>q.fq!=='I'&&String(q.id).startsWith('ib_')&&delNames.includes(q.name));
     if(gone.length){const ids=S.recs.filter(r=>!r.x&&r.dt>td&&/_\d+_\d+$/.test(r.id)&&gone.some(q=>r.id.startsWith(q.id+'_'))).map(r=>r.id);
       if(ids.length)await mutate([],ids);const previous=S.rules;S.rules=S.rules.filter(q=>!gone.includes(q));try{await saveKV('rules')}catch(e){S.rules=previous;throw e}scheduleRender();toast('Claude 幫你刪除了 '+gone.length+' 個週期')}}
-  if(pxN)await saveKV('settings');if(pxN){scheduleRender();holdSyncSoon()}
+  if(apN||apDup||pxN)await saveKV('settings');if(pxN){scheduleRender();holdSyncSoon()}
   if(add.length){await mutate(add);await fixOsGroups().catch(()=>{});scheduleRender();
     const notices=Object.entries(INBOX_SOURCES).map(([source,label])=>{
       const records=add.filter(r=>r.t!=='餘額調整'&&inboxRecordSource(r)===source);
       return records.length?label+' 幫你記了 '+records.length+' 筆：'+records.slice(0,3).map(r=>(r.n||r.s)+' '+fmt(Math.abs(r.m))).join('、'):'';
     });
-    const message=notices.filter(Boolean).join('；');
-    if(message)toast(message)
-  }
+    toast([...notices,apN?'Apple Pay 自動記了 '+apN+' 筆'+(apUnk?'（'+apUnk+' 筆卡片未設定對應帳戶）':''):''].filter(Boolean).join('；')+(apDup?'；略過重複 '+apDup+' 筆':''))}
+  else if(apDup)toast('Apple Pay：略過 '+apDup+' 筆已記過的交易')
   if(rups.length){const up=[],okN=[],bad=[];let ch=false;
     for(const {x} of rups){const nm=String(x.n||'').trim();
       const hit=S.rules.filter(q=>q.fq!=='I'&&q.fs&&(q.name===nm||(q.fs.n||'')===nm||(!q.fs.n&&q.fs.s===nm))&&(x.oamt==null||Math.abs(Math.abs(evalAmt(q.fs.amt)||0)-Math.abs(+x.oamt))<0.5));
@@ -4374,7 +4374,7 @@ Object.assign(ACT,{
 });
 
 /* =====================================================================
-   v2.0 新功能：重複偵測、信用卡對帳、訂閱偵測、
+   v2.0 新功能：Apple Pay 自動記帳、重複偵測、信用卡對帳、訂閱偵測、
    股票市值、存錢目標、預算結轉
    ===================================================================== */
 
@@ -4386,6 +4386,60 @@ function dupOf(r,skip){if(!r||!['支出','收入'].includes(r.t))return null;con
     if(mr!=null&&mx!=null){if(Math.abs(dd*1440+mx-mr)<=120)return x}else if(dd===0)return x}
   return null}
 function dupText(x){return`${x.dt.slice(5).replace('-','/')} ${x.tm&&x.tm!=='00:00'?x.tm+' ':''}${esc(titleOf(x))} ${money(Math.abs(x.m),curOf(x))}`}
+
+/* ---------- Apple Pay（iPhone 捷徑「交易」自動化）→ 收件匣 ----------
+   文件欄位：src='ap' shop amt(例如 "NT$1,234") card at(yyyy-MM-ddTHH:mm)            */
+function apAmt(s){s=String(s||'');let cu='TWD';
+  for(const[re,c]of[[/US\$|USD/i,'USD'],[/HK\$|HKD/i,'HKD'],[/[¥￥円]|JPY/i,'JPY'],[/€|EUR/i,'EUR'],[/£|GBP/i,'GBP'],[/₩|KRW/i,'KRW'],[/S\$|SGD/i,'SGD'],[/A\$|AUD/i,'AUD'],[/RMB|CNY|人民幣/i,'CNY'],[/฿|THB/i,'THB']])if(re.test(s)){cu=c;break}
+  const num=s.replace(/[^\d.,]/g,'');const v=/,\d{2}$/.test(num)&&!num.includes('.')?+num.replace(/\./g,'').replace(',','.'):+num.replace(/,/g,'');
+  return{v:isFinite(v)?v:NaN,cu,neg:/[-−]/.test(s)}}
+function _lcs(a,b){let best=0;for(let i=0;i<a.length;i++)for(let j=0;j<b.length;j++){let k=0;while(a[i+k]&&a[i+k]===b[j+k])k++;if(k>best)best=k}return best}
+function apAcct(card){const map=S.settings.apMap||{};const m=map[card];if(m&&D.acct.has(m)&&!D.acct.get(m).arch)return{a:m,sure:true};
+  const nz=s=>String(s||'').toLowerCase().replace(/\s|信用卡|簽帳金融卡|金融卡|簽帳卡|卡|銀行|商業|國際|card|bank|visa|master|jcb/g,'');const c=nz(card);let best=null,bs=0;
+  if(c)for(const a of S.accts){if(a.arch)continue;let s=_lcs(c,nz(a.name));if(s>=2&&a.grp==='信用卡')s+=.5;if(s>bs){bs=s;best=a}}
+  if(best&&bs>=2.5)return{a:best.id,sure:true,guess:true};const fb=D.acct.get(S.settings.lastA)||S.accts.find(a=>!a.arch);return{a:fb?.id,sure:false}}
+function apRecord(x,id){const{v,cu,neg}=apAmt(x.amt);if(!(v>0))return{skip:'amt'};
+  const card=String(x.card||'').trim().slice(0,40);const shop=String(x.shop||'').trim().slice(0,60);
+  const{a,sure}=apAcct(card);const acct=D.acct.get(a);if(!acct)return{skip:'acct'};
+  const cards=S.settings.apCards||(S.settings.apCards={});if(card){const o=cards[card]||{n:0};o.n++;o.last=TODAY();cards[card]=o}
+  const m=/^(\d{4}-\d{2}-\d{2})[T ](\d{1,2}):(\d{2})/.exec(String(x.at||''));const dt=m?m[1]:TODAY();const tm=m?p2(+m[2])+':'+m[3]:NOWTM();
+  const inc=neg;const g=inc?{c:S.cats.inc[0]?.n||'收入',s:S.cats.inc[0]?.subs[0]||''}:suggestCat('',shop);
+  const r={id,a:acct.id,t:inc?'收入':'支出',c:g.c,s:g.s||'',m:inc?v:-v,f:0,d:0,n:inc?'Apple Pay 退款':'',sh:shop,dt,tm,p:'',ds:sure||!card?'':'Apple Pay 卡片「'+card+'」尚未設定對應帳戶',tg:'ap',w:'',k:'',g:'',o:Date.now()};
+  if(cu!==acct.cur){r.cu=cu;r.xr=+(fxOn(cu,dt)/fxOn(acct.cur,dt)).toPrecision(6)}
+  const dp=dupOf(r);if(dp)return{skip:'dup',dup:dp};
+  return{r,sure}}
+function pageApplePay(){const uid=window.Cloud&&Cloud.user?Cloud.user.uid:'';const cfg=window.FIREBASE_CONFIG||{};
+  const signUrl='https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key='+(cfg.apiKey||'');
+  const fsUrl='https://firestore.googleapis.com/v1/projects/'+(cfg.projectId||'')+'/databases/(default)/documents/users/'+(uid||'〔登入後顯示〕')+'/inbox';
+  const body='{"fields":{"src":{"stringValue":"ap"},"shop":{"stringValue":"〔商家〕"},"amt":{"stringValue":"〔金額〕"},"card":{"stringValue":"〔卡片〕"},"at":{"stringValue":"〔格式化日期〕"}}}';
+  const recent=D.live.filter(r=>r.tg==='ap').slice(0,5);const cards=Object.entries(S.settings.apCards||{}).sort((a,b)=>(b[1].last||'')<(a[1].last||'')?-1:1);
+  const opts=sel=>`<option value="">自動判斷</option>`+S.accts.filter(a=>!a.arch).map(a=>`<option value="${a.id}" ${a.id===sel?'selected':''}>${esc(a.name)}</option>`).join('');
+  const cp=(lbl,v)=>`<div class="field"><span>${lbl}</span><div class="cpy"><code>${esc(v)}</code><button class="btn sm" data-act="ap-copy" data-v="${esc(v)}">複製</button></div></div>`;
+  return{back:1,head:`<h1>Apple Pay 自動記帳</h1>`,body:`
+  <div class="sum"><div class="lbl">運作方式</div><div class="hint" style="margin-top:4px">iPhone 用 Apple Pay 刷卡的當下，捷徑會把「商家、金額、卡片」送進雲端收件匣；打開 App 時自動記成一筆支出，分類依這個商家以前的記錄判斷。同帳戶、同金額、2 小時內已經有記錄的會自動略過，不會重複。</div>
+  ${recent.length?`<div class="lbl mt">最近自動記錄</div>${recent.map(r=>`<div class="hint num">${r.dt.slice(5).replace('-','/')} ${r.tm} · ${esc(r.sh||r.s)} · ${money(Math.abs(r.m),curOf(r))} · ${esc(D.acct.get(r.a)?.name||'')}</div>`).join('')}`:''}</div>
+  ${cards.length?`<div class="grp"><div class="grph"><span>卡片對應帳戶</span><span>${cards.length}</span></div><div class="card stack">${cards.map(([c,o])=>`<label class="field"><span>${esc(c)} · ${o.n} 次 · 最後 ${esc((o.last||'').slice(5).replace('-','/'))}</span><select class="in" data-apmap="${esc(c)}">${opts((S.settings.apMap||{})[c])}</select></label>`).join('')}</div></div>`:''}
+  <div class="grp"><div class="grph"><span>一次性設定（iPhone 捷徑）</span></div><div class="card stack">
+  ${!uid?'<div class="note alert"><div class="grow">請先到「雲端同步」登入，才會顯示你的寫入網址。</div></div>':''}
+  <div class="lbl">iOS 27 以後（自動化已併入捷徑本身，沒有獨立的「自動化」分頁）</div>
+  <ol class="steps">
+   <li>打開「捷徑」App，按右上「＋」新增一個捷徑，名稱取「Apple Pay 記帳」。</li>
+   <li>在最上方的觸發條件（「何時執行／When」，或搜尋框輸入「錢包」）選「<b>錢包：當我點一下卡片</b>」（英文為 When I tap a Wallet pass or payment card）。</li>
+   <li>按觸發條件旁的「⌄」展開：卡片選要記帳的卡（或任何卡片），類別、商家保持「任何」；把「<b>自動化</b>」開關打開、「<b>通知</b>」開關關閉（＝不必確認就執行）。</li>
+   <li>接著加入下面第 2～6 步的動作（與 iOS 17～26 相同）。</li>
+   <li>完成後回「資料庫」→「自動化」，確認這個自動化的開關是開的。</li></ol>
+  <div class="lbl mt">動作（各版本相同）</div>
+  <ol class="steps">
+   <li>iOS 17～26：「捷徑」App →「自動化」→ 右上「＋」→ 選「<b>錢包</b>」（iOS 17～25 叫「交易」），勾選卡片，選「<b>立即執行</b>」→「下一步」→「新增空白自動化」。iOS 27 跳過這步。</li>
+   <li>加入動作「<b>格式化日期</b>」：日期選「目前日期」，格式選「自訂」，填 <code>yyyy-MM-dd'T'HH:mm</code></li>
+   <li>加入動作「<b>取得 URL 內容</b>」：網址貼上下方〔登入網址〕，展開後方法選 <b>POST</b>，要求本文選 <b>JSON</b>，新增 3 個欄位：<br><code>email</code>（文字）＝記帳助理帳號的 Email<br><code>password</code>（文字）＝記帳助理的密碼<br><code>returnSecureToken</code>（布林值）＝是</li>
+   <li>加入動作「<b>取得辭典值</b>」：取得「值」，鍵填 <code>idToken</code>，辭典選上一步的「URL 的內容」。</li>
+   <li>加入動作「<b>文字</b>」：貼上下方〔本文範本〕，再把〔商家〕〔金額〕〔卡片〕換成「捷徑輸入」的對應變數，〔格式化日期〕換成第 2 步的結果。</li>
+   <li>再加入「<b>取得 URL 內容</b>」：網址貼上〔寫入網址〕，方法 <b>POST</b>；標頭新增 <code>Authorization</code>＝<code>Bearer </code>（後面空一格）＋「辭典值」，再新增 <code>Content-Type</code>＝<code>application/json</code>；要求本文選「<b>檔案</b>」，選第 5 步的「文字」。</li>
+   <li>完成。用 Apple Pay 刷一次，打開 App 就會看到這筆記錄。</li></ol>
+  <div class="hint">注意：只有實體店用 iPhone／Apple Watch 感應付款會觸發；網購、App 內購不會。若常常沒觸發，到「設定 → 通知 → 錢包」關閉「摘要」或「排程摘要」，交易通知延遲時自動化容易逾時。</div>
+  ${cp('登入網址',signUrl)}${cp('寫入網址',fsUrl)}${cp('本文範本',body)}
+  <div class="hint">記帳助理帳號只能「新增收件匣」，讀不到你的帳本；密碼只存在你的 iPhone 捷徑裡。</div></div></div>`}}
 
 /* ---------- 信用卡／帳戶對帳：貼上或上傳帳單明細，和 App 的記錄比對 ---------- */
 let RC=null;
@@ -4699,7 +4753,7 @@ function budCarry(ym,cat){const B=S.budgets;if(!B.roll||!B.since||ym<=B.since)re
   for(let k=B.since;k<ym;k=shiftYM(k,1)){const u=monUse(k);carry+=base-(cat?(u.by.get(cat)||0):u.tot)}return Math.round(carry)}
 
 /* ---------- 掛到既有頁面 ---------- */
-PAGES.gold=pageGold;PAGES.market=pageMarket;PAGES.fx=pageFx;PAGES.recon=pageRecon;PAGES.invest=pageInvest;PAGES.goals=pageGoals;
+PAGES.applepay=pageApplePay;PAGES.gold=pageGold;PAGES.market=pageMarket;PAGES.fx=pageFx;PAGES.recon=pageRecon;PAGES.invest=pageInvest;PAGES.goals=pageGoals;
 {const _more=PAGES.more;PAGES.more=function(){const r=_more();const it=(p,t,s)=>`<button class="li" data-act="push" data-p="${p}"><div class="grow"><div>${t}</div><small>${s}</small></div><span class="chev">${IC.chev}</span></button>`;
   const H=S.settings.hold||[],G=S.settings.goals||[];
   r.body=r.body.replace(/()(<button class="li" data-act="push" data-p="search")/,`$1${it('goals','存錢目標',G.length?G.length+' 個目標':'設定目標金額與期限')}${it('market','投資市值','股票・黃金・外匯 · 更新：'+mktDate())}$2`);return r}}
@@ -4713,6 +4767,7 @@ PAGES.gold=pageGold;PAGES.market=pageMarket;PAGES.fx=pageFx;PAGES.recon=pageReco
 
 /* ---------- 動作 ---------- */
 Object.assign(ACT,{
+  'ap-copy':el=>{const v=el.dataset.v;(navigator.clipboard?.writeText(v)||Promise.reject()).then(()=>toast('已複製'),()=>toast('請長按文字手動複製'))},
   'rc-run':el=>rcRun(el.dataset.id,$('#rc-in').value),
   'rc-clear':()=>{RC=null;render(true)},
   'rc-pend':async el=>{if(!RC||!RC.missing.length)return;const a=D.acct.get(RC.acctId);const add=RC.missing.map(it=>{const exp=it.v>0;const kind=exp?'exp':'inc';const f=blankForm(kind);const g=exp?suggestCat(it.desc,it.desc):{c:f.c,s:f.s};
@@ -4739,6 +4794,7 @@ Object.assign(ACT,{
   'gl-del':async el=>{const G=S.settings.goals||[];const g=G[+el.dataset.i];if(!g||!await askConfirm('刪除目標「'+esc(g.name)+'」？','刪除'))return;G.splice(+el.dataset.i,1);await saveKV('settings');render(true)},
 });
 document.addEventListener('change',asyncAction(async e=>{const t=e.target;
+  if(t.matches&&t.matches('[data-apmap]')){const m=S.settings.apMap||(S.settings.apMap={});if(t.value)m[t.dataset.apmap]=t.value;else delete m[t.dataset.apmap];await saveKV('settings');toast('已設定')}
   if(t.id==='rc-file'&&t.files&&t.files[0]){const txt=await readTextFile(t.files[0]);t.value='';rcRun(t.dataset.id,txt)}}));
 
 /* ---------- 推播提醒：App 把未來 30 天的提醒寫到 kv/notify，GitHub 排程每小時用記帳助理帳號讀取並發送 ---------- */
