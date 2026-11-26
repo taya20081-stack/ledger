@@ -643,13 +643,25 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 .summary-items.hlist{margin:10px 0 0;padding:4px 12px}
 /* ===== v2.0.134 介面整理 ===== */
 .sheet.ed .mgrid.edit-fields{grid-auto-rows:1fr}
-#ef-schedule{box-sizing:border-box;width:min(calc(100% - 24px),440px);max-height:calc(100dvh - 24px);padding:0;border:1px solid var(--rule);border-radius:20px;background:var(--paper);color:var(--ink);overflow:hidden}
+#ef-schedule{box-sizing:border-box;position:fixed;inset:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));width:min(calc(100% - 24px),440px);max-width:calc(100% - max(12px,env(safe-area-inset-left)) - max(12px,env(safe-area-inset-right)));max-height:calc(100dvh - max(12px,env(safe-area-inset-top)) - max(12px,env(safe-area-inset-bottom)));margin:auto;padding:0;border:1px solid var(--rule);border-radius:20px;background:var(--paper);color:var(--ink);overflow:hidden}
 #ef-schedule[open]{display:flex;flex-direction:column}
 #ef-schedule::backdrop{background:#0007}
-#ef-schedule .schedule-body{display:grid;gap:12px;padding:16px;overflow:auto;overscroll-behavior:contain}
+#ef-schedule .schedule-head,#ef-schedule .schedule-footer{flex:none;padding:12px 16px}
+#ef-schedule .schedule-head{display:grid;gap:12px;padding-bottom:0}
+#ef-schedule .schedule-body{display:grid;gap:12px;min-height:0;padding:14px 16px 16px;overflow:auto;overscroll-behavior:contain;scroll-padding-block:12px}
+#ef-schedule .schedule-body:empty{display:none}
 #ef-schedule h2{margin:0;font-size:18px}
-#ef-schedule .schedule-footer{flex:none;padding:12px 16px;border-top:1px solid var(--rule)}
-#ef-schedule .schedule-footer .btn{width:100%;min-height:44px}
+#ef-schedule .schedule-footer{display:grid;grid-template-columns:1fr 1fr;gap:8px;border-top:1px solid var(--rule);margin-top:12px}
+#ef-schedule .schedule-footer .btn,#ef-schedule .seg button,#ef-schedule .in,#ef-schedule .mdg button{min-height:44px;touch-action:manipulation}
+#ef-schedule .in{min-width:0;font-size:16px}
+#ef-schedule .grid2,#ef-schedule .grid3,#ef-schedule .mdg{grid-auto-columns:minmax(0,1fr)}
+#ef-schedule .grid3{grid-template-columns:repeat(3,minmax(0,1fr))}
+#ef-schedule .grid2{grid-template-columns:repeat(2,minmax(0,1fr))}
+#ef-schedule .mdg{grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+#ef-schedule .mdg button{padding-inline:0}
+#ef-schedule :focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+#ef-schedule summary{display:list-item;padding:12px 0;min-height:44px;cursor:pointer}
+#ef-schedule details .hint{margin-top:8px}
 .edit-fields [data-act="ef-copy"]{grid-column:1}
 .edit-fields #ef-del{color:var(--seal);border-color:var(--seal)}
 .sheet.ed .mgrid .mbtn{flex-direction:column;justify-content:center;gap:1px;height:auto;min-height:54px;padding:5px 10px}
@@ -1783,6 +1795,7 @@ function ctile(c,z,act,attrs,on,label,amtHtml){const col=catCol({t:'支出',c,s:
   return`<button class="ctile${on?' on':''}" data-act="${act}" ${attrs||''}><span class="cbd" style="--bc:${col}">${e||esc((z||c||'?').slice(0,1))}</span><span class="cl">${esc(label||z||c||'未選')}</span>${amtHtml||''}</button>`}
 function cpages(tiles){const P=[];for(let i=0;i<tiles.length;i+=10)P.push(tiles.slice(i,i+10));
   return`<div class="cpager" onscroll="const d=this.nextElementSibling;if(d){const i=Math.round(this.scrollLeft/this.clientWidth);[...d.children].forEach((x,k)=>x.classList.toggle('on',k===i))}">${P.map(p=>`<div class="cgrid">${p.join('')}</div>`).join('')}</div>${P.length>1?`<div class="cdots">${P.map((_,k)=>`<i class="${k?'':'on'}"></i>`).join('')}</div>`:''}`}
+let scheduleDraft=null;
 function renderEditor(){
   const f=EF;const sb=$('#sb');if(!sb)return;{const sh=$('#sheet');if(sh)sh.dataset.k=f.kind}const cur=D.acct.get(f.a)?.cur||'TWD';const amtCur=f.kind!=='tr'&&f.cu?f.cu:cur;
   const ei=f.kind==='exp'||f.kind==='inc';
@@ -1854,14 +1867,15 @@ function renderEditor(){
   const tabsH=(!ei||showCat)?`<div class="mtabs" role="tablist">${tabs.map(([k,l])=>`<button class="${tabOn(k)?'on':''}" data-act="ef-kind" data-k="${k}">${l}</button>`).join('')}</div>`:'';
   const previousSchedule=$('#ef-schedule[open]');
   const scheduleWasOpen=previousSchedule?.dataset.mode;
-  const scheduleScroll=$('#ef-schedule .schedule-body')?.scrollTop||0;
+  const scheduleScroll=previousSchedule?.querySelector('.schedule-body').scrollTop||0;
+  const scheduleFocus=previousSchedule?.contains(document.activeElement)?document.activeElement:null;
   const scheduleDialog=(!f._edit||canConv)&&['exp','inc','tr'].includes(f.kind)?(()=>{
     const md=md0,canI=f.kind==='exp'&&!f.splits;
     const choices=`<div class="seg full" role="group" aria-label="記帳方式"><button class="${!md?'on':''}" aria-pressed="${!md}" data-act="ef-mode" data-k="">單次</button><button class="${md==='rep'?'on':''}" aria-pressed="${md==='rep'}" data-act="ef-mode" data-k="rep">週期</button>${canI?`<button class="${md==='inst'?'on':''}" aria-pressed="${md==='inst'}" data-act="ef-mode" data-k="inst">分期</button>`:''}</div>`;
     let fields='';
-    if(md==='rep')fields=`<div class="grid3"><label class="field"><span>區間</span><select class="in" id="f-rep" data-f="rep" data-rr="1">${[['D','每天'],['W','每週'],['M','每月'],['Y','每年']].map(([k,l])=>`<option value="${k}" ${(f.rep||'M')===k?'selected':''}>${l}</option>`).join('')}</select></label><label class="field"><span>每幾次區間</span><input class="in num" id="f-iv" data-f="iv" inputmode="numeric" value="${esc(f.iv)}"></label><label class="field"><span>次數</span><input class="in num" id="f-cnt" data-f="cnt" inputmode="numeric" value="${esc(f.cnt)}" placeholder="無限期"></label></div>${(f.rep||'M')==='M'?(()=>{const sel=new Set(f.mdays||[]);const sd=+f.dt.slice(8);return`<div class="field"><span>指定日期（可多選；不選＝每月 ${sd} 日）</span><div class="mdg">${[...Array(31)].map((_,i)=>`<button type="button" class="${sel.has(i+1)?'on':''}" data-act="ef-md" data-d="${i+1}">${i+1}</button>`).join('')}<button type="button" class="wide ${sel.has(32)?'on':''}" data-act="ef-md" data-d="32">最後一天</button></div>${sel.size?`<div class="hint">每月 ${mdText([...sel].sort((x,y)=>x-y))}${sel.size>1?'，每個日期各記一筆':''}；29–31 日遇到較短的月份會記在該月最後一天。</div>`:''}</div>`})():''}<div class="grid3"><label class="field"><span>起始期數</span><input class="in num" id="f-sno" data-f="sno" inputmode="numeric" value="${esc(f.sno||'')}" placeholder="首期"></label><label class="field"><span>遇非工作日</span><select class="in" id="f-wk" data-f="wk"><option value="">依原日期</option><option value="prev" ${f.wk==='prev'?'selected':''}>提前到工作日</option><option value="next" ${f.wk==='next'?'selected':''}>延後到工作日</option></select></label><span></span></div><div class="hint">從上面的日期開始，到期自動入帳，不用手動確認；未來 2 個月內的各期會先顯示在月曆上（標示「未入帳」，不計入餘額）。要改或刪某一期時，可以選「只動這一期」或「這一期和之後」。次數留空＝無限期。起始期數：例如這已經是第 51 次就填 51。非工作日依台灣行政機關辦公日曆（週末、國定假日與補假；已內建 2026、2027 年）。</div>`;
-    if(md==='inst'&&canI)fields=`<div class="grid2"><label class="field"><span>分期期數</span><input class="in num" id="f-ik" data-f="ik" inputmode="numeric" value="${esc(f.ik||'3')}"></label><label class="field"><span>年利率 %（無利息填 0）</span><input class="in num" id="f-ir" data-f="ir" inputmode="decimal" value="${esc(f.ir||'0')}"></label></div><label class="field"><span>起始期數（已經繳過幾期就從下一期開始，例如填 5 代表這筆是第 5 期）</span><input class="in num" id="f-sno" data-f="sno" inputmode="numeric" value="${esc(f.sno||'')}" placeholder="首期"></label><div class="hint" id="f-iprev">${instPrev(f)}</div>`;
-    return `<dialog id="ef-schedule" aria-labelledby="ef-schedule-title" data-mode="${md}"><div class="schedule-body"><h2 id="ef-schedule-title" tabindex="-1" autofocus>${md==='rep'?'週期設定':md==='inst'?'分期設定':'重複設定'}</h2>${choices}${fields}</div><div class="schedule-footer"><button class="btn pri" data-act="ef-schedule-done">完成</button></div></dialog>`;
+    if(md==='rep')fields=`<div class="grid3"><label class="field"><span>區間</span><select class="in" id="f-rep" data-f="rep" data-rr="1">${[['D','每天'],['W','每週'],['M','每月'],['Y','每年']].map(([k,l])=>`<option value="${k}" ${(f.rep||'M')===k?'selected':''}>${l}</option>`).join('')}</select></label><label class="field"><span>每隔幾次</span><input class="in num" id="f-iv" data-f="iv" inputmode="numeric" value="${esc(f.iv)}"></label><label class="field"><span>次數</span><input class="in num" id="f-cnt" data-f="cnt" inputmode="numeric" value="${esc(f.cnt)}" placeholder="不限"></label></div>${(f.rep||'M')==='M'?(()=>{const sel=new Set(f.mdays||[]);const sd=+f.dt.slice(8);return`<details id="ef-schedule-days"${sel.size?' open':''}><summary>${sel.size?'每月 '+mdText([...sel]):'每月 '+sd+' 日 · 選擇其他日期'}</summary><div class="mdg">${[...Array(31)].map((_,i)=>`<button type="button" class="${sel.has(i+1)?'on':''}" aria-pressed="${sel.has(i+1)}" data-act="ef-md" data-d="${i+1}">${i+1}</button>`).join('')}<button type="button" class="wide ${sel.has(32)?'on':''}" aria-pressed="${sel.has(32)}" data-act="ef-md" data-d="32">最後一天</button></div>${sel.size?`<div class="hint">每月 ${mdText([...sel].sort((x,y)=>x-y))}${sel.size>1?'，每個日期各記一筆':''}；29–31 日遇到較短的月份會記在該月最後一天。</div>`:''}</details>`})():''}<div class="grid2"><label class="field"><span>起始期數</span><input class="in num" id="f-sno" data-f="sno" inputmode="numeric" value="${esc(f.sno||'')}" placeholder="首期"></label><label class="field"><span>遇非工作日</span><select class="in" id="f-wk" data-f="wk"><option value="">依原日期</option><option value="prev" ${f.wk==='prev'?'selected':''}>提前到工作日</option><option value="next" ${f.wk==='next'?'selected':''}>延後到工作日</option></select></label></div><details><summary>週期入帳說明</summary><div class="hint">從記錄的日期開始，到期自動入帳，不用手動確認；未來 2 個月內的各期會先顯示在月曆上（標示「未入帳」，不計入餘額）。要改或刪某一期時，可以選「只動這一期」或「這一期和之後」。次數留空＝無限期。起始期數：例如這已經是第 51 次就填 51。非工作日依台灣行政機關辦公日曆（週末、國定假日與補假；已內建 2026、2027 年）。</div></details>`;
+    if(md==='inst'&&canI)fields=`<div class="grid2"><label class="field"><span>分期期數</span><input class="in num" id="f-ik" data-f="ik" inputmode="numeric" value="${esc(f.ik||'3')}"></label><label class="field"><span>年利率 %（無利息填 0）</span><input class="in num" id="f-ir" data-f="ir" inputmode="decimal" value="${esc(f.ir||'0')}"></label></div><label class="field"><span>起始期數</span><input class="in num" id="f-sno" data-f="sno" inputmode="numeric" value="${esc(f.sno||'')}" placeholder="首期"><small class="hint">已繳過 4 期就填 5。</small></label><div class="hint" id="f-iprev">${instPrev(f)}</div>`;
+    return `<dialog id="ef-schedule" aria-labelledby="ef-schedule-title" data-mode="${md}"><div class="schedule-head"><h2 id="ef-schedule-title" tabindex="-1" autofocus>${md==='rep'?'週期設定':md==='inst'?'分期設定':'重複設定'}</h2>${choices}</div><div class="schedule-body">${fields}</div><div class="schedule-footer"><button class="btn" data-act="ef-schedule-cancel">取消</button><button class="btn pri" data-act="ef-schedule-done">完成</button></div></dialog>`;
   })():'';
   sb.innerHTML=`  ${f.kind==='sys'?`<label class="field"><span>類型</span><select class="in" id="f-st" data-f="st" data-rr="1">${SYS_T.filter(t=>!SYS_HIDE.has(t)||f.st===t).map(t=>`<option ${t===f.st?'selected':''}>${t}</option>`).join('')}</select></label>`:''}
   ${f.kind==='debt'?`<div class="field"><span>動作</span><div class="chips">${Object.entries(DEBT_ACT).map(([k,v])=>`<button class="chip${f.act===k?' on':''}" data-act="ef-debt" data-k="${k}">${v[3]}<small style="opacity:.7">${v[0]==='應收款項'?'應收':'應付'}</small></button>`).join('')}</div></div><label class="field"><span>對象</span><input class="in" id="f-w" data-f="w" list="dl-who" value="${esc(f.w)}" placeholder="例如：家人、同事姓名"></label>`:''}
@@ -1887,7 +1901,13 @@ function renderEditor(){
   const dialog=$('#ef-schedule');
   if(dialog&&scheduleWasOpen!=null){
     dialog.showModal();
-    if(scheduleWasOpen===dialog.dataset.mode)dialog.querySelector('.schedule-body').scrollTop=scheduleScroll;
+    if(scheduleWasOpen===dialog.dataset.mode){
+      const days=dialog.querySelector('#ef-schedule-days');
+      if(days&&previousSchedule.querySelector('#ef-schedule-days')?.open)days.open=true;
+      if(scheduleFocus?.id)document.getElementById(scheduleFocus.id)?.focus({preventScroll:true});
+      if(scheduleFocus?.dataset.act==='ef-md')dialog.querySelector(`[data-act="ef-md"][data-d="${scheduleFocus.dataset.d}"]`)?.focus({preventScroll:true});
+      dialog.querySelector('.schedule-body').scrollTop=scheduleScroll;
+    }
   }
   efHead(ei&&showCat&&!!(f._pickNew||f._reop));
 }
@@ -2060,8 +2080,19 @@ const ACT={
   'pend-post':el=>{const x=(S.settings.pend||[]).find(p=>p.id===el.dataset.id);if(!x)return;closeSheet();const f={...blankForm(x.fs.kind||'exp'),...x.fs,_edit:false,_pend:x.id,mode:'',rep:'',post:'',dep:''};if(el.dataset.today)f.dt=TODAY();setTimeout(()=>openEditor(f),250)},
   'pend-del':async el=>{if(el.dataset.armed!=='1'){el.dataset.armed='1';el.textContent='確定刪除';return}S.settings.pend=(S.settings.pend||[]).filter(p=>p.id!==el.dataset.id);await saveKV('settings');closeSheet();render(true);toast('已刪除待入帳項目')},
   'ef-md':el=>{if(!EF)return;const d=+el.dataset.d;const s=new Set(EF.mdays||[]);s.has(d)?s.delete(d):s.add(d);EF.mdays=[...s].sort((x,y)=>x-y);renderEditor()},
-  'ef-schedule':()=>$('#ef-schedule')?.showModal(),
-  'ef-schedule-done':()=>{$('#ef-schedule')?.close();$('#f-mode-open')?.focus()},
+  'ef-schedule':()=>{
+    const dialog=$('#ef-schedule');
+    if(!EF||!dialog||dialog.open)return;
+    scheduleDraft={editor:EF,values:Object.fromEntries(['mode','rep','iv','cnt','sno','wk','mdays','ik','ir'].map(key=>[key,EF[key]]))};
+    dialog.showModal();
+  },
+  'ef-schedule-cancel':()=>{
+    if(scheduleDraft?.editor===EF)Object.assign(EF,scheduleDraft.values);
+    ACT['ef-schedule-done']();
+    renderEditor();
+    $('#f-mode-open')?.focus();
+  },
+  'ef-schedule-done':()=>{scheduleDraft=null;$('#ef-schedule')?.close();$('#f-mode-open')?.focus()},
   'ef-mode':el=>{if(!EF)return;EF.mode=el.dataset.k;if(EF.mode==='rep'){if(!EF.rep)EF.rep='M'}else EF.rep='';renderEditor()},
   'ef-save':async el=>{if(EF)EF._scope=el.dataset.scope||'';const had=!!$('#sheet');await saveEditor(!!el.dataset.again);if(had&&!$('#sheet'))savedFx()},
   'ef-copy':()=>{const f={...EF,ids:[],_edit:false,dt:TODAY(),tm:NOWTM()};EF=f;$('.sheet h2').textContent='記一筆（複製）';renderEditor()},
@@ -2181,7 +2212,7 @@ function applyTheme(){const t=S.settings.theme==='dark'?'dark':'light';document.
 
 /* ================= events ================= */
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const fn=ACT[el.dataset.act];if(fn){e.preventDefault();try{Promise.resolve(fn(el,e)).catch(onActionError)}catch(error){onActionError(error)}}});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#ef-schedule')?.open){e.preventDefault();ACT['ef-schedule-done']();return}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#ef-schedule')?.open){e.preventDefault();ACT['ef-schedule-cancel']();return}
   if(e.key==='Escape'&&$('#sheet')&&!$('#sheet .sh .ibtn')?.dataset.noclose)closeSheet();
   if((e.key==='Enter'||e.key===' ')&&e.target.matches('[role=button][data-act]')){e.preventDefault();e.target.click()}
   if(e.key==='Enter'&&EF&&e.target.id==='f-amt'){e.preventDefault();saveEditor(false).catch(onActionError)}});
