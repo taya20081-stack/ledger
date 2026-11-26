@@ -13,6 +13,8 @@
 
 - 用範例或測試資料在兩種尺寸跑完受影響的流程，確認內容無水平溢出，主要按鈕可操作，表單和視窗的完成與取消行為正常。
 - 檢查 iOS 安全區、鍵盤開啟時的表單與底部按鈕、長文字、焦點及對比。重要觸控目標至少 44 × 44 CSS px。
+- **靈動島／瀏海**：`index.html` 使用 `apple-mobile-web-app-status-bar-style: default`，從主畫面開啟時，App 畫面從狀態列下方開始，所以 `env(safe-area-inset-top)` 實際上是 0，靈動島不會蓋到內容。**不要改成 `black-translucent`**；真的要改，就要讓所有頂部元件都避開安全區（16 Pro 約 59–62px、13 Pro 約 47px）。注意首頁 `.top` 是 sticky 元件，安全區變大時會蓋住月曆，得先修好這個問題。
+- 用 Playwright 模擬實機可用區域時，要扣掉狀態列高度：13 Pro 用 390 × 797、16 Pro 用 402 × 812，底部安全區（home indicator）設 34px。瀏覽器模擬不會帶入 `env()` 的值，可以在測試用的副本裡把 `env(safe-area-inset-bottom…)` 換成 34px 再驗證。
 - 在 PR 記錄兩種尺寸的驗證結果，註明使用瀏覽器模擬、iOS 模擬器或 Safari 實機。涉及 Safari、鍵盤或加入主畫面的行為時，有實機或 iOS 模擬器就加測。
 
 ## 設計指南與工具
