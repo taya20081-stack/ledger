@@ -643,6 +643,7 @@ details.grp>summary{list-style:none;cursor:pointer}details.grp>summary::-webkit-
 .summary-items.hlist{margin:10px 0 0;padding:4px 12px}
 /* ===== v2.0.134 介面整理 ===== */
 .sheet.ed .mgrid.edit-fields{grid-auto-rows:1fr}
+#gl-error:empty{display:none}
 #ef-schedule{box-sizing:border-box;position:fixed;inset:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));width:min(calc(100% - 24px),440px);max-width:calc(100% - max(12px,env(safe-area-inset-left)) - max(12px,env(safe-area-inset-right)));max-height:calc(100dvh - max(12px,env(safe-area-inset-top)) - max(12px,env(safe-area-inset-bottom)));margin:auto;padding:0;border:1px solid var(--rule);border-radius:20px;background:var(--paper);color:var(--ink);overflow:hidden}
 #ef-schedule[open]{display:flex;flex-direction:column}
 #ef-schedule::backdrop{background:#0007}
@@ -2048,7 +2049,13 @@ function twOpen(){if(!EF)return;const[h,m]=(EF.tm||'00:00').split(':').map(Numbe
 function twApplyTyped(){const inp=$('#tw-in');if(!inp||inp.hidden)return;const d=inp.value.replace(/\D/g,'');inp.hidden=true;inp.blur();if(!d)return;let h,m;if(d.length<=2){h=+d;m=0}else if(d.length===3){h=+d[0];m=+d.slice(1)}else{h=+d.slice(0,2);m=+d.slice(2)}
   if(!(h<24&&m<60))return toast('時間不正確');$('#tw-h').scrollTop=h*TW_H;$('#tw-m').scrollTop=m*TW_H}
 function twClose(){const w=$('#tw');if(w)w.remove();if(window.scrollY)window.scrollTo(0,0)}
-function efFocusAmt(){setTimeout(()=>{const e=$('#f-amt');e&&e.focus&&e.focus()},60)}
+function efFocusAmt(){
+  const editor=EF;
+  setTimeout(()=>{
+    if(EF!==editor||document.activeElement.matches('#sheet.ed input, #sheet.ed select, #sheet.ed textarea')||$('#ef-schedule')?.open)return;
+    $('#f-amt')?.focus();
+  },60);
+}
 const ACT={
   'close-sheet':()=>closeSheet(),
   back:()=>back(),
@@ -2211,6 +2218,10 @@ async function loadSample(){
 function applyTheme(){const t=S.settings.theme==='dark'?'dark':'light';document.documentElement.dataset.app=t;document.documentElement.toggleAttribute('data-swap',S.settings.swapCol!==false);const m=document.querySelector('meta[name=theme-color]');if(m)m.content=t==='dark'?'#0F141B':'#FFF9E0'}
 
 /* ================= events ================= */
+document.addEventListener('pointerdown',e=>{
+  const button=e.target.closest('#sheet.ed button:is([data-act="ef-save"],[data-act="close-sheet"],[data-act="ef-schedule"])');
+  if(e.button===0&&button&&document.activeElement.matches('#sheet.ed input'))e.preventDefault();
+});
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const fn=ACT[el.dataset.act];if(fn){e.preventDefault();try{Promise.resolve(fn(el,e)).catch(onActionError)}catch(error){onActionError(error)}}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#ef-schedule')?.open){e.preventDefault();ACT['ef-schedule-cancel']();return}
   if(e.key==='Escape'&&$('#sheet')&&!$('#sheet .sh .ibtn')?.dataset.noclose)closeSheet();
@@ -4620,10 +4631,41 @@ function goalsHTML(compact){const G=S.settings.goals||[];if(!G.length)return'';
 function pageGoals(){const G=S.settings.goals||[];const opts=`<option value="">手動填已存金額</option>`+S.accts.filter(a=>!a.arch).map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');
   return{back:1,head:`<h1>存錢目標</h1>`,body:`
   ${G.length?`<div class="list">${G.map((g,i)=>{const c=goalCalc(g);return`<div class="li sch"><div class="grow"><div>${esc(g.name)}${c.pct>=1?'<span class="pill">已達成</span>':''}</div><div class="bar" style="margin:6px 0"><i style="width:${(c.pct*100).toFixed(1)}%;background:#7BBF7F"></i></div><small class="num">${money(Math.round(c.saved))} / ${money(g.target)}（${Math.round(c.pct*100)}%）${g.due?' · 期限 '+g.due.replace(/-/g,'/'):''}</small><small class="num">${c.pct>=1?'已達成':`還差 ${money(Math.round(c.left))}`}${g.due&&c.pct<1?` · 每月需存 ${money(Math.ceil(c.per))}（剩 ${c.months} 個月）`:''}${g.a?' · 依「'+esc(D.acct.get(g.a)?.name||'')+'」餘額':''}</small></div>${g.a?'':`<button class="btn sm" data-act="gl-save" data-i="${i}">更新已存</button>`}<button class="btn sm danger" data-act="gl-del" data-i="${i}">刪除</button></div>`}).join('')}</div>`:'<div class="empty">還沒有存錢目標</div>'}
-  <div class="card stack"><div class="lbl">新增目標</div><label class="field"><span>名稱</span><input class="in" id="gl-name" placeholder="例如 2027 普吉島旅遊"></label>
-  <div class="grid2"><label class="field"><span>目標金額</span><input class="in num" id="gl-target" inputmode="decimal" placeholder="100000"></label><label class="field"><span>期限（選填）</span><input class="in" type="date" id="gl-due"></label></div>
-  <label class="field"><span>進度依據</span><select class="in" id="gl-a">${opts}</select></label><button class="btn pri" data-act="gl-add">新增目標</button>
-  <div class="hint">建議為目標開一個專用帳戶（例如「旅遊基金」），每次轉帳存入，進度就會自動依帳戶餘額更新。</div></div>`}}
+  <form class="card stack" id="gl-form" novalidate><div class="lbl">新增目標</div><label class="field"><span>名稱（必填）</span><input class="in" id="gl-name" name="name" autocomplete="off" required placeholder="例如 2027 普吉島旅遊" aria-describedby="gl-error"></label>
+  <div class="grid2"><label class="field"><span>目標金額（必填）</span><input class="in num" id="gl-target" name="target" inputmode="decimal" autocomplete="off" required placeholder="例如 100000" aria-describedby="gl-error"></label><label class="field"><span>期限（選填）</span><input class="in" type="date" id="gl-due"></label></div>
+  <label class="field"><span>進度依據</span><select class="in" id="gl-a">${opts}</select></label><div id="gl-error" class="neg" role="alert"></div><button class="btn pri" type="submit" style="min-height:44px">新增目標</button>
+  <div class="hint">建議為目標開一個專用帳戶（例如「旅遊基金」），每次轉帳存入，進度就會自動依帳戶餘額更新。</div></form>`}}
+
+document.addEventListener('submit',asyncAction(async e=>{
+  const form=e.target;
+  if(form.id!=='gl-form')return;
+  e.preventDefault();
+  const button=form.querySelector('button[type="submit"]');
+  if(button.disabled)return;
+  const nameInput=form.querySelector('#gl-name'),targetInput=form.querySelector('#gl-target');
+  const error=form.querySelector('#gl-error');
+  nameInput.removeAttribute('aria-invalid');
+  targetInput.removeAttribute('aria-invalid');
+  const name=nameInput.value.trim(),target=evalAmt(targetInput.value);
+  const invalid=!name?nameInput:!(target>0)?targetInput:null;
+  if(invalid){
+    error.textContent=invalid===nameInput?'請輸入目標名稱。':'請輸入大於 0 的目標金額。';
+    invalid.setAttribute('aria-invalid','true');
+    invalid.focus();
+    return;
+  }
+  error.textContent='';
+  button.disabled=true;
+  const goal={id:uid(),name,target,due:form.querySelector('#gl-due').value,a:form.querySelector('#gl-a').value,saved:0};
+  try{
+    await saveKV('settings',{...S.settings,goals:[...(S.settings.goals||[]),goal]});
+    render(true);
+    toast('已新增目標');
+  }catch(error){
+    form.querySelector('#gl-error').textContent='目標未能儲存，請再試一次。';
+    throw error;
+  }finally{button.disabled=false}
+}));
 
 /* ---------- 預算結轉：沒花完的累積到下個月，超支則扣下個月 ---------- */
 const _monUse=new Map();
@@ -4671,8 +4713,6 @@ Object.assign(ACT,{
     if(px){const v=evalAmt(px);if(!(v>0))return toast('價格不正確');h.px=v;h.pxManual=1;h.pxd=TODAY()}else if(h.pxManual){h.pxManual=0;h.px=0}
     await saveKV('settings');closeSheet();showSavedInvestment('已儲存')},
   'hd-del':async el=>{const H=S.settings.hold||[];const h=H[+el.dataset.i];if(!h)return;closeSheet();if(!await askConfirm('刪除持股「'+esc(h.code+' '+(h.name||''))+'」？','刪除'))return;H.splice(H.indexOf(h),1);await saveKV('settings');render(true)},
-  'gl-add':async()=>{const name=$('#gl-name').value.trim(),target=evalAmt($('#gl-target').value),due=$('#gl-due').value,a=$('#gl-a').value;if(!name)return toast('請輸入名稱');if(!(target>0))return toast('請輸入目標金額');
-    S.settings.goals=[...(S.settings.goals||[]),{id:uid(),name,target,due,a,saved:0}];await saveKV('settings');render(true);toast('已新增目標')},
   'gl-save':async el=>{const g=(S.settings.goals||[])[+el.dataset.i];if(!g)return;const v=await askText('目前已存金額',String(g.saved||''),g.name,'num');if(v==null)return;const n=evalAmt(v);if(!(n>=0))return toast('金額不正確');g.saved=n;await saveKV('settings');render(true)},
   'gl-del':async el=>{const G=S.settings.goals||[];const g=G[+el.dataset.i];if(!g||!await askConfirm('刪除目標「'+esc(g.name)+'」？','刪除'))return;G.splice(+el.dataset.i,1);await saveKV('settings');render(true)},
 });
@@ -4793,7 +4833,7 @@ function efBar(){const sh=$('#sheet.ed');if(!sh||!EF)return;let bar=sh.querySele
   bar.innerHTML=EF._edit?`<button class="btn pri" data-act="ef-save">儲存</button>`:`<button class="btn" data-act="ef-save" data-again="1">再記一筆</button><button class="btn pri" data-act="ef-save">儲存</button>`}
 {const _rE=renderEditor;renderEditor=function(){_rE.apply(this,arguments);efBar()}}
 {const _oE=openEditor;openEditor=function(fs,isEdit){_oE.apply(this,arguments);if(isEdit)return;
-  setTimeout(()=>{const el=$('#f-amt');if(!el||!EF||document.activeElement===el)return;try{el.focus({preventScroll:true})}catch(e){el.focus()}if(typeof CALC_TOUCH!=='undefined'&&CALC_TOUCH&&!document.body.classList.contains('calc-on'))calcShow(el)},120)}}
+  setTimeout(()=>{const el=$('#f-amt');if(!el||EF!==fs||!fs.c||document.activeElement.closest('#sheet'))return;try{el.focus({preventScroll:true})}catch(e){el.focus()}if(typeof CALC_TOUCH!=='undefined'&&CALC_TOUCH&&!document.body.classList.contains('calc-on'))calcShow(el)},120)}}
 {const _cS=calcShow;calcShow=function(el){_cS.apply(this,arguments);const k=$('#calc');if(k)document.body.style.setProperty('--calch',k.offsetHeight+'px')}}
 // iOS 系統鍵盤出現時，把記一筆畫面縮到鍵盤上方，底部儲存鈕才看得到
 if(window.visualViewport){const vv=window.visualViewport;const kb=()=>{const h=Math.max(0,window.innerHeight-vv.height-vv.offsetTop);document.body.classList.toggle('kb-on',h>100);document.body.style.setProperty('--kbh',h+'px')};vv.addEventListener('resize',kb);vv.addEventListener('scroll',kb)}
