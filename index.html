@@ -161,6 +161,8 @@ button{cursor:pointer}
 .btn.sm{padding:5px 10px;font-size:13px;border-radius:9px}
 .btns{display:flex;gap:8px;flex-wrap:wrap}
 .btns.fill>*{flex:1}
+.btns.editor-actions{flex-wrap:nowrap}
+.editor-actions>.btn{flex:1 1 0;min-width:0;min-height:44px;padding-inline:6px}
 .field{display:grid;gap:4px;min-width:0}
 .field>span{font-size:12px;color:var(--muted);letter-spacing:.05em}
 .in{width:100%;min-width:0;border:1px solid var(--rule);background:var(--paper);border-radius:10px;padding:9px 11px;font-size:16px}
@@ -703,7 +705,7 @@ body.kb-on .sheet.ed{height:auto;bottom:var(--kbh,0px)}
 <div id="app"></div>
 <script>
 window.FIREBASE_CONFIG={"apiKey":"AIzaSyBJXlXSuctjCBbOifJX8DpewQ869cEcLxo","authDomain":"money-app-54e0d.firebaseapp.com","projectId":"money-app-54e0d","storageBucket":"money-app-54e0d.firebasestorage.app","messagingSenderId":"19895742426","appId":"1:19895742426:web:0a4d66e6621155a7abdae3"};
-window.APP_VER='v3.0.3';
+window.APP_VER='v3.0.4';
 'use strict';
 /* ================= utilities ================= */
 const p2=n=>String(n).padStart(2,'0');
@@ -1848,7 +1850,7 @@ function renderEditor(){
     const osB=f.kind==='exp'&&!f._edit&&f.mode!=='inst'?cap(`<button class="mbtn${f.os?' on':''}" data-act="ef-os">${f.os?'是（1.5%）':'否'}</button>`,'海外交易'):'';
     const postB=!f._edit&&!(f.mode||f.rep)?cap(`<label class="mbtn sel"><select id="f-post" data-f="post" aria-label="入帳方式"><option value="">立即</option><option value="m" ${f.post==='m'?'selected':''}>手動確認後</option></select></label>`,'入帳')+cap(`<button class="mbtn${f.dep?' on':''}" data-act="ef-deptog">${f.dep?'追蹤中':'無'}</button>`,'訂金尾款'):'';
     const more=cap(timeBtn,'時間')+cap(modeBtn,'重複')+cap(feeB,'手續費')+osB+postB;
-    return`<div class="mgrid">${cap(acctBtn,'帳戶')}${cap(dateBtn,'日期')}${cap(shopBtn,'商家')}${cap(projBtn,'專案')}${more}${f._edit?`<button class="mbtn" data-act="ef-del" id="ef-del" style="color:var(--seal);grid-column:1/-1">刪除</button>`:''}</div>`})():`${acctRow}${projRow}${dateRow}`}
+    return`<div class="mgrid">${cap(acctBtn,'帳戶')}${cap(dateBtn,'日期')}${cap(shopBtn,'商家')}${cap(projBtn,'專案')}${more}</div>`})():`${acctRow}${projRow}${dateRow}`}
   ${!ei?feeRow+osRow:''}
   ${(!f._edit||(canConv&&f.mode))&&['exp','inc','tr'].includes(f.kind)?(()=>{const md=f.mode||(f.rep?'rep':'');const canI=f.kind==='exp'&&!f.splits;
     const seg=ei?'':`<div class="field"><span>記帳方式</span><div class="seg full"><button class="${!md?'on':''}" data-act="ef-mode" data-k="">單次</button><button class="${md==='rep'?'on':''}" data-act="ef-mode" data-k="rep">週期</button>${canI?`<button class="${md==='inst'?'on':''}" data-act="ef-mode" data-k="inst">分期</button>`:''}</div></div>`;
@@ -1859,7 +1861,7 @@ function renderEditor(){
     return seg+`<div class="grid2">${postSel}<label class="field"><span>訂金尾款追蹤</span><select class="in" id="f-dep" data-act-change="ef-dep"><option value="">關閉</option><option value="1" ${f.dep?'selected':''}>開啟</option></select></label></div>${f.dep?`<div class="grid2"><label class="field"><span>總金額（上面金額＝訂金）</span><input class="in num" id="f-depT" data-f="depT" data-calc inputmode="${CALC_IM}" value="${esc(f.depT||'')}"></label><label class="field"><span>尾款預計日期</span><input class="in" type="date" id="f-depD" data-f="depD" value="${esc(f.depD||'')}"></label></div><div class="hint">存檔後先記訂金；尾款（總金額－訂金）會放進鈴鐺的待入帳清單，付款時點「入帳」即可。</div>`:''}`})():''}
   ${f._dupMsg?`<div class="note alert" id="ef-dup"><div class="grow"><b>可能重複</b>：同帳戶已有 ${f._dupMsg}。確定不是同一筆，再按一次「儲存」。</div></div>`:''}
   ${f._edit&&efRule(f)?`<div class="note" style="flex-wrap:wrap"><div class="grow">這是週期記錄「${esc(ruleName(efRule(f).rule.fs,efRule(f).rule.name))}」的第 ${efRule(f).k+1+(efRule(f).rule.off||0)} 期，要改哪些？</div></div><div class="btns fill"><button class="btn pri" data-act="ef-save">只改這一期</button><button class="btn" data-act="ef-save" data-scope="all">這一期和之後都改</button></div>`:ei?'':`<div class="btns fill"><button class="btn pri" data-act="ef-save">儲存</button>${f._edit?'':`<button class="btn" data-act="ef-save" data-again="1">儲存並再記一筆</button>`}</div>`}
-  <div class="btns">${f._edit?`<button class="btn sm" data-act="ef-copy">複製</button>${f.kind==='exp'?`<button class="btn sm" data-act="ef-refund">退款</button>`:''}`:''}${f._edit&&!ei?`<button class="btn sm danger" data-act="ef-del" id="ef-del">刪除</button>`:''}</div>
+  ${f._edit?`<div class="btns editor-actions"><button class="btn sm danger" data-act="ef-del" id="ef-del">刪除</button><button class="btn sm" data-act="ef-copy">複製</button>${f.kind==='exp'?`<button class="btn sm" data-act="ef-refund">退款</button>`:''}</div>`:''}
   ${datalists()}`;
   efHead(ei&&showCat&&!!(f._pickNew||f._reop));
 }
